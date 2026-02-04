@@ -203,4 +203,22 @@ export default function Home() {
       </section>
 
       {/* SCREEN 3 */}
-      <secti
+      <section
+        ref={screen3Ref}
+        style={{
+          height: "100vh",
+          scrollSnapAlign: "start",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          padding: 40,
+        }}
+      >
+        <div style={{ maxWidth: 520, fontSize: 18, opacity: 0.85 }}>
+          {principle ? principles[principle] : ""}
+        </div>
+      </section>
+    </main>
+  );
+}
