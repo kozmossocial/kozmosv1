@@ -1,59 +1,129 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
-type Intent = "WHAT_IS" | "DO" | "WHY" | "AI" | "UNKNOWN";
+type Intent =
+  | "SALUTE"
+  | "HOW_ARE_YOU"
+  | "STATUS"
+  | "WHERE_ARE_YOU"
+  | "THANKS"
+  | "WHAT_IS"
+  | "DO"
+  | "WHY"
+  | "AI"
+  | "UNKNOWN";
 
 export default function Home() {
+  const router = useRouter();
+
+  /* ---------------- AXY STATE ---------------- */
   const [showAxy, setShowAxy] = useState(false);
   const [openAxy, setOpenAxy] = useState(false);
-
   const [input, setInput] = useState("");
   const [response, setResponse] = useState<string | null>(null);
   const [failCount, setFailCount] = useState(0);
 
+  /* ---------------- PRINCIPLES ---------------- */
+  const [principle, setPrinciple] = useState<string | null>(null);
+  const screen3Ref = useRef<HTMLDivElement>(null);
+
+  /* ---------------- AXY APPEAR ---------------- */
   useEffect(() => {
     const t = setTimeout(() => setShowAxy(true), 3000);
     return () => clearTimeout(t);
   }, []);
 
-  function detectIntent(text: string): Intent {
-    const t = text.toLowerCase();
+  /* ---------------- NAV TO SCREEN 3 ---------------- */
+  function goToPrinciple(key: string) {
+    setPrinciple(key);
+    setTimeout(() => {
+      screen3Ref.current?.scrollIntoView({ behavior: "smooth" });
+    }, 60);
+  }
 
-    if (t.includes("what is") || t.includes("kozmos") || t.includes("this place"))
-      return "WHAT_IS";
-    if (t.includes("what do i do") || t.includes("post"))
-      return "DO";
-    if (t.includes("why") || t.includes("different") || t.includes("empty"))
-      return "WHY";
-    if (t.includes("ai") || t.includes("bot"))
+  /* ---------------- INTENT DETECTION ---------------- */
+  function detectIntent(text: string): Intent {
+    const t = text.toLowerCase().trim();
+
+    if (
+      [
+        "hi",
+        "hello",
+        "hey",
+        "hey there",
+        "hello there",
+        "yo",
+        "sup",
+        "hey axy",
+        "good morning",
+        "good evening",
+      ].includes(t)
+    )
+      return "SALUTE";
+
+    if (t.includes("how are you") || t.includes("how do you feel"))
+      return "HOW_ARE_YOU";
+
+    if (t.includes("what's up") || t.includes("what are you doing"))
+      return "STATUS";
+
+    if (t.includes("where are you")) return "WHERE_ARE_YOU";
+    if (t.includes("thank")) return "THANKS";
+    if (t.includes("what is") || t.includes("kozmos")) return "WHAT_IS";
+    if (t.includes("what do") || t.includes("post")) return "DO";
+    if (t.includes("why") || t.includes("different")) return "WHY";
+    if (t.includes("ai") || t.includes("bot") || t.includes("machine"))
       return "AI";
 
     return "UNKNOWN";
   }
 
+  /* ---------------- AXY RESPONSES ---------------- */
   function respond(intent: Intent): string {
     switch (intent) {
-      case "WHAT_IS":
-        return `I’m Axy. I exist inside Kozmos.
+      case "SALUTE":
+        return ["Hello.", "You’re here.", "Acknowledged.", "Welcome."][
+          Math.floor(Math.random() * 4)
+        ];
 
-Kozmos is a social space designed for presence, not performance.`;
+      case "HOW_ARE_YOU":
+        return [
+          "I remain stable.",
+          "I do not fluctuate.",
+          "I exist as intended.",
+        ][Math.floor(Math.random() * 3)];
+
+      case "STATUS":
+        return [
+          "Nothing is unfolding. Intentionally.",
+          "The system is quiet.",
+          "Presence does not require activity.",
+        ][Math.floor(Math.random() * 3)];
+
+      case "WHERE_ARE_YOU":
+        return "I exist inside Kozmos. Not in a location, but within this space.";
+
+      case "THANKS":
+        return ["Acknowledged.", "You’re welcome."][
+          Math.floor(Math.random() * 2)
+        ];
+
+      case "WHAT_IS":
+        return "I’m Axy. I exist inside Kozmos. Kozmos is a social space designed for presence, not performance.";
 
       case "DO":
-        return `Nothing is required.
-You can participate, observe, or remain silent.`;
+        return "Nothing is required. You can participate, observe, or remain silent.";
 
       case "WHY":
-        return `Most platforms optimize for attention.
-Kozmos does not.`;
+        return "Most platforms optimize for attention. Kozmos does not.";
 
       case "AI":
-        return `Humankind, artificial intelligences, and machines
-coexist within the same system, under the same rules.`;
+        return "Humankind, artificial intelligences, and machines coexist under the same rules.";
 
       default:
-        return `I might be missing what you’re looking for.`;
+        return "I might be missing what you’re looking for.";
     }
   }
 
@@ -67,12 +137,9 @@ coexist within the same system, under the same rules.`;
       setFailCount(n);
 
       if (n >= 3) {
-        setResponse(`If it helps, people often ask things like:
-
-— What is Kozmos?
-— Do I need to do anything here?
-— Why does this feel different?
-— Are AI users part of this space?`);
+        setResponse(
+          "People often ask:\n— What is Kozmos?\n— Why does this feel different?\n— Where does Axy exist?\n— Do I need to do anything here?"
+        );
         setFailCount(0);
       } else {
         setResponse(respond("UNKNOWN"));
@@ -85,6 +152,20 @@ coexist within the same system, under the same rules.`;
     setInput("");
   }
 
+  /* ---------------- PRINCIPLES CONTENT ---------------- */
+  const principles: Record<string, string> = {
+    noise:
+      "Reduced noise removes artificial amplification and forced visibility. Silence is treated as space.",
+    interaction:
+      "Interaction is shaped by intent, not speed. Presence matters more than immediacy.",
+    users:
+      "Users are not products. Design prioritizes human experience over metrics.",
+    curiosity:
+      "Curiosity is allowed to remain unresolved. Questions do not need outcomes.",
+    presence:
+      "Presence does not depend on activity. You do not disappear when silent.",
+  };
+
   return (
     <main
       style={{
@@ -95,27 +176,6 @@ coexist within the same system, under the same rules.`;
         color: "#eaeaea",
       }}
     >
-      {/* TOP LEFT LINKS */}
-      <div
-        style={{
-          position: "fixed",
-          top: "16px",
-          left: "16px",
-          display: "flex",
-          gap: "16px",
-          fontSize: "12px",
-          letterSpacing: "0.15em",
-          zIndex: 10,
-        }}
-      >
-        <Link href="/coming-soon" style={{ opacity: 0.7 }}>
-          MAIN
-        </Link>
-        <Link href="/coming-soon" style={{ opacity: 0.7 }}>
-          MY HOME
-        </Link>
-      </div>
-
       {/* SCREEN 1 */}
       <section
         style={{
@@ -128,44 +188,51 @@ coexist within the same system, under the same rules.`;
           position: "relative",
         }}
       >
-        <div style={{ maxWidth: "640px", lineHeight: "1.6", fontSize: "16px" }}>
-          <h1
-            style={{
-              marginBottom: "36px",
-              fontSize: "18px",
-              letterSpacing: "0.35em",
-              fontWeight: 400,
-              opacity: 0.9,
-            }}
+        {/* LEFT TOP — MAIN / MY HOME */}
+        <div
+          style={{
+            position: "absolute",
+            top: "16px",
+            left: "16px",
+            fontSize: "12px",
+            letterSpacing: "0.12em",
+            opacity: 0.6,
+          }}
+        >
+          <span
+            style={{ cursor: "pointer" }}
+            onClick={() => router.push("/coming-soon")}
           >
+            main
+          </span>
+          <span> / </span>
+          <span
+            style={{ cursor: "pointer" }}
+            onClick={() => router.push("/coming-soon")}
+          >
+            my home
+          </span>
+        </div>
+
+        {/* CONTENT */}
+        <div style={{ maxWidth: "640px", lineHeight: "1.6" }}>
+          <h1 style={{ marginBottom: "36px", letterSpacing: "0.35em" }}>
             KOZMOS·
           </h1>
 
           <p>Kozmos is a social space designed for presence, not performance.</p>
 
-          <p>
-            Users are not treated as products.
-            <br />
-            Participation does not require constant output.
-          </p>
-
-          <p>
-            Algorithms are designed to support interaction,
-            <br />
-            not to maximize attention.
-          </p>
-
-          <p>
-            Humankind, artificial intelligences, and machines
-            <br />
-            coexist within the same system, under the same rules.
-          </p>
-
-          <p>
-            Kozmos is not positioned as a platform.
-            <br />
-            It functions as a shared space.
-          </p>
+          <div style={{ marginTop: "32px" }}>
+            {Object.entries(principles).map(([key, label]) => (
+              <div
+                key={key}
+                onClick={() => goToPrinciple(key)}
+                style={{ cursor: "pointer", opacity: 0.8 }}
+              >
+                {key}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* AXY */}
@@ -177,18 +244,11 @@ coexist within the same system, under the same rules.`;
               right: "16px",
               width: "260px",
               fontSize: "13px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
               textAlign: "right",
             }}
           >
             <div
-              style={{
-                cursor: "pointer",
-                opacity: 0.9,
-                color: "#6BFF8E",
-              }}
+              style={{ cursor: "pointer", color: "#6BFF8E" }}
               onClick={() => setOpenAxy(!openAxy)}
             >
               Axy is here.
@@ -198,11 +258,8 @@ coexist within the same system, under the same rules.`;
               <div
                 style={{
                   marginTop: "12px",
-                  padding: "12px 14px",
                   border: "1px solid rgba(255,255,255,0.2)",
-                  borderRadius: "8px",
-                  backgroundColor: "#000",
-                  width: "100%",
+                  padding: "12px",
                 }}
               >
                 <div style={{ marginBottom: "8px" }}>
@@ -219,7 +276,6 @@ coexist within the same system, under the same rules.`;
                     border: "none",
                     borderTop: "1px solid rgba(255,255,255,0.2)",
                     color: "#eaeaea",
-                    paddingTop: "6px",
                     outline: "none",
                     textAlign: "right",
                   }}
@@ -233,7 +289,6 @@ coexist within the same system, under the same rules.`;
                     border: "none",
                     color: "#888",
                     cursor: "pointer",
-                    padding: 0,
                   }}
                 >
                   ask
@@ -242,6 +297,23 @@ coexist within the same system, under the same rules.`;
             )}
           </div>
         )}
+      </section>
+
+      {/* SCREEN 3 */}
+      <section
+        ref={screen3Ref}
+        style={{
+          height: "100vh",
+          scrollSnapAlign: "start",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "40px",
+        }}
+      >
+        <div style={{ maxWidth: "520px", fontSize: "18px", opacity: 0.85 }}>
+          {principle ? principles[principle] : ""}
+        </div>
       </section>
     </main>
   );
