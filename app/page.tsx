@@ -38,14 +38,15 @@ export default function Home() {
 
   return (
     <main
-      style={{
-        height: "100vh",
-        overflowY: "scroll",
-        scrollSnapType: "y mandatory",
-        background: "#0b0b0b",
-        color: "#eaeaea",
-      }}
-    >
+  style={{
+    minHeight: "100vh",
+    overflowY: "scroll",
+    overflowX: "hidden",
+    scrollSnapType: "y mandatory",
+    background: "#0b0b0b",
+    color: "#eaeaea",
+  }}
+>
       {/* SCREEN 1 */}
       <section
         style={{
