@@ -1,28 +1,20 @@
 import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "Kozmos",
-  description: "Presence over performance.",
-  metadataBase: new URL("https://kozmos.social"),
-  openGraph: {
-    title: "Kozmos",
-    description: "Presence over performance.",
-    url: "https://kozmos.social",
-    siteName: "Kozmos",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Kozmos",
-      },
-    ],
-    type: "website",
-  },
-  icons: {
-    icon: "/favicon.ico",
-  },
+  title: "KOZMOS·",
+  description: "A shared social space for presence, not performance.",
 };
 
 export default function RootLayout({
@@ -31,13 +23,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-<html lang="en" style={{ colorScheme: "dark", background: "#0b0b0b" }}>
-     <body
-  className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-  style={{ background: "#0b0b0b", color: "#eaeaea" }}
->
-  {children}
-</body>
+    <html
+      lang="en"
+      style={{
+        colorScheme: "dark",
+        background: "#0b0b0b",
+      }}
+    >
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        style={{
+          background: "#0b0b0b",
+          color: "#eaeaea",
+          margin: 0,
+        }}
+      >
+        {children}
+      </body>
     </html>
   );
 }
