@@ -1,9 +1,36 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Login() {
   const router = useRouter();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    if (!email || !password) return;
+
+    setLoading(true);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    // ✅ LOGIN → MY HOME
+    router.push("/my-home");
+  }
 
   return (
     <main
@@ -17,23 +44,24 @@ export default function Login() {
         padding: 40,
       }}
     >
-{/* TOP LEFT — GO BACK */}
-    <div
-      style={{
-        position: "absolute",
-        top: 16,
-        left: 16,
-        fontSize: 12,
-        letterSpacing: "0.12em",
-        opacity: 0.6,
-        cursor: "pointer",
-      }}
-      onClick={() => router.push("/")}
-      onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
-      onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
-    >
-      ← go back
-    </div>
+      {/* TOP LEFT — GO BACK */}
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          fontSize: 12,
+          letterSpacing: "0.12em",
+          opacity: 0.6,
+          cursor: "pointer",
+        }}
+        onClick={() => router.push("/")}
+        onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
+        onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
+      >
+        ← go back
+      </div>
+
       <div style={{ width: 320 }}>
         <h1
           style={{
@@ -48,17 +76,26 @@ export default function Login() {
 
         <input
           placeholder="email"
+          type="email"
           style={inputStyle}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
         />
 
         <input
           placeholder="password"
           type="password"
           style={inputStyle}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
         />
 
-        <button style={buttonStyle}>
-          enter
+        <button
+          style={buttonStyle}
+          onClick={handleLogin}
+          disabled={loading}
+        >
+          {loading ? "..." : "enter"}
         </button>
 
         <div
