@@ -88,19 +88,35 @@ export default function Home() {
           </span>
         </div>
 
-        {/* TOP RIGHT */}
-        <div
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            fontSize: 12,
-            opacity: 0.6,
-            letterSpacing: "0.12em",
-          }}
-        >
-          signup / login
-        </div>
+       {/* TOP RIGHT */}
+<div
+  style={{
+    position: "absolute",
+    top: 16,
+    right: 16,
+    fontSize: 12,
+    opacity: 0.6,
+    letterSpacing: "0.12em",
+  }}
+>
+  <span
+    style={{ cursor: "pointer" }}
+    onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
+    onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
+    onClick={() => router.push("/register")}
+  >
+    signup
+  </span>{" "}
+  /{" "}
+  <span
+    style={{ cursor: "pointer" }}
+    onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
+    onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
+    onClick={() => router.push("/login")}
+  >
+    login
+  </span>
+</div>
 
         {/* CONTENT */}
         <div style={{ maxWidth: 520, lineHeight: 1.6 }}>
