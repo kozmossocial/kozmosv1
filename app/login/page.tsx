@@ -28,7 +28,7 @@ export default function Login() {
       return;
     }
 
-    // ✅ LOGIN → MY HOME
+    // my-home henüz yok → sonra bağlarız
     router.push("/my-home");
   }
 
@@ -74,16 +74,18 @@ export default function Login() {
           ENTER
         </h1>
 
+        {/* EMAIL */}
+        <div style={labelStyle}>email</div>
         <input
-          placeholder="email"
           type="email"
           style={inputStyle}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
 
+        {/* PASSWORD */}
+        <div style={labelStyle}>password</div>
         <input
-          placeholder="password"
           type="password"
           style={inputStyle}
           value={password}
@@ -115,14 +117,21 @@ export default function Login() {
   );
 }
 
+const labelStyle: React.CSSProperties = {
+  fontSize: 12,
+  letterSpacing: "0.12em",
+  opacity: 0.6,
+  marginBottom: 6,
+};
+
 const inputStyle: React.CSSProperties = {
   width: "100%",
   background: "transparent",
   border: "none",
   borderBottom: "1px solid rgba(255,255,255,0.2)",
   color: "#eaeaea",
-  padding: "12px 0",
-  marginBottom: 24,
+  padding: "10px 0",
+  marginBottom: 20,
   outline: "none",
   fontSize: 14,
 };
