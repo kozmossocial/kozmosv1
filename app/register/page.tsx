@@ -17,6 +17,23 @@ export default function Register() {
         padding: 40,
       }}
     >
+{/* TOP LEFT — GO BACK */}
+    <div
+      style={{
+        position: "absolute",
+        top: 16,
+        left: 16,
+        fontSize: 12,
+        letterSpacing: "0.12em",
+        opacity: 0.6,
+        cursor: "pointer",
+      }}
+      onClick={() => router.push("/")}
+      onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
+      onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
+    >
+      ← go back
+    </div>
       <div style={{ width: 320 }}>
         <h1
           style={{
