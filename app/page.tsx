@@ -219,23 +219,49 @@ export default function Home() {
         </div>
       </section>
 
-      {/* SCREEN 3 */}
-      <section
-        ref={screen3Ref}
-        style={{
-          height: "100vh",
-          scrollSnapAlign: "start",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          padding: 40,
-        }}
-      >
-        <div style={{ maxWidth: 520, fontSize: 18, opacity: 0.85 }}>
-          {principle ? principles[principle] : ""}
-        </div>
-      </section>
-    </main>
-  );
-}
+     {/* SCREEN 3 */}
+<section
+  ref={screen3Ref}
+  style={{
+    height: "100vh",
+    scrollSnapAlign: "start",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    alignItems: "center",
+    textAlign: "center",
+    padding: 40,
+  }}
+>
+  {/* PRINCIPLE TEXT — ÜST KISIM */}
+  <div
+    style={{
+      maxWidth: 520,
+      fontSize: 18,
+      opacity: 0.85,
+      marginTop: 120,
+    }}
+  >
+    {principle ? principles[principle] : ""}
+  </div>
+
+  {/* AXY BANNER — ALT KISIM */}
+  <div
+    style={{
+      marginBottom: 32,
+      opacity: 0.85,
+      cursor: "pointer",
+    }}
+  >
+    <img
+      src="/axy-banner.png"
+      alt="Axy"
+      style={{
+        maxWidth: 220,
+        width: "100%",
+        display: "block",
+        margin: "0 auto",
+      }}
+    />
+  </div>
+</section>
