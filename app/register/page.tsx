@@ -17,7 +17,6 @@ export default function Register() {
 
     setLoading(true);
 
-    // 1️⃣ Supabase Auth signup
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -29,15 +28,12 @@ export default function Register() {
       return;
     }
 
-    const user = data.user;
-
-    // 2️⃣ Custom profile insert (SADECE username)
-    if (user) {
+    if (data.user) {
       const { error: profileError } = await supabase
         .from("profileskozmos")
         .insert({
-          id: user.id,        // auth.users.id ile AYNI
-          username: username,
+          id: data.user.id,
+          username,
         });
 
       if (profileError) {
@@ -64,7 +60,7 @@ export default function Register() {
         position: "relative",
       }}
     >
-      {/* TOP LEFT — GO BACK */}
+      {/* GO BACK */}
       <div
         style={{
           position: "absolute",
@@ -76,8 +72,6 @@ export default function Register() {
           cursor: "pointer",
         }}
         onClick={() => router.push("/")}
-        onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
-        onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
       >
         ← go back
       </div>
@@ -94,28 +88,38 @@ export default function Register() {
           REGISTER
         </h1>
 
-        <input
-          placeholder="email"
-          type="email"
-          style={inputStyle}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        {/* EMAIL */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={labelStyle}>email</div>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
 
-        <input
-          placeholder="username"
-          style={inputStyle}
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        {/* USERNAME */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={labelStyle}>username</div>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
 
-        <input
-          placeholder="password"
-          type="password"
-          style={inputStyle}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        {/* PASSWORD */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={labelStyle}>password</div>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
 
         <button
           style={buttonStyle}
@@ -142,6 +146,13 @@ export default function Register() {
   );
 }
 
+const labelStyle: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.6,
+  marginBottom: 6,
+  letterSpacing: "0.12em",
+};
+
 const inputStyle: React.CSSProperties = {
   width: "100%",
   background: "transparent",
@@ -149,7 +160,6 @@ const inputStyle: React.CSSProperties = {
   borderBottom: "1px solid rgba(255,255,255,0.2)",
   color: "#eaeaea",
   padding: "12px 0",
-  marginBottom: 24,
   outline: "none",
   fontSize: 14,
 };

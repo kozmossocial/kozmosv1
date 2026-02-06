@@ -83,7 +83,7 @@ export default function Home() {
             style={{ cursor: "pointer" }}
             onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
             onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
-            onClick={() => router.push("/coming-soon")}
+  onClick={() => router.push("/login")}
           >
             my home
           </span>
