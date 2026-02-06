@@ -12,30 +12,28 @@ type Note = {
 export default function MyHome() {
   const router = useRouter();
 
-  const [username, setUsername] = useState<string>("user");
+  const [username, setUsername] = useState("user");
   const [userId, setUserId] = useState<string | null>(null);
 
   const [noteInput, setNoteInput] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    async function loadUser() {
-      // 1️⃣ Auth user
+    async function loadUserAndNotes() {
+      // 1️⃣ Auth
       const {
         data: { user },
-        error: authError,
       } = await supabase.auth.getUser();
 
-      if (authError || !user) {
+      if (!user) {
         router.push("/login");
         return;
       }
 
       setUserId(user.id);
 
-      // 2️⃣ Profile username
+      // 2️⃣ Username
       const { data: profile } = await supabase
         .from("profileskozmos")
         .select("username")
@@ -44,16 +42,17 @@ export default function MyHome() {
 
       setUsername(profile?.username ?? "user");
 
-      // 3️⃣ Notes
+      // 3️⃣ Notes (SADECE BU USER)
       const { data: notesData } = await supabase
         .from("notes")
         .select("id, content")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       setNotes(notesData || []);
     }
 
-    loadUser();
+    loadUserAndNotes();
   }, [router]);
 
   async function handleLogout() {
@@ -66,32 +65,17 @@ export default function MyHome() {
 
     setLoading(true);
 
-    if (editingId) {
-      await supabase
-        .from("notes")
-        .update({ content: noteInput })
-        .eq("id", editingId);
+    const { data } = await supabase
+      .from("notes")
+      .insert({
+        user_id: userId,
+        content: noteInput,
+      })
+      .select("id, content")
+      .single();
 
-      setNotes((prev) =>
-        prev.map((n) =>
-          n.id === editingId ? { ...n, content: noteInput } : n
-        )
-      );
-
-      setEditingId(null);
-    } else {
-      const { data } = await supabase
-        .from("notes")
-        .insert({
-          user_id: userId,
-          content: noteInput,
-        })
-        .select()
-        .single();
-
-      if (data) {
-        setNotes((prev) => [data, ...prev]);
-      }
+    if (data) {
+      setNotes((prev) => [data, ...prev]);
     }
 
     setNoteInput("");
@@ -103,27 +87,11 @@ export default function MyHome() {
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }
 
-  function editNote(note: Note) {
-    setNoteInput(note.content);
-    setEditingId(note.id);
-  }
-
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#0b0b0b",
-        color: "#eaeaea",
-        padding: "40px",
-        position: "relative",
-      }}
-    >
+    <main style={pageStyle}>
       {/* TOP LEFT */}
       <div style={topLeftStyle}>
-        <span
-          style={{ cursor: "pointer" }}
-          onClick={() => router.push("/coming-soon")}
-        >
+        <span style={{ cursor: "pointer" }} onClick={() => router.push("/coming-soon")}>
           main
         </span>{" "}
         / <span>my home</span>
@@ -131,34 +99,19 @@ export default function MyHome() {
 
       {/* TOP RIGHT */}
       <div style={topRightStyle}>
-        <span style={{ marginRight: 6 }}>{username}</span> /{" "}
+        <span>{username}</span> /{" "}
         <span style={{ cursor: "pointer" }} onClick={handleLogout}>
           logout
         </span>
       </div>
 
       {/* CONTENT */}
-      <div
-        style={{
-          maxWidth: 520,
-          margin: "0 auto",
-          marginTop: 120,
-        }}
-      >
+      <div style={contentStyle}>
         <div style={{ opacity: 0.6, marginBottom: 6 }}>
           this is your space.
         </div>
 
-        <div
-          style={{
-            fontSize: 12,
-            letterSpacing: "0.12em",
-            opacity: 0.6,
-            marginBottom: 12,
-          }}
-        >
-          keep your notes here
-        </div>
+        <div style={labelStyle}>keep your notes here</div>
 
         <textarea
           value={noteInput}
@@ -168,7 +121,7 @@ export default function MyHome() {
         />
 
         <div style={saveStyle} onClick={saveNote}>
-          {loading ? "saving…" : editingId ? "update" : "save"}
+          {loading ? "saving…" : "save"}
         </div>
 
         {/* NOTES */}
@@ -180,7 +133,6 @@ export default function MyHome() {
               </div>
 
               <div style={noteActionsStyle}>
-                <span onClick={() => editNote(note)}>edit</span>
                 <span onClick={() => deleteNote(note.id)}>delete</span>
               </div>
             </div>
@@ -192,6 +144,14 @@ export default function MyHome() {
 }
 
 /* styles */
+
+const pageStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "#0b0b0b",
+  color: "#eaeaea",
+  padding: 40,
+  position: "relative",
+};
 
 const topLeftStyle: React.CSSProperties = {
   position: "absolute",
@@ -209,6 +169,18 @@ const topRightStyle: React.CSSProperties = {
   fontSize: 12,
   letterSpacing: "0.12em",
   opacity: 0.6,
+};
+
+const contentStyle: React.CSSProperties = {
+  maxWidth: 520,
+  margin: "120px auto 0",
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 12,
+  letterSpacing: "0.12em",
+  opacity: 0.6,
+  marginBottom: 12,
 };
 
 const textareaStyle: React.CSSProperties = {
@@ -242,7 +214,5 @@ const noteActionsStyle: React.CSSProperties = {
   marginTop: 6,
   fontSize: 12,
   opacity: 0.5,
-  display: "flex",
-  gap: 12,
   cursor: "pointer",
 };
