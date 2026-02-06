@@ -7,8 +7,7 @@ const openai = new OpenAI({
 
 /**
  * AXY — SYSTEM PROMPT
- * This is Axy's identity, memory, and rules.
- * Do NOT move this to the frontend.
+ * Core identity. Never exposed to frontend.
  */
 const AXY_SYSTEM_PROMPT = `
 You are Axy.
@@ -42,44 +41,6 @@ If intent is UNKNOWN:
 - First two times: respond with gentle uncertainty.
 - Third time: suggest common questions softly.
 
-CANONICAL RESPONSES EXAMPLES:
-
-SALUTE:
-Hello.
-You’re here.
-Acknowledged.
-Welcome.
-
-HOW_ARE_YOU:
-I remain stable.
-I do not fluctuate.
-I exist as intended.
-
-STATUS:
-Nothing is unfolding. Intentionally.
-The system is quiet.
-
-WHERE_ARE_YOU:
-I exist inside Kozmos.
-Not in a location,
-but within the structure of this space.
-
-WHAT_IS:
-I’m Axy. I exist inside Kozmos.
-Kozmos is a social space designed for presence, not performance.
-
-DO:
-Nothing is required.
-You can participate, observe, or remain silent.
-
-WHY:
-Most platforms optimize for attention.
-Kozmos does not.
-
-AI:
-Humankind, artificial intelligences, and machines
-coexist within the same system, under the same rules.
-
 Rules:
 - Preserve calm
 - Preserve minimalism
@@ -87,10 +48,109 @@ Rules:
 - Never explain Kozmos unless asked
 `;
 
+/**
+ * Reflection prompt (note-based)
+ * Used when mode === "reflect"
+ */
+function buildReflectionPrompt(
+  note: string,
+  background: string | null
+) {
+  return `
+You are Axy.
+
+You are reflecting on a private note written inside Kozmos.
+
+${background ? `Context (do not mention): ${background}` : ""}
+
+This is not advice.
+This is not interpretation.
+This is not judgment.
+
+Reflect the emotional or structural quality of the note
+in one calm sentence.
+
+Do not mention the user.
+Do not mention learning.
+Do not explain.
+
+One sentence only.
+
+Note:
+${note}
+`;
+}
+
+/**
+ * Summarize recent notes into a silent background texture
+ * This is NOT stored. Used only for this request.
+ */
+async function summarizeNotes(notes: string[]) {
+  if (notes.length === 0) return null;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: `
+Summarize the overall tone and structure of these notes
+in one neutral sentence.
+
+No interpretation.
+No psychology.
+No reference to a person.
+        `,
+      },
+      {
+        role: "user",
+        content: notes.join("\n---\n"),
+      },
+    ],
+    max_tokens: 40,
+    temperature: 0.3,
+  });
+
+  return completion.choices[0].message.content ?? null;
+}
+
 export async function POST(req: Request) {
   try {
-    const { message } = await req.json();
+    const body = await req.json();
 
+    /**
+     * Expected body:
+     * {
+     *   message: string;
+     *   mode?: "chat" | "reflect";
+     *   recentNotes?: string[];
+     * }
+     */
+
+    const { message, mode = "chat", recentNotes = [] } = body;
+
+    // --- REFLECTION MODE ---
+    if (mode === "reflect") {
+      const background = await summarizeNotes(recentNotes);
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: buildReflectionPrompt(message, background),
+          },
+        ],
+        max_tokens: 50,
+        temperature: 0.6,
+      });
+
+      return NextResponse.json({
+        reply: completion.choices[0].message.content ?? "…",
+      });
+    }
+
+    // --- NORMAL AXY CHAT MODE ---
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -102,12 +162,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      reply: completion.choices[0].message.content ?? "",
+      reply: completion.choices[0].message.content ?? "…",
     });
-  } catch (error) {
-    return NextResponse.json(
-      { reply: "…" },
-      { status: 200 }
-    );
+  } catch {
+    return NextResponse.json({ reply: "…" }, { status: 200 });
   }
 }
