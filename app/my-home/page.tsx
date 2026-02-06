@@ -6,25 +6,39 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function MyHome() {
   const router = useRouter();
-  const [username, setUsername] = useState<string | null>(null);
+  const [username, setUsername] = useState<string>("user");
 
   useEffect(() => {
     async function loadUser() {
-      const { data } = await supabase.auth.getUser();
+      // 1️⃣ Auth user
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-      if (!data.user) {
+      if (authError || !user) {
         router.push("/login");
         return;
       }
 
-      // profil tablosundan username çek
-      const { data: profile } = await supabase
+      // 2️⃣ Profile username
+      const { data: profile, error: profileError } = await supabase
         .from("profileskozmos")
         .select("username")
-        .eq("id", data.user.id)
-        .single();
+        .eq("id", user.id)
+        .maybeSingle(); // ❗ single yerine maybeSingle
 
-      setUsername(profile?.username ?? "user");
+      if (profileError) {
+        console.error("PROFILE FETCH ERROR:", profileError.message);
+        setUsername("user");
+        return;
+      }
+
+      if (profile?.username) {
+        setUsername(profile.username);
+      } else {
+        setUsername("user");
+      }
     }
 
     loadUser();
@@ -58,20 +72,11 @@ export default function MyHome() {
       >
         <span
           style={{ cursor: "pointer" }}
-          onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
-          onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
-onClick={() => router.push("/coming-soon")}
+          onClick={() => router.push("/coming-soon")}
         >
           main
         </span>{" "}
-        /{" "}
-        <span
-          style={{ cursor: "pointer" }}
-          onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
-          onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
-        >
-          my home
-        </span>
+        / <span>my home</span>
       </div>
 
       {/* TOP RIGHT — USERNAME / LOGOUT */}
@@ -85,16 +90,9 @@ onClick={() => router.push("/coming-soon")}
           opacity: 0.6,
         }}
       >
-        <span
-          style={{ cursor: "default", marginRight: 6 }}
-        >
-          {username}
-        </span>
-        /{" "}
+        <span style={{ marginRight: 6 }}>{username}</span> /{" "}
         <span
           style={{ cursor: "pointer" }}
-          onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
-          onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
           onClick={handleLogout}
         >
           logout

@@ -12,11 +12,13 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleRegister() {
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault(); // ✅ ENTER FIX
     if (!email || !password || !username) return;
 
     setLoading(true);
 
+    // 1️⃣ Supabase Auth signup
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -28,12 +30,15 @@ export default function Register() {
       return;
     }
 
-    if (data.user) {
+    const user = data.user;
+
+    // 2️⃣ Custom profile insert
+    if (user) {
       const { error: profileError } = await supabase
         .from("profileskozmos")
         .insert({
-          id: data.user.id,
-          username,
+          id: user.id,
+          username: username,
         });
 
       if (profileError) {
@@ -60,7 +65,7 @@ export default function Register() {
         position: "relative",
       }}
     >
-      {/* GO BACK */}
+      {/* TOP LEFT — GO BACK */}
       <div
         style={{
           position: "absolute",
@@ -72,11 +77,14 @@ export default function Register() {
           cursor: "pointer",
         }}
         onClick={() => router.push("/")}
+        onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
+        onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
       >
         ← go back
       </div>
 
-      <div style={{ width: 320 }}>
+      {/* ✅ FORM */}
+      <form style={{ width: 320 }} onSubmit={handleRegister}>
         <h1
           style={{
             letterSpacing: "0.25em",
@@ -88,42 +96,32 @@ export default function Register() {
           REGISTER
         </h1>
 
-        {/* EMAIL */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={labelStyle}>email</div>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
+        <input
+          placeholder="email"
+          type="email"
+          style={inputStyle}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
-        {/* USERNAME */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={labelStyle}>username</div>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
+        <input
+          placeholder="username"
+          style={inputStyle}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
 
-        {/* PASSWORD */}
-        <div style={{ marginBottom: 32 }}>
-          <div style={labelStyle}>password</div>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
+        <input
+          placeholder="password"
+          type="password"
+          style={inputStyle}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
         <button
           style={buttonStyle}
-          onClick={handleRegister}
+          type="submit"
           disabled={loading}
         >
           {loading ? "..." : "register"}
@@ -141,17 +139,10 @@ export default function Register() {
         >
           already here? login
         </div>
-      </div>
+      </form>
     </main>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 12,
-  opacity: 0.6,
-  marginBottom: 6,
-  letterSpacing: "0.12em",
-};
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -160,6 +151,7 @@ const inputStyle: React.CSSProperties = {
   borderBottom: "1px solid rgba(255,255,255,0.2)",
   color: "#eaeaea",
   padding: "12px 0",
+  marginBottom: 24,
   outline: "none",
   fontSize: 14,
 };

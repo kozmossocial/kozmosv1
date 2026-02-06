@@ -11,7 +11,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleLogin() {
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault(); // ✅ ENTER FIX
     if (!email || !password) return;
 
     setLoading(true);
@@ -28,7 +29,6 @@ export default function Login() {
       return;
     }
 
-    // my-home henüz yok → sonra bağlarız
     router.push("/my-home");
   }
 
@@ -42,6 +42,7 @@ export default function Login() {
         alignItems: "center",
         justifyContent: "center",
         padding: 40,
+        position: "relative",
       }}
     >
       {/* TOP LEFT — GO BACK */}
@@ -62,7 +63,8 @@ export default function Login() {
         ← go back
       </div>
 
-      <div style={{ width: 320 }}>
+      {/* ✅ FORM */}
+      <form style={{ width: 320 }} onSubmit={handleLogin}>
         <h1
           style={{
             letterSpacing: "0.25em",
@@ -94,7 +96,7 @@ export default function Login() {
 
         <button
           style={buttonStyle}
-          onClick={handleLogin}
+          type="submit"
           disabled={loading}
         >
           {loading ? "..." : "enter"}
@@ -112,7 +114,7 @@ export default function Login() {
         >
           new here? join
         </div>
-      </div>
+      </form>
     </main>
   );
 }
