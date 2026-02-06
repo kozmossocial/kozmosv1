@@ -180,15 +180,23 @@ export default function MyHome() {
       fontStyle: "italic",
     }}
   >
-    <span
-      style={{
-        color: "#6BFF8E",        // ✅ Ana sayfadaki Axy yeşili
-        letterSpacing: "0.12em",
-        marginRight: 4,
-      }}
-    >
-      Axy reflects:
-    </span>
+  <span
+  style={{
+    color: "#6BFF8E",
+    letterSpacing: "0.12em",
+    marginRight: 4,
+    cursor: "pointer",
+  }}
+  onClick={() =>
+    setAxyReflection((prev) => {
+      const copy = { ...prev };
+      delete copy[note.id];   // ✅ Axy kapanır
+      return copy;
+    })
+  }
+>
+  Axy reflects:
+</span>
     {axyReflection[note.id]}
   </div>
 )}
