@@ -190,7 +190,7 @@ export default function MyHome() {
   onClick={() =>
     setAxyReflection((prev) => {
       const copy = { ...prev };
-      delete copy[note.id];   // ✅ Axy kapanır
+      delete copy[note.id];   
       return copy;
     })
   }
