@@ -233,7 +233,6 @@ export default function Home() {
     padding: 40,
   }}
 >
-  {/* PRINCIPLE TEXT — ÜST KISIM */}
   <div
     style={{
       maxWidth: 520,
@@ -245,7 +244,6 @@ export default function Home() {
     {principle ? principles[principle] : ""}
   </div>
 
-  {/* AXY BANNER — ALT KISIM */}
   <div
     style={{
       marginBottom: 32,
