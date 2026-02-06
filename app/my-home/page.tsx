@@ -171,18 +171,27 @@ export default function MyHome() {
                   {note.content}
                 </div>
 
-                {axyReflection[note.id] && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 13,
-                      opacity: 0.7,
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Axy reflects: {axyReflection[note.id]}
-                  </div>
-                )}
+              {axyReflection[note.id] && (
+  <div
+    style={{
+      marginTop: 8,
+      fontSize: 13,
+      opacity: 0.75,
+      fontStyle: "italic",
+    }}
+  >
+    <span
+      style={{
+        color: "#6BFF8E",        // ✅ Ana sayfadaki Axy yeşili
+        letterSpacing: "0.12em",
+        marginRight: 4,
+      }}
+    >
+      Axy reflects:
+    </span>
+    {axyReflection[note.id]}
+  </div>
+)}
 
                 <div style={noteActionsStyle}>
                   <span onClick={() => deleteNote(note.id)}>delete</span>
