@@ -19,9 +19,12 @@ export default function MyHome() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // 🧠 AXY STATES
+  const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
+  const [axyLoadingId, setAxyLoadingId] = useState<string | null>(null);
+
   useEffect(() => {
     async function loadUserAndNotes() {
-      // 1️⃣ Auth
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -33,7 +36,6 @@ export default function MyHome() {
 
       setUserId(user.id);
 
-      // 2️⃣ Username
       const { data: profile } = await supabase
         .from("profileskozmos")
         .select("username")
@@ -42,7 +44,6 @@ export default function MyHome() {
 
       setUsername(profile?.username ?? "user");
 
-      // 3️⃣ Notes (SADECE BU USER)
       const { data: notesData } = await supabase
         .from("notes")
         .select("id, content")
@@ -87,6 +88,35 @@ export default function MyHome() {
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }
 
+  // 🤖 ASK AXY
+  async function askAxy(noteId: string, content: string) {
+    setAxyLoadingId(noteId);
+
+    try {
+      const res = await fetch("/api/axy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Reflect on this note in one calm sentence:\n\n${content}`,
+        }),
+      });
+
+      const data = await res.json();
+
+      setAxyReflection((prev) => ({
+        ...prev,
+        [noteId]: data.reply,
+      }));
+    } catch {
+      setAxyReflection((prev) => ({
+        ...prev,
+        [noteId]: "...",
+      }));
+    }
+
+    setAxyLoadingId(null);
+  }
+
   return (
     <main style={pageStyle}>
       {/* TOP LEFT */}
@@ -127,14 +157,50 @@ export default function MyHome() {
         {/* NOTES */}
         <div style={{ marginTop: 40 }}>
           {notes.map((note) => (
-            <div key={note.id} style={noteStyle}>
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                {note.content}
+            <div
+              key={note.id}
+              style={{
+                ...noteStyle,
+                display: "flex",
+                gap: 16,
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                  {note.content}
+                </div>
+
+                {axyReflection[note.id] && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 13,
+                      opacity: 0.7,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Axy reflects: {axyReflection[note.id]}
+                  </div>
+                )}
+
+                <div style={noteActionsStyle}>
+                  <span onClick={() => deleteNote(note.id)}>delete</span>
+                </div>
               </div>
 
-              <div style={noteActionsStyle}>
-                <span onClick={() => deleteNote(note.id)}>delete</span>
-              </div>
+              {/* AXY LOGO */}
+              <img
+                src="/axy-logofav.png"
+                alt="Axy"
+                style={{
+                  width: 22,
+                  height: 22,
+                  opacity: 0.6,
+                  cursor: "pointer",
+                }}
+                onClick={() => askAxy(note.id, note.content)}
+              />
             </div>
           ))}
         </div>
