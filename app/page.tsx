@@ -141,8 +141,8 @@ export default function Home() {
         </div>
 
         {/* CONTENT */}
-        <div style={{ maxWidth: 520, lineHeight: 1.6 }}>
-          <h1 style={{ letterSpacing: "0.35em", fontWeight: 400, marginBottom: 56 }}>
+        <div style={{ maxWidth: 520, lineHeight: 2.0 }}>
+          <h1 style={{ letterSpacing: "0.35em", fontWeight: 600, marginBottom: 56 }}>
             KOZMOS·
           </h1>
 
