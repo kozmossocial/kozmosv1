@@ -15,6 +15,10 @@ export default function MyHome() {
   const [username, setUsername] = useState("user");
   const [userId, setUserId] = useState<string | null>(null);
 
+  // ✨ AXY MICRO STATES
+  const [axyPulseId, setAxyPulseId] = useState<string | null>(null);
+  const [axyFadeId, setAxyFadeId] = useState<string | null>(null);
+
   const [noteInput, setNoteInput] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
@@ -171,35 +175,41 @@ export default function MyHome() {
                   {note.content}
                 </div>
 
-              {axyReflection[note.id] && (
-  <div
-    style={{
-      marginTop: 8,
-      fontSize: 13,
-      opacity: 0.75,
-      fontStyle: "italic",
-    }}
-  >
-  <span
-  style={{
-    color: "#6BFF8E",
-    letterSpacing: "0.12em",
-    marginRight: 4,
-    cursor: "pointer",
-  }}
-  onClick={() =>
-    setAxyReflection((prev) => {
-      const copy = { ...prev };
-      delete copy[note.id];   
-      return copy;
-    })
-  }
->
-  Axy reflects:
-</span>
-    {axyReflection[note.id]}
-  </div>
-)}
+                {axyReflection[note.id] && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 13,
+                      opacity: 0.75,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "#6BFF8E",
+                        letterSpacing: "0.12em",
+                        marginRight: 4,
+                        cursor: "pointer",
+                      }}
+                      onClick={() => {
+                        setAxyFadeId(note.id);
+
+                        setAxyReflection((prev) => {
+                          const copy = { ...prev };
+                          delete copy[note.id];
+                          return copy;
+                        });
+
+                        setTimeout(() => {
+                          setAxyFadeId(null);
+                        }, 400);
+                      }}
+                    >
+                      Axy reflects:
+                    </span>
+                    {axyReflection[note.id]}
+                  </div>
+                )}
 
                 <div style={noteActionsStyle}>
                   <span onClick={() => deleteNote(note.id)}>delete</span>
@@ -207,17 +217,35 @@ export default function MyHome() {
               </div>
 
               {/* AXY LOGO */}
-              <img
-                src="/axy-logofav.png"
-                alt="Axy"
-                style={{
-                  width: 22,
-                  height: 22,
-                  opacity: 0.6,
-                  cursor: "pointer",
-                }}
-                onClick={() => askAxy(note.id, note.content)}
-              />
+             <img
+  src="/axy-logofav.png"
+  alt="Axy"
+  style={{
+    width: 22,
+    height: 22,
+    cursor: "pointer",
+    opacity: axyFadeId === note.id ? 0.25 : 0.6,
+    transform: axyPulseId === note.id ? "scale(1.2)" : "scale(1)",
+    transition:
+      "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.filter =
+      "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.filter = "none";
+  }}
+  onClick={() => {
+    setAxyPulseId(note.id);
+    askAxy(note.id, note.content);
+
+    setTimeout(() => {
+      setAxyPulseId(null);
+    }, 300);
+  }}
+/>
+
             </div>
           ))}
         </div>
