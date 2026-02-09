@@ -28,6 +28,7 @@ export default function MyHome() {
   const [axyLoadingId, setAxyLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
+
     async function loadUserAndNotes() {
       const {
         data: { user },
@@ -59,7 +60,19 @@ export default function MyHome() {
 
     loadUserAndNotes();
   }, [router]);
+useEffect(() => {
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT") {
+      router.replace("/login");
+    }
+  });
 
+  return () => {
+    subscription.unsubscribe();
+  };
+}, [router]);
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/");
