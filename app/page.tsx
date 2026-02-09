@@ -144,11 +144,11 @@ async function handleLoginClick() {
           </span>{" "}
           /{" "}
           <span
-            style={{ cursor: "pointer" }}
-            onClick={() => router.push("/login")}
-          >
-            login
-          </span>
+  style={{ cursor: "pointer" }}
+  onClick={handleLoginClick}
+>
+  login
+</span>
         </div>
 
         {/* CONTENT */}
