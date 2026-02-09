@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
   const router = useRouter();
@@ -11,7 +12,6 @@ export default function Home() {
   const [openAxy, setOpenAxy] = useState(false);
   const [principle, setPrinciple] = useState<string | null>(null);
 
-  // ✅ AXY CHAT STATES (EK)
   const [axyInput, setAxyInput] = useState("");
   const [axyReply, setAxyReply] = useState<string | null>(null);
   const [axyLoading, setAxyLoading] = useState(false);
@@ -20,6 +20,17 @@ export default function Home() {
     const t = setTimeout(() => setShowAxy(true), 3000);
     return () => clearTimeout(t);
   }, []);
+async function handleLoginClick() {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    router.push("/my-home");
+  } else {
+    router.push("/login");
+  }
+}
 
   function goToPrinciple(key: string) {
     setPrinciple(key);
