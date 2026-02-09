@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Login() {
@@ -10,29 +10,28 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-useEffect(() => {
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  // ✅ LOGIN GUARD
+  useEffect(() => {
     async function checkSession() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
       if (user) {
-        router.push("/my-home");
+        router.replace("/my-home"); // ⬅️ push değil replace
+        return;
       }
+
+      setCheckingSession(false);
     }
 
     checkSession();
   }, [router]);
 
-  return (
-    <main>
-      {/* login formun burada */}
-    </main>
-  );
-}
-
   async function handleLogin(e: React.FormEvent) {
-    e.preventDefault(); 
+    e.preventDefault();
     if (!email || !password) return;
 
     setLoading(true);
@@ -49,7 +48,12 @@ useEffect(() => {
       return;
     }
 
-    router.push("/my-home");
+    router.replace("/my-home");
+  }
+
+  // ⛔ Session kontrol edilirken formu hiç gösterme
+  if (checkingSession) {
+    return null;
   }
 
   return (
@@ -77,13 +81,11 @@ useEffect(() => {
           cursor: "pointer",
         }}
         onClick={() => router.push("/")}
-        onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
-        onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
       >
         ← go back
       </div>
 
-      {/* ✅ FORM */}
+      {/* FORM */}
       <form style={{ width: 320 }} onSubmit={handleLogin}>
         <h1
           style={{
@@ -96,7 +98,6 @@ useEffect(() => {
           ENTER
         </h1>
 
-        {/* EMAIL */}
         <div style={labelStyle}>email</div>
         <input
           type="email"
@@ -105,7 +106,6 @@ useEffect(() => {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        {/* PASSWORD */}
         <div style={labelStyle}>password</div>
         <input
           type="password"
@@ -114,11 +114,7 @@ useEffect(() => {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <button
-          style={buttonStyle}
-          type="submit"
-          disabled={loading}
-        >
+        <button style={buttonStyle} type="submit" disabled={loading}>
           {loading ? "..." : "enter"}
         </button>
 
