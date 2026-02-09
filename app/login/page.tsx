@@ -10,9 +10,29 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        router.push("/my-home");
+      }
+    }
+
+    checkSession();
+  }, [router]);
+
+  return (
+    <main>
+      {/* login formun burada */}
+    </main>
+  );
+}
 
   async function handleLogin(e: React.FormEvent) {
-    e.preventDefault(); // ✅ ENTER FIX
+    e.preventDefault(); 
     if (!email || !password) return;
 
     setLoading(true);
