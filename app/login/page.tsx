@@ -1,18 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Login() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const redirectTo = searchParams.get("redirect") || "/my-home";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  // ✅ LOGIN GUARD
+  // ✅ LOGIN GUARD (zaten logged in ise)
   useEffect(() => {
     async function checkSession() {
       const {
@@ -20,7 +23,7 @@ export default function Login() {
       } = await supabase.auth.getUser();
 
       if (user) {
-        router.replace("/my-home"); // ⬅️ push değil replace
+        router.replace(redirectTo);
         return;
       }
 
@@ -28,7 +31,7 @@ export default function Login() {
     }
 
     checkSession();
-  }, [router]);
+  }, [router, redirectTo]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -48,10 +51,11 @@ export default function Login() {
       return;
     }
 
-    router.replace("/my-home");
+    // ✅ login sonrası doğru yere dön
+    router.replace(redirectTo);
   }
 
-  // ⛔ Session kontrol edilirken formu hiç gösterme
+  // ⛔ Session kontrol edilirken formu gösterme
   if (checkingSession) {
     return null;
   }

@@ -112,7 +112,7 @@ async function handleLoginClick() {
         >
           <span
             style={{ cursor: "pointer" }}
-            onClick={() => router.push("/coming-soon")}
+onClick={() => router.push("/login?redirect=/main")}
           >
             main
           </span>{" "}

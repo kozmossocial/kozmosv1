@@ -138,7 +138,7 @@ useEffect(() => {
     <main style={pageStyle}>
       {/* TOP LEFT */}
       <div style={topLeftStyle}>
-        <span style={{ cursor: "pointer" }} onClick={() => router.push("/coming-soon")}>
+        <span style={{ cursor: "pointer" }} onClick={() => router.push("/main")}>
           main
         </span>{" "}
         / <span>my home</span>
