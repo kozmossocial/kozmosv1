@@ -24,6 +24,7 @@ type HushMember = {
   user_id: string;
   role: "owner" | "member";
   status: "invited" | "accepted" | "declined" | "left" | "removed";
+  display_name?: string | null;
   created_at: string;
 };
 
@@ -144,26 +145,38 @@ export default function Main() {
     const chatIds = chats.map((chat) => chat.id);
     const { data: members } = await supabase
       .from("hush_chat_members")
-      .select("id, chat_id, user_id, role, status, created_at")
+      .select("id, chat_id, user_id, role, status, display_name, created_at")
       .in("chat_id", chatIds);
 
     setHushMembers(members || []);
+
+    const map: Record<string, string> = {};
+    (members || []).forEach((member) => {
+      if (member.display_name) {
+        map[member.user_id] = member.display_name;
+      }
+    });
 
     const userIds = Array.from(
       new Set((members || []).map((member) => member.user_id))
     );
 
     if (userIds.length === 0) {
-      setHushUsers({});
+      setHushUsers(map);
+      return;
+    }
+
+    const missingUserIds = userIds.filter((id) => !map[id]);
+    if (missingUserIds.length === 0) {
+      setHushUsers(map);
       return;
     }
 
     const { data: profiles } = await supabase
       .from("profileskozmos")
       .select("id, username")
-      .in("id", userIds);
+      .in("id", missingUserIds);
 
-    const map: Record<string, string> = {};
     (profiles || []).forEach((profile) => {
       map[profile.id] = profile.username;
     });
@@ -212,6 +225,56 @@ export default function Main() {
     if (!userId) return;
     loadHush();
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel("hush-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "hush_chats" },
+        () => {
+          loadHush();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "hush_chat_members" },
+        () => {
+          loadHush();
+          if (selectedHushChatId) {
+            loadHushMessages(selectedHushChatId);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "hush_chat_messages" },
+        (payload) => {
+          const next = payload.new as HushMessage | null;
+          const prev = payload.old as HushMessage | null;
+          const chatId = next?.chat_id || prev?.chat_id;
+
+          if (selectedHushChatId && chatId === selectedHushChatId) {
+            loadHushMessages(selectedHushChatId);
+          }
+        }
+      )
+      .subscribe();
+
+    const poll = setInterval(() => {
+      loadHush();
+      if (selectedHushChatId) {
+        loadHushMessages(selectedHushChatId);
+      }
+    }, 6000);
+
+    return () => {
+      clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  }, [userId, selectedHushChatId]);
 
   useEffect(() => {
     if (!selectedHushChatId || !userId) {
@@ -355,12 +418,14 @@ export default function Main() {
           user_id: userId,
           role: "owner",
           status: "accepted",
+          display_name: username,
         },
         {
           chat_id: chat.id,
           user_id: targetUserId,
           role: "member",
           status: "invited",
+          display_name: hushInviteTarget?.username ?? "user",
         },
       ]);
 
@@ -383,6 +448,7 @@ export default function Main() {
       user_id: targetUserId,
       role: "member",
       status: "invited",
+      display_name: hushInviteTarget?.username ?? "user",
     });
 
     setHushInviteTarget(null);
