@@ -76,7 +76,7 @@ export default function AccountPage() {
           alt="Kozmos"
           className="kozmos-logo kozmos-logo-ambient"
           style={{
-            width: 120,
+            width: 80,
           }}
         />
       </div>
