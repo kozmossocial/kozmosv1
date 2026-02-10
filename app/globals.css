@@ -8,7 +8,7 @@ body {
   height: 100%;
   background: #0b0b0b;
   color: #eaeaea;
-  overflow-x: hidden; /* ✅ sağa taşmayı öldürür */
+  overflow-x: hidden;
 }
 
 /* Dark scrollbar (Chrome, Edge) */
@@ -23,4 +23,24 @@ body {
 ::-webkit-scrollbar-thumb {
   background-color: #333;
   border-radius: 4px;
+}
+
+/* Kozmos logo */
+.kozmos-logo {
+  opacity: 0.85;
+  border-radius: 6px;
+  transition:
+    opacity 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.08s ease;
+}
+
+.kozmos-logo:hover {
+  opacity: 1;
+  box-shadow: 0 0 18px rgba(0, 255, 170, 0.45);
+}
+
+.kozmos-logo:active {
+  transform: scale(0.97);
+  box-shadow: 0 0 10px rgba(0, 255, 170, 0.25);
 }

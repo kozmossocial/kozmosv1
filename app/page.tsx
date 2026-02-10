@@ -16,21 +16,59 @@ export default function Home() {
   const [axyReply, setAxyReply] = useState<string | null>(null);
   const [axyLoading, setAxyLoading] = useState(false);
 
+  // 🔹 AUTH + PROFILE STATE
+  const [user, setUser] = useState<any>(null);
+  const [username, setUsername] = useState<string | null>(null);
+
   useEffect(() => {
     const t = setTimeout(() => setShowAxy(true), 3000);
     return () => clearTimeout(t);
   }, []);
-async function handleLoginClick() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (user) {
-    router.push("/my-home");
-  } else {
-    router.push("/login");
+  // 🔹 USER + USERNAME LOAD (TEK NOKTA)
+  useEffect(() => {
+  const loadUser = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setUser(null);
+      return;
+    }
+
+    setUser(user);
+
+    const { data } = await supabase
+      .from("profileskozmos")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (data?.username) {
+      setUsername(data.username);
+    }
+  };
+
+  loadUser();
+}, []);
+
+
+  async function handleLoginClick() {
+    if (user) {
+      router.push("/my-home");
+    } else {
+      router.push("/login");
+    }
   }
-}
+
+  // ✅ STABİL LOGOUT
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setUser(null);
+    setUsername(null);
+    router.push("/");
+  }
 
   function goToPrinciple(key: string) {
     setPrinciple(key);
@@ -39,7 +77,6 @@ async function handleLoginClick() {
     }, 80);
   }
 
-  // ✅ AXY ASK FUNCTION (EK)
   async function askAxy() {
     if (!axyInput.trim()) return;
 
@@ -112,7 +149,7 @@ async function handleLoginClick() {
         >
           <span
             style={{ cursor: "pointer" }}
-onClick={() => router.push("/login?redirect=/main")}
+            onClick={() => router.push("/login?redirect=/main")}
           >
             main
           </span>{" "}
@@ -136,24 +173,44 @@ onClick={() => router.push("/login?redirect=/main")}
             letterSpacing: "0.12em",
           }}
         >
-          <span
-            style={{ cursor: "pointer" }}
-            onClick={() => router.push("/register")}
-          >
-            signup
-          </span>{" "}
-          /{" "}
-          <span
-  style={{ cursor: "pointer" }}
-  onClick={handleLoginClick}
->
-  login
-</span>
+          {user ? (
+            <>
+              <span style={{ marginRight: 8 }}>
+                {username ?? "…"}
+              </span>
+              /{" "}
+              <span style={{ cursor: "pointer" }} onClick={handleLogout}>
+                logout
+              </span>
+            </>
+          ) : (
+            <>
+              <span
+                style={{ cursor: "pointer" }}
+                onClick={() => router.push("/register")}
+              >
+                signup
+              </span>{" "}
+              /{" "}
+              <span
+                style={{ cursor: "pointer" }}
+                onClick={handleLoginClick}
+              >
+                login
+              </span>
+            </>
+          )}
         </div>
 
         {/* CONTENT */}
         <div style={{ maxWidth: 520, lineHeight: 2.0 }}>
-          <h1 style={{ letterSpacing: "0.35em", fontWeight: 600, marginBottom: 56 }}>
+          <h1
+            style={{
+              letterSpacing: "0.35em",
+              fontWeight: 600,
+              marginBottom: 56,
+            }}
+          >
             KOZMOS·
           </h1>
 
