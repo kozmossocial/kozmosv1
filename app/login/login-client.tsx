@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function Login() {
+export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -15,7 +15,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  // ✅ LOGIN GUARD (zaten logged in ise)
+  // ✅ LOGIN GUARD
   useEffect(() => {
     async function checkSession() {
       const {
@@ -51,11 +51,9 @@ export default function Login() {
       return;
     }
 
-    // ✅ login sonrası doğru yere dön
     router.replace(redirectTo);
   }
 
-  // ⛔ Session kontrol edilirken formu gösterme
   if (checkingSession) {
     return null;
   }
@@ -73,7 +71,6 @@ export default function Login() {
         position: "relative",
       }}
     >
-      {/* TOP LEFT — GO BACK */}
       <div
         style={{
           position: "absolute",
@@ -89,7 +86,6 @@ export default function Login() {
         ← go back
       </div>
 
-      {/* FORM */}
       <form style={{ width: 320 }} onSubmit={handleLogin}>
         <h1
           style={{
