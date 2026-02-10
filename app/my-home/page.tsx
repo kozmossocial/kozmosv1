@@ -182,18 +182,24 @@ useEffect(() => {
         <span style={{ cursor: "pointer" }} onClick={() => router.push("/main")}>
           main
         </span>{" "}
-        / <span>my home</span>
+        /{" "}
+        <span
+          style={{ cursor: "pointer" }}
+          onClick={() => router.refresh()}
+        >
+          my home
+        </span>
       </div>
 
       {/* TOP RIGHT */}
       <div style={topRightStyle}>
-      <span
-  style={{ cursor: "pointer", opacity: 0.8 }}
-  onClick={() => router.push("/account")}
->
-  {username}
-</span>
- /{" "}
+        <span
+          style={{ cursor: "pointer", opacity: 0.8 }}
+          onClick={() => router.push("/account")}
+        >
+          {username}
+        </span>
+        {" / "}
         <span style={{ cursor: "pointer" }} onClick={handleLogout}>
           logout
         </span>
