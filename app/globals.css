@@ -140,3 +140,21 @@ body {
 .kozmos-tap:active {
   text-shadow: 0 0 6px rgba(107, 255, 142, 0.6);
 }
+
+/* Main layout responsive */
+@media (max-width: 900px) {
+  .main-grid {
+    grid-template-columns: 1fr !important;
+    row-gap: 24px;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .hush-panel {
+    margin-left: 0 !important;
+  }
+
+  .play-panel {
+    margin-right: 0 !important;
+  }
+}

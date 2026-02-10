@@ -772,9 +772,13 @@ export default function Main() {
       </div>
 
       {/* MAIN GRID */}
-      <div style={mainGridStyle}>
+      <div className="main-grid" style={mainGridStyle}>
         {/* HUSH PANEL */}
-        <div style={hushPanelStyle} ref={hushPanelRef}>
+        <div
+          className="hush-panel"
+          style={hushPanelStyle}
+          ref={hushPanelRef}
+        >
         <div
           style={{
             display: "flex",
@@ -1282,6 +1286,7 @@ export default function Main() {
 
         {/* PLAY PANEL */}
         <div
+          className="play-panel"
           style={{
             ...playPanelStyle,
             minHeight: playOpen ? undefined : playClosedHeight ?? undefined,
