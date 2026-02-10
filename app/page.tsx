@@ -219,7 +219,7 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
     position: "absolute",
     top: 30,
     left: "50%",
-    transform: "translateX(-30%)",
+    transform: "translateX(-27%)",
     zIndex: 50,
   }}
 >
