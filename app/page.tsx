@@ -205,7 +205,13 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
           )}
         </div>
 
-       <div style={{ maxWidth: 520, lineHeight: 2.5 }}>
+       <div
+  style={{
+    maxWidth: 520,
+    lineHeight: 2.5,
+    marginTop: "180px",        // desktop & mobile için güvenli
+  }}
+>
 
   {/* LOGO */}
   <div
