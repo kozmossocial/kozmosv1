@@ -750,8 +750,10 @@ export default function Main() {
         </span>
       </div>
 
-      {/* HUSH PANEL */}
-      <div style={hushPanelStyle}>
+      {/* MAIN GRID */}
+      <div style={mainGridStyle}>
+        {/* HUSH PANEL */}
+        <div style={hushPanelStyle}>
         <div
           style={{
             display: "flex",
@@ -1084,14 +1086,14 @@ export default function Main() {
                 </span>
               </div>
             ) : (
-              <div style={{ opacity: 0.4 }}>not a member</div>
+              <div style={{ opacity: 0.4 }}>not inside</div>
             )}
           </div>
         )}
-      </div>
+        </div>
 
-      {/* CHAT */}
-      <div style={{ maxWidth: 640, margin: "120px auto 0" }}>
+        {/* CHAT */}
+        <div style={chatColumnStyle}>
         <div
           style={{
             fontSize: 12,
@@ -1252,6 +1254,7 @@ export default function Main() {
         >
           {loading ? "sending..." : "send"}
         </div>
+        </div>
       </div>
 
       {/* AXY */}
@@ -1327,10 +1330,8 @@ const hushPillStyle: React.CSSProperties = {
 };
 
 const hushPanelStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 72,
-  left: 16,
-  width: 248,
+  width: "100%",
+  marginLeft: -32,
   padding: 12,
   fontSize: 12,
   letterSpacing: "0.04em",
@@ -1342,6 +1343,20 @@ const hushPanelStyle: React.CSSProperties = {
   boxShadow:
     "0 0 24px rgba(107,255,142,0.16), inset 0 0 12px rgba(107,255,142,0.08)",
   backdropFilter: "blur(6px)",
+};
+
+const mainGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(260px, 1fr) minmax(0, 680px) minmax(0, 1fr)",
+  columnGap: 24,
+  alignItems: "start",
+  marginTop: 120,
+  paddingLeft: 36,
+  paddingRight: 0,
+};
+
+const chatColumnStyle: React.CSSProperties = {
+  width: "100%",
 };
 
 
