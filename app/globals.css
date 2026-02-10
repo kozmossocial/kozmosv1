@@ -150,11 +150,17 @@ body {
     padding-right: 16px !important;
   }
 
+  .chat-panel {
+    order: 1;
+  }
+
   .hush-panel {
+    order: 2;
     margin-left: 0 !important;
   }
 
   .play-panel {
+    order: 3;
     margin-right: 0 !important;
   }
 }

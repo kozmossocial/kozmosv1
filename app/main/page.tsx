@@ -1118,7 +1118,7 @@ export default function Main() {
         </div>
 
         {/* CHAT */}
-        <div style={chatColumnStyle}>
+        <div className="chat-panel" style={chatColumnStyle}>
         <div
           className="kozmos-shared-glow"
           style={{
