@@ -146,7 +146,13 @@ useEffect(() => {
 
       {/* TOP RIGHT */}
       <div style={topRightStyle}>
-        <span>{username}</span> /{" "}
+      <span
+  style={{ cursor: "pointer", opacity: 0.8 }}
+  onClick={() => router.push("/account")}
+>
+  {username}
+</span>
+ /{" "}
         <span style={{ cursor: "pointer" }} onClick={handleLogout}>
           logout
         </span>

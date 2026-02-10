@@ -175,9 +175,12 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
         >
           {user ? (
             <>
-              <span style={{ marginRight: 8 }}>
-                {username ?? "…"}
-              </span>
+              <span
+  style={{ marginRight: 8, cursor: "pointer", opacity: 0.8 }}
+  onClick={() => router.push("/account")}
+>
+  {username ?? "…"}
+</span>
               /{" "}
               <span style={{ cursor: "pointer" }} onClick={handleLogout}>
                 logout
