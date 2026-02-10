@@ -55,6 +55,35 @@ export default function Main() {
     load();
   }, [router]);
 
+  // 🔁 REALTIME — yeni mesajları anında al
+  useEffect(() => {
+    const channel = supabase
+      .channel("main-messages-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "main_messages",
+        },
+        (payload) => {
+          const newMessage = payload.new as Message;
+
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMessage.id)) {
+              return prev;
+            }
+            return [...prev, newMessage];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // 💬 send message
   async function sendMessage() {
     if (!input.trim() || !userId) return;
