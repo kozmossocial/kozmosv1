@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -91,6 +91,9 @@ export default function Main() {
     username: string;
     chatId?: string;
   } | null>(null);
+  const [playOpen, setPlayOpen] = useState(false);
+  const hushPanelRef = useRef<HTMLDivElement | null>(null);
+  const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
 
   /* delayed presence */
   useEffect(() => {
@@ -314,6 +317,24 @@ export default function Main() {
 
     loadHushMessages(selectedHushChatId);
   }, [selectedHushChatId, userId, hushMembers]);
+
+  useEffect(() => {
+    const el = hushPanelRef.current;
+    if (!el) return;
+
+    const update = () => {
+      if (!playOpen) {
+        setPlayClosedHeight(el.getBoundingClientRect().height);
+      }
+    };
+
+    update();
+
+    const observer = new ResizeObserver(() => update());
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, [playOpen]);
 
   /*  REALTIME (insert + delete) */
   useEffect(() => {
@@ -753,7 +774,7 @@ export default function Main() {
       {/* MAIN GRID */}
       <div style={mainGridStyle}>
         {/* HUSH PANEL */}
-        <div style={hushPanelStyle}>
+        <div style={hushPanelStyle} ref={hushPanelRef}>
         <div
           style={{
             display: "flex",
@@ -1095,11 +1116,14 @@ export default function Main() {
         {/* CHAT */}
         <div style={chatColumnStyle}>
         <div
+          className="kozmos-shared-glow"
           style={{
-            fontSize: 12,
+            fontSize: 20,
             letterSpacing: "0.12em",
+            fontWeight: 500,
             opacity: 0.6,
-            marginBottom: 16,
+            marginBottom: 18,
+            textTransform: "none",
           }}
         >
           shared space
@@ -1255,6 +1279,84 @@ export default function Main() {
           {loading ? "sending..." : "send"}
         </div>
         </div>
+
+        {/* PLAY PANEL */}
+        <div
+          style={{
+            ...playPanelStyle,
+            minHeight: playOpen ? undefined : playClosedHeight ?? undefined,
+          }}
+          onClick={() => setPlayOpen((prev) => !prev)}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <div style={{ opacity: 0.6, letterSpacing: "0.2em" }}>
+              {"kozmos\u00b7play"}
+            </div>
+            <div style={{ opacity: 0.35 }}>beta</div>
+          </div>
+
+          <div style={{ opacity: 0.5, marginBottom: 6 }}>
+            quiet games inside kozmos
+          </div>
+
+          {playOpen && (
+            <>
+              <div style={{ marginBottom: 10 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <span>signal drift</span>
+                  <span className="kozmos-tap" style={{ opacity: 0.6 }}>
+                    enter
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <span>slow orbit</span>
+                  <span className="kozmos-tap" style={{ opacity: 0.6 }}>
+                    enter
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span>hush puzzle</span>
+                  <span className="kozmos-tap" style={{ opacity: 0.6 }}>
+                    enter
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ opacity: 0.35, fontSize: 11 }}>
+                more arriving soon
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* AXY */}
@@ -1357,6 +1459,22 @@ const mainGridStyle: React.CSSProperties = {
 
 const chatColumnStyle: React.CSSProperties = {
   width: "100%",
+};
+
+const playPanelStyle: React.CSSProperties = {
+  width: "100%",
+  marginRight: 16,
+  padding: 12,
+  fontSize: 12,
+  letterSpacing: "0.04em",
+  opacity: 0.9,
+  borderRadius: 12,
+  border: "1px solid rgba(102, 2, 60, 0.28)",
+  background:
+    "linear-gradient(180deg, rgba(20,10,24,0.92), rgba(12,6,16,0.78))",
+  boxShadow:
+    "0 0 24px rgba(102, 2, 60, 0.28), inset 0 0 12px rgba(102, 2, 60, 0.18)",
+  backdropFilter: "blur(6px)",
 };
 
 

@@ -115,6 +115,23 @@ body {
   text-shadow: 0 0 4px rgba(107, 255, 142, 0.25);
 }
 
+/* Shared space glow (match logo breathe) */
+@keyframes kozmosTextGlow {
+  0% {
+    text-shadow: 0 0 10px rgba(0, 255, 170, 0.25);
+  }
+  50% {
+    text-shadow: 0 0 22px rgba(0, 255, 170, 0.45);
+  }
+  100% {
+    text-shadow: 0 0 10px rgba(0, 255, 170, 0.25);
+  }
+}
+
+.kozmos-shared-glow {
+  animation: kozmosTextGlow 4.5s ease-in-out infinite;
+}
+
 /* Subtle click feedback */
 .kozmos-tap {
   transition: text-shadow 0.2s ease, color 0.2s ease;
