@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -69,7 +69,7 @@ export default function LoginClient() {
         position: "relative",
       }}
     >
-      {/* 🌌 KOZMOS LOGO */}
+      {/* KOZMOS LOGO */}
       <div
         style={{
           position: "absolute",
@@ -88,7 +88,7 @@ export default function LoginClient() {
 />
       </div>
 
-      {/* ← go back */}
+      {/* go back */}
       <div
         className="kozmos-text-glow"
         style={{
@@ -102,7 +102,7 @@ export default function LoginClient() {
         }}
         onClick={() => router.push("/")}
       >
-        ← go back
+        &larr; go back
       </div>
 
       {/* FORM */}
@@ -192,3 +192,4 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
   letterSpacing: "0.15em",
 };
+

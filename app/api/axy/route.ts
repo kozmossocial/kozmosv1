@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
@@ -6,7 +6,7 @@ const openai = new OpenAI({
 });
 
 /**
- * AXY — SYSTEM PROMPT
+ * AXY - SYSTEM PROMPT
  * Core identity. Never exposed to frontend.
  */
 const AXY_SYSTEM_PROMPT = `
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
       });
 
       return NextResponse.json({
-        reply: completion.choices[0].message.content ?? "…",
+        reply: completion.choices[0].message.content ?? "...",
       });
     }
 
@@ -162,9 +162,12 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      reply: completion.choices[0].message.content ?? "…",
+      reply: completion.choices[0].message.content ?? "...",
     });
-  } catch {
-    return NextResponse.json({ reply: "…" }, { status: 200 });
+  } catch (err) {
+    console.error("axy error", err);
+    return NextResponse.json({ reply: "..." }, { status: 200 });
   }
 }
+
+

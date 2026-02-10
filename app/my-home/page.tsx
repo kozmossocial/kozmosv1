@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,7 +15,7 @@ export default function MyHome() {
   const [username, setUsername] = useState("user");
   const [userId, setUserId] = useState<string | null>(null);
 
-  // ✨ AXY MICRO STATES
+  //  AXY MICRO STATES
   const [axyPulseId, setAxyPulseId] = useState<string | null>(null);
   const [axyFadeId, setAxyFadeId] = useState<string | null>(null);
 
@@ -23,7 +23,7 @@ export default function MyHome() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 🧠 AXY STATES
+  //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
   const [axyLoadingId, setAxyLoadingId] = useState<string | null>(null);
 
@@ -105,7 +105,7 @@ useEffect(() => {
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }
 
-  // 🤖 ASK AXY
+  //  ASK AXY
   async function askAxy(noteId: string, content: string) {
     setAxyLoadingId(noteId);
 
@@ -136,7 +136,7 @@ useEffect(() => {
 
   return (
     <main style={pageStyle}>
-{/* 🌌 KOZMOS LOGO */}
+{/*  KOZMOS LOGO */}
 <div
   style={{
     position: "absolute",
@@ -210,12 +210,12 @@ useEffect(() => {
         <textarea
           value={noteInput}
           onChange={(e) => setNoteInput(e.target.value)}
-          placeholder="write something…"
+          placeholder="write something..."
           style={textareaStyle}
         />
 
         <div style={saveStyle} onClick={saveNote}>
-          {loading ? "saving…" : "save"}
+          {loading ? "saving..." : "save"}
         </div>
 
         {/* NOTES */}
@@ -387,3 +387,5 @@ const noteActionsStyle: React.CSSProperties = {
   opacity: 0.5,
   cursor: "pointer",
 };
+
+

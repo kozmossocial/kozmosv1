@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -34,7 +34,7 @@ export default function Main() {
     return () => clearTimeout(t);
   }, []);
 
-  /* 🔐 load user + messages */
+  /*  load user + messages */
   useEffect(() => {
     async function load() {
       const {
@@ -67,7 +67,7 @@ export default function Main() {
     load();
   }, [router]);
 
-  /* 🔁 REALTIME (insert + delete) */
+  /*  REALTIME (insert + delete) */
   useEffect(() => {
     const channel = supabase
       .channel("main-messages-realtime")
@@ -96,7 +96,7 @@ export default function Main() {
     };
   }, []);
 
-  /* 💬 send */
+  /*  send */
   async function sendMessage() {
     if (!input.trim() || !userId) return;
 
@@ -112,7 +112,7 @@ export default function Main() {
     setLoading(false);
   }
 
-  /* 🗑 delete */
+  /*  delete */
   async function deleteMessage(id: string) {
     await supabase.from("main_messages").delete().eq("id", id);
   }
@@ -278,7 +278,7 @@ export default function Main() {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="write something…"
+          placeholder="write something..."
           style={{
             width: "100%",
             minHeight: 80,
@@ -302,7 +302,7 @@ export default function Main() {
           }}
           onClick={sendMessage}
         >
-          {loading ? "sending…" : "send"}
+          {loading ? "sending..." : "send"}
         </div>
       </div>
 
@@ -356,7 +356,7 @@ export default function Main() {
                   cursor: "pointer",
                 }}
               >
-                {axyLoading ? "…" : "ask"}
+                {axyLoading ? "..." : "ask"}
               </div>
             </div>
           )}
@@ -365,3 +365,5 @@ export default function Main() {
     </main>
   );
 }
+
+

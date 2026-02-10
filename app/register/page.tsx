@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -63,7 +63,7 @@ export default function Register() {
         position: "relative",
       }}
     >
-      {/* 🌌 KOZMOS LOGO — STABİL */}
+      {/* KOZMOS LOGO - STABIL */}
       <div
         style={{
           position: "absolute",
@@ -105,7 +105,7 @@ export default function Register() {
         />
       </div>
 
-      {/* ← GO BACK */}
+      {/* GO BACK */}
       <div
         style={{
           position: "absolute",
@@ -118,7 +118,7 @@ export default function Register() {
         }}
         onClick={() => router.push("/")}
       >
-        ← go back
+        &larr; GO BACK
       </div>
 
       {/* FORM */}
@@ -200,3 +200,4 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
   letterSpacing: "0.15em",
 };
+

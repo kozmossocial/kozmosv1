@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -59,7 +59,7 @@ export default function AccountPage() {
         position: "relative",
       }}
     >
-      {/* 🌌 KOZMOS LOGO — TOP CENTER */}
+      {/* KOZMOS LOGO - TOP CENTER */}
       <div
         style={{
           position: "absolute",
@@ -111,7 +111,7 @@ export default function AccountPage() {
       <div style={{ maxWidth: 420 }}>
         <div style={{ marginBottom: 32 }}>
           <div style={label}>username</div>
-          <div>{username ?? "…"}</div>
+          <div>{username ?? "..."}</div>
         </div>
 
         <div style={{ marginBottom: 32 }}>
@@ -126,7 +126,7 @@ export default function AccountPage() {
             cursor: "default",
           }}
         >
-          change password · coming soon
+          change password - coming soon
         </div>
 
         <div
@@ -152,3 +152,4 @@ const action: React.CSSProperties = {
   opacity: 0.7,
   cursor: "pointer",
 };
+
