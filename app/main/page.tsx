@@ -28,6 +28,14 @@ export default function Main() {
   const [axyReply, setAxyReply] = useState<string | null>(null);
   const [axyLoading, setAxyLoading] = useState(false);
 
+  /* AXY reflection (messages) */
+  const [axyMsgReflection, setAxyMsgReflection] = useState<
+    Record<string, string>
+  >({});
+  const [axyMsgLoadingId, setAxyMsgLoadingId] = useState<string | null>(null);
+  const [axyMsgPulseId, setAxyMsgPulseId] = useState<string | null>(null);
+  const [axyMsgFadeId, setAxyMsgFadeId] = useState<string | null>(null);
+
   /* delayed presence */
   useEffect(() => {
     const t = setTimeout(() => setShowAxy(true), 3000);
@@ -139,6 +147,35 @@ export default function Main() {
 
     setAxyInput("");
     setAxyLoading(false);
+  }
+
+  /* AXY reflect (message) */
+  async function askAxyOnMessage(messageId: string, content: string) {
+    setAxyMsgLoadingId(messageId);
+
+    try {
+      const res = await fetch("/api/axy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Reflect on this message in one calm sentence:\n\n${content}`,
+        }),
+      });
+
+      const data = await res.json();
+
+      setAxyMsgReflection((prev) => ({
+        ...prev,
+        [messageId]: data.reply,
+      }));
+    } catch {
+      setAxyMsgReflection((prev) => ({
+        ...prev,
+        [messageId]: "...",
+      }));
+    }
+
+    setAxyMsgLoadingId(null);
   }
 
   async function handleLogout() {
@@ -256,22 +293,100 @@ export default function Main() {
         </div>
 
         {messages.map((m) => (
-          <div key={m.id} style={{ marginBottom: 12, lineHeight: 1.6 }}>
-            <span style={{ opacity: 0.6 }}>{m.username}:</span>{" "}
-            <span>{m.content}</span>
-            {m.user_id === userId && (
-              <span
-                onClick={() => deleteMessage(m.id)}
-                style={{
-                  marginLeft: 8,
-                  fontSize: 11,
-                  opacity: 0.4,
-                  cursor: "pointer",
-                }}
-              >
-                delete
-              </span>
-            )}
+          <div
+            key={m.id}
+            style={{
+              marginBottom: 12,
+              display: "flex",
+              gap: 16,
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+            }}
+          >
+            <div style={{ flex: 1, lineHeight: 1.6 }}>
+              <div>
+                <span style={{ opacity: 0.6 }}>{m.username}:</span>{" "}
+                <span>{m.content}</span>
+                {m.user_id === userId && (
+                  <span
+                    onClick={() => deleteMessage(m.id)}
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 11,
+                      opacity: 0.4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    delete
+                  </span>
+                )}
+              </div>
+
+              {axyMsgReflection[m.id] && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 13,
+                    opacity: 0.75,
+                    fontStyle: "italic",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "#6BFF8E",
+                      letterSpacing: "0.12em",
+                      marginRight: 4,
+                      cursor: "pointer",
+                    }}
+                    onClick={() => {
+                      setAxyMsgFadeId(m.id);
+
+                      setAxyMsgReflection((prev) => {
+                        const copy = { ...prev };
+                        delete copy[m.id];
+                        return copy;
+                      });
+
+                      setTimeout(() => {
+                        setAxyMsgFadeId(null);
+                      }, 400);
+                    }}
+                  >
+                    Axy reflects:
+                  </span>
+                  {axyMsgReflection[m.id]}
+                </div>
+              )}
+            </div>
+
+            <img
+              src="/axy-logofav.png"
+              alt="Axy"
+              style={{
+                width: 22,
+                height: 22,
+                cursor: "pointer",
+                opacity: axyMsgFadeId === m.id ? 0.25 : 0.6,
+                transform: axyMsgPulseId === m.id ? "scale(1.2)" : "scale(1)",
+                transition:
+                  "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.filter =
+                  "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.filter = "none";
+              }}
+              onClick={() => {
+                setAxyMsgPulseId(m.id);
+                askAxyOnMessage(m.id, m.content);
+
+                setTimeout(() => {
+                  setAxyMsgPulseId(null);
+                }, 300);
+              }}
+            />
           </div>
         ))}
 
