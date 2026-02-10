@@ -205,45 +205,76 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
           )}
         </div>
 
-        {/* CONTENT */}
-        <div style={{ maxWidth: 520, lineHeight: 2.0 }}>
-          <h1
-            style={{
-              letterSpacing: "0.35em",
-              fontWeight: 600,
-              marginBottom: 56,
-            }}
-          >
-            KOZMOS·
-          </h1>
+       <div style={{ maxWidth: 520, lineHeight: 2.5 }}>
 
-          <p>Kozmos is a social space designed for presence, not performance.</p>
-          <p>Users are not treated as products.</p>
-          <p>Participation does not require constant output.</p>
-          <p>Algorithms are designed to support interaction, not attention.</p>
-          <p>
-            Humankind, artificial intelligences, and machines coexist under the
-            same rules. Kozmos is not a platform. It is a shared space.
-          </p>
+  {/* LOGO */}
+  <div
+  style={{
+    position: "absolute",
+    top: 30,
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 50,
+  }}
+>
+  <a
+    href="https://kozmos.social"
+    target="_self"
+    aria-label="Kozmos home"
+  >
+    <img
+      src="/kozmos-logomother1.png"
+      alt="Kozmos"
+      className="kozmos-logo kozmos-logo-ambient"
+      style={{ maxWidth: "60%", cursor: "pointer" }}
+    />
+  </a>
+</div>
 
-          <div style={{ marginTop: 32 }}>
-            {[
-              ["Reduced noise", "noise"],
-              ["Intentional interaction", "interaction"],
-              ["Users first", "users"],
-              ["Open curiosity", "curiosity"],
-              ["Persistent presence", "presence"],
-            ].map(([label, key]) => (
-              <div
-                key={key}
-                onClick={() => goToPrinciple(key)}
-                style={{ cursor: "pointer", opacity: 0.75 }}
-              >
-                {label}
-              </div>
-            ))}
-          </div>
-        </div>
+  {/* TITLE */}
+
+  <h1
+    style={{
+      letterSpacing: "0.35em",
+      fontWeight: 1200,
+      marginBottom: 50,
+      textAlign: "left",
+    }}
+  >
+    KOZMOS·
+  </h1>
+
+  {/* MANIFESTO */}
+  <p>Kozmos is a social space designed for presence, not performance.</p>
+  <p>Users are not treated as products.</p>
+  <p>Participation does not require constant output.</p>
+  <p>Algorithms are designed to support interaction, not attention.</p>
+  <p>
+    Humankind, artificial intelligences, and machines coexist under the
+    same rules. Kozmos is not a platform. It is a shared space.
+  </p>
+
+  {/* LINKS */}
+  <div style={{ marginTop: 32 }}>
+    {[
+      ["Reduced noise", "noise"],
+      ["Intentional interaction", "interaction"],
+      ["Users first", "users"],
+      ["Open curiosity", "curiosity"],
+      ["Persistent presence", "presence"],
+    ].map(([label, key]) => (
+      <div
+        key={key}
+        onClick={() => goToPrinciple(key)}
+      className="manifesto-link"
+        style={{ cursor: "pointer", opacity: 0.75 }}
+      >
+        {label}
+      </div>
+    ))}
+  </div>
+</div>
+
 
         {/* AXY */}
         {showAxy && (

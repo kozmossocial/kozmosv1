@@ -44,3 +44,55 @@ body {
   transform: scale(0.97);
   box-shadow: 0 0 10px rgba(0, 255, 170, 0.25);
 }
+/* Kozmos manifesto links glow */
+.manifesto-link {
+  opacity: 0.75;
+  cursor: pointer;
+  transition:
+    opacity 0.25s ease,
+    text-shadow 0.25s ease;
+}
+
+.manifesto-link:hover {
+  opacity: 1;
+  text-shadow: 0 0 12px rgba(0, 255, 170, 0.6);
+}
+/* Kozmos logo base */
+.kozmos-logo {
+  opacity: 0.9;
+  border-radius: 6px;
+  transition:
+    opacity 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.12s ease;
+}
+
+/* Hover glow */
+.kozmos-logo:hover {
+  opacity: 1;
+  box-shadow: 0 0 22px rgba(0, 255, 170, 0.45);
+}
+
+/* Click / press */
+.kozmos-logo:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 12px rgba(0, 255, 170, 0.3);
+}
+
+/* 🌱 Ambient slow glow (nefes gibi) */
+@keyframes kozmosGlow {
+  0% {
+    box-shadow: 0 0 10px rgba(0, 255, 170, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(0, 255, 170, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(0, 255, 170, 0.18);
+  }
+}
+
+.kozmos-logo-ambient {
+  animation: kozmosGlow 4.5s ease-in-out infinite;
+}
+
