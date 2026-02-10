@@ -79,6 +79,11 @@ export default function Main() {
     setLoading(false);
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/");
+  }
+
   return (
     <main
       style={{
@@ -86,9 +91,10 @@ export default function Main() {
         background: "#0b0b0b",
         color: "#eaeaea",
         padding: 40,
+        position: "relative",
       }}
     >
-      {/* TOP */}
+      {/* TOP LEFT — main / my home */}
       <div
         style={{
           position: "absolute",
@@ -99,7 +105,45 @@ export default function Main() {
           opacity: 0.6,
         }}
       >
-        <span>main</span>
+        <span
+          style={{ cursor: "pointer" }}
+          onClick={() => router.push("/main")}
+        >
+          main
+        </span>{" "}
+        /{" "}
+        <span
+          style={{ cursor: "pointer" }}
+          onClick={() => router.push("/my-home")}
+        >
+          my home
+        </span>
+      </div>
+
+      {/* TOP RIGHT — username / logout */}
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          fontSize: 12,
+          letterSpacing: "0.12em",
+          opacity: 0.6,
+        }}
+      >
+        <span
+          style={{ marginRight: 8, cursor: "pointer", opacity: 0.8 }}
+          onClick={() => router.push("/account")}
+        >
+          {username}
+        </span>
+        /{" "}
+        <span
+          style={{ cursor: "pointer" }}
+          onClick={handleLogout}
+        >
+          logout
+        </span>
       </div>
 
       {/* CHAT */}

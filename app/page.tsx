@@ -322,27 +322,53 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
 
       {/* SCREEN 3 */}
       <section
-        ref={screen3Ref}
-        style={{
-          height: "100vh",
-          scrollSnapAlign: "start",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: 40,
-        }}
-      >
-        <div style={{ maxWidth: 520, fontSize: 18, marginTop: 120 }}>
-          {principle ? principles[principle] : ""}
-        </div>
+  ref={screen3Ref}
+  style={{
+    height: "100vh",
+    scrollSnapAlign: "start",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: 40,
+  }}
+>
+  {/* METİN ALANI */}
+  <div
+    style={{
+      flex: 1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      transform: "translateY(-40px)", // metni biraz yukarı al
+    }}
+  >
+    <div
+      style={{
+        maxWidth: 520,
+        fontSize: 18,
+        textAlign: "center",
+      }}
+    >
+      {principle ? principles[principle] : ""}
+    </div>
+  </div>
 
-        <img
-          src="/axy-banner.png"
-          alt="Axy"
-          style={{ maxWidth: 220, marginBottom: 32 }}
-        />
-      </section>
+  {/* AXY ALANI */}
+  <div
+    style={{
+      marginBottom: 32, // sayfanın altına yakın ama yapışık değil
+    }}
+  >
+    <img
+      src="/axy-banner.png"
+      alt="Axy"
+      style={{
+        maxWidth: 220,
+        opacity: 0.9,
+      }}
+    />
+  </div>
+</section>
     </main>
   );
 }
