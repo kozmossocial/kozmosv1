@@ -898,7 +898,11 @@ export default function Main() {
                   cursor: "pointer",
                   opacity: isSelected ? 0.9 : 0.6,
                 }}
-                onClick={() => setSelectedHushChatId(chat.id)}
+                onClick={() =>
+                  setSelectedHushChatId((prev) =>
+                    prev === chat.id ? null : chat.id
+                  )
+                }
                 onMouseEnter={() => setHoveredHushChatId(chat.id)}
                 onMouseLeave={() => setHoveredHushChatId(null)}
               >
