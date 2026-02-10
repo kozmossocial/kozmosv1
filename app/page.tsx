@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
   const router = useRouter();
-  const screen3Ref = useRef<HTMLDivElement>(null);
+const screen3Ref = useRef<HTMLDivElement | null>(null);
 
   const [showAxy, setShowAxy] = useState(false);
   const [openAxy, setOpenAxy] = useState(false);
