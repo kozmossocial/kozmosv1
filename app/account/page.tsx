@@ -19,7 +19,9 @@ export default function AccountPage() {
         return;
       }
 
-      setEmail(user.email);
+      sif (user.email) {
+  setEmail(user.email);
+}
     };
 
     loadUser();
