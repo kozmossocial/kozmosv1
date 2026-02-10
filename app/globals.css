@@ -5,13 +5,13 @@ body {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   background: #0b0b0b;
   color: #eaeaea;
   overflow-x: hidden;
 }
 
-/* Dark scrollbar (Chrome, Edge) */
+/* Dark scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -25,7 +25,7 @@ body {
   border-radius: 4px;
 }
 
-/* Kozmos logo */
+/* Kozmos logo effects (sayfalarda MANUEL kullanılırsa) */
 .kozmos-logo {
   opacity: 0.85;
   border-radius: 6px;
