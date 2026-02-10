@@ -151,6 +151,7 @@ useEffect(() => {
   <img
     src="/kozmos-logomother1.png"
     alt="Kozmos"
+      className="kozmos-logo kozmos-logo-ambient"
     style={{
       width: 80,
       opacity: 0.85,

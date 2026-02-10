@@ -169,6 +169,7 @@ export default function Main() {
   <img
     src="/kozmos-logomother1.png"
     alt="Kozmos"
+      className="kozmos-logo kozmos-logo-ambient"
     style={{
       maxWidth: 80,          // ana sayfadakiyle uyumlu
       opacity: 0.9,

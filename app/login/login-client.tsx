@@ -15,7 +15,7 @@ export default function LoginClient() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  // ✅ LOGIN GUARD
+  /* LOGIN GUARD */
   useEffect(() => {
     async function checkSession() {
       const {
@@ -54,9 +54,7 @@ export default function LoginClient() {
     router.replace(redirectTo);
   }
 
-  if (checkingSession) {
-    return null;
-  }
+  if (checkingSession) return null;
 
   return (
     <main
@@ -71,7 +69,7 @@ export default function LoginClient() {
         position: "relative",
       }}
     >
-      {/* 🌌 KOZMOS LOGO — STABİL, SCROLL ETMEZ */}
+      {/* 🌌 KOZMOS LOGO */}
       <div
         style={{
           position: "absolute",
@@ -84,35 +82,15 @@ export default function LoginClient() {
         onClick={() => router.push("/")}
       >
         <img
-          src="/kozmos-logomother1.png"
-          alt="Kozmos"
-          style={{
-            width: 120,
-            opacity: 0.85,
-            borderRadius: 6,
-            transition:
-              "opacity 0.25s ease, box-shadow 0.25s ease, transform 0.08s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = "1";
-            e.currentTarget.style.boxShadow =
-              "0 0 18px rgba(0,255,170,0.45)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = "0.85";
-            e.currentTarget.style.boxShadow = "none";
-          }}
-          onMouseDown={(e) => {
-            e.currentTarget.style.transform = "scale(0.97)";
-          }}
-          onMouseUp={(e) => {
-            e.currentTarget.style.transform = "scale(1)";
-          }}
-        />
+  src="/kozmos-logomother1.png"
+  alt="Kozmos"
+  className="kozmos-logo kozmos-logo-ambient"
+/>
       </div>
 
       {/* ← go back */}
       <div
+        className="kozmos-text-glow"
         style={{
           position: "absolute",
           top: 16,
@@ -156,11 +134,17 @@ export default function LoginClient() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <button style={buttonStyle} type="submit" disabled={loading}>
+        <button
+          className="kozmos-glow"
+          style={buttonStyle}
+          type="submit"
+          disabled={loading}
+        >
           {loading ? "..." : "enter"}
         </button>
 
         <div
+          className="kozmos-soft-glow"
           style={{
             marginTop: 24,
             fontSize: 12,
@@ -176,6 +160,8 @@ export default function LoginClient() {
     </main>
   );
 }
+
+/* styles */
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,

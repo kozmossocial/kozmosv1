@@ -25,61 +25,20 @@ body {
   border-radius: 4px;
 }
 
-/* Kozmos logo effects (sayfalarda MANUEL kullanılırsa) */
-.kozmos-logo {
-  opacity: 0.85;
-  border-radius: 6px;
-  transition:
-    opacity 0.25s ease,
-    box-shadow 0.25s ease,
-    transform 0.08s ease;
-}
+/* =========================
+   KOZMOS LOGO (TEK KAYNAK)
+   ========================= */
 
-.kozmos-logo:hover {
-  opacity: 1;
-  box-shadow: 0 0 18px rgba(0, 255, 170, 0.45);
-}
-
-.kozmos-logo:active {
-  transform: scale(0.97);
-  box-shadow: 0 0 10px rgba(0, 255, 170, 0.25);
-}
-/* Kozmos manifesto links glow */
-.manifesto-link {
-  opacity: 0.75;
-  cursor: pointer;
-  transition:
-    opacity 0.25s ease,
-    text-shadow 0.25s ease;
-}
-
-.manifesto-link:hover {
-  opacity: 1;
-  text-shadow: 0 0 12px rgba(0, 255, 170, 0.6);
-}
-/* Kozmos logo base */
 .kozmos-logo {
   opacity: 0.9;
   border-radius: 6px;
   transition:
     opacity 0.25s ease,
-    box-shadow 0.25s ease,
-    transform 0.12s ease;
+    transform 0.12s ease,
+    filter 0.25s ease;
 }
 
-/* Hover glow */
-.kozmos-logo:hover {
-  opacity: 1;
-  box-shadow: 0 0 22px rgba(0, 255, 170, 0.45);
-}
-
-/* Click / press */
-.kozmos-logo:active {
-  transform: scale(0.96);
-  box-shadow: 0 0 12px rgba(0, 255, 170, 0.3);
-}
-
-/* 🌱 Ambient slow glow (nefes gibi) */
+/* 🫁 Ambient glow = box-shadow (nefes gibi) */
 @keyframes kozmosGlow {
   0% {
     box-shadow: 0 0 10px rgba(0, 255, 170, 0.18);
@@ -96,3 +55,62 @@ body {
   animation: kozmosGlow 4.5s ease-in-out infinite;
 }
 
+/* ✨ Hover glow = filter (ambient ÜSTÜNE biner) */
+.kozmos-logo:hover {
+  opacity: 1;
+  filter: drop-shadow(0 0 18px rgba(0, 255, 170, 0.55));
+}
+
+/* 🖱 Click / press */
+.kozmos-logo:active {
+  transform: scale(0.96);
+  filter: drop-shadow(0 0 12px rgba(0, 255, 170, 0.35));
+}
+
+/* =========================
+   MANIFESTO LINKS
+   ========================= */
+
+.manifesto-link {
+  opacity: 0.75;
+  cursor: pointer;
+  transition:
+    opacity 0.25s ease,
+    text-shadow 0.25s ease;
+}
+
+.manifesto-link:hover {
+  opacity: 1;
+  text-shadow: 0 0 12px rgba(0, 255, 170, 0.6);
+}
+
+/* =========================
+   GENERIC GLOW SYSTEM
+   ========================= */
+
+.kozmos-glow {
+  transition:
+    opacity 0.25s ease,
+    filter 0.25s ease,
+    transform 0.12s ease;
+}
+
+.kozmos-glow:hover {
+  opacity: 1;
+  filter: drop-shadow(0 0 8px rgba(107, 255, 142, 0.45));
+}
+
+.kozmos-glow:active {
+  transform: scale(0.97);
+  filter: drop-shadow(0 0 5px rgba(107, 255, 142, 0.3));
+}
+
+/* Text glow */
+.kozmos-text-glow:hover {
+  text-shadow: 0 0 6px rgba(107, 255, 142, 0.45);
+}
+
+/* Very soft */
+.kozmos-soft-glow:hover {
+  text-shadow: 0 0 4px rgba(107, 255, 142, 0.25);
+}

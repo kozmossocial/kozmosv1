@@ -78,7 +78,9 @@ export default function Register() {
         <img
           src="/kozmos-logomother1.png"
           alt="Kozmos"
+            className="kozmos-logo kozmos-logo-ambient"
           style={{
+            
             width: 120,
             opacity: 0.85,
             borderRadius: 6,

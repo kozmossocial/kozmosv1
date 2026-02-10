@@ -37,11 +37,6 @@ export default function AccountPage() {
     loadAccount();
   }, [router]);
 
-  async function handleChangePassword() {
-    if (!email) return;
-    await supabase.auth.resetPasswordForEmail(email);
-  }
-
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace("/");
@@ -61,9 +56,31 @@ export default function AccountPage() {
         justifyContent: "center",
         alignItems: "center",
         padding: 40,
-        position: "relative", // ⬅️ EK
+        position: "relative",
       }}
     >
+      {/* 🌌 KOZMOS LOGO — TOP CENTER */}
+      <div
+        style={{
+          position: "absolute",
+          top: 32,
+          left: "50%",
+          transform: "translateX(-50%)",
+          cursor: "pointer",
+          zIndex: 10,
+        }}
+        onClick={() => router.push("/")}
+      >
+        <img
+          src="/kozmos-logomother1.png"
+          alt="Kozmos"
+          className="kozmos-logo kozmos-logo-ambient"
+          style={{
+            width: 120,
+          }}
+        />
+      </div>
+
       {/* TOP LEFT NAV */}
       <div
         style={{
@@ -90,6 +107,7 @@ export default function AccountPage() {
         </span>
       </div>
 
+      {/* CONTENT */}
       <div style={{ maxWidth: 420 }}>
         <div style={{ marginBottom: 32 }}>
           <div style={label}>username</div>
@@ -101,16 +119,15 @@ export default function AccountPage() {
           <div>{email}</div>
         </div>
 
-       <div
-  style={{
-    ...action,
-    opacity: 0.4,
-    cursor: "default",
-  }}
->
-  change password · coming soon
-</div>
-
+        <div
+          style={{
+            ...action,
+            opacity: 0.4,
+            cursor: "default",
+          }}
+        >
+          change password · coming soon
+        </div>
 
         <div
           style={{ ...action, marginTop: 24, opacity: 0.5 }}
