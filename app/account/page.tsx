@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
 export default async function AccountPage() {
-  const supabase = createClient(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -38,10 +38,7 @@ export default async function AccountPage() {
           <div style={{ fontSize: 14 }}>{user.email}</div>
         </div>
 
-        <form
-          action="/auth/change-password"
-          method="post"
-        >
+        <form action="/auth/change-password" method="post">
           <button
             type="submit"
             style={{
