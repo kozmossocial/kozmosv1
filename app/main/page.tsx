@@ -11,6 +11,30 @@ type Message = {
   content: string;
 };
 
+type HushChat = {
+  id: string;
+  created_by: string;
+  status: "open" | "closed";
+  created_at: string;
+};
+
+type HushMember = {
+  id: number;
+  chat_id: string;
+  user_id: string;
+  role: "owner" | "member";
+  status: "invited" | "accepted" | "declined" | "left" | "removed";
+  created_at: string;
+};
+
+type HushMessage = {
+  id: string;
+  chat_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+};
+
 export default function Main() {
   const router = useRouter();
 
@@ -35,6 +59,24 @@ export default function Main() {
   const [axyMsgLoadingId, setAxyMsgLoadingId] = useState<string | null>(null);
   const [axyMsgPulseId, setAxyMsgPulseId] = useState<string | null>(null);
   const [axyMsgFadeId, setAxyMsgFadeId] = useState<string | null>(null);
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
+
+  /* HUSH */
+  const [hushChats, setHushChats] = useState<HushChat[]>([]);
+  const [hushMembers, setHushMembers] = useState<HushMember[]>([]);
+  const [hushUsers, setHushUsers] = useState<Record<string, string>>({});
+  const [selectedHushChatId, setSelectedHushChatId] = useState<string | null>(
+    null
+  );
+  const [hushMessages, setHushMessages] = useState<HushMessage[]>([]);
+  const [hushInput, setHushInput] = useState("");
+  const [hushLoading, setHushLoading] = useState(false);
+  const [hushSending, setHushSending] = useState(false);
+  const [hushInviteTarget, setHushInviteTarget] = useState<{
+    userId: string;
+    username: string;
+    chatId?: string;
+  } | null>(null);
 
   /* delayed presence */
   useEffect(() => {
@@ -74,6 +116,117 @@ export default function Main() {
 
     load();
   }, [router]);
+
+  async function loadHush() {
+    const { data: chats } = await supabase
+      .from("hush_chats")
+      .select("id, created_by, status, created_at")
+      .eq("status", "open")
+      .order("created_at", { ascending: false });
+
+    setHushChats(chats || []);
+
+    if (!chats || chats.length === 0) {
+      setHushMembers([]);
+      setHushUsers({});
+      setHushMessages([]);
+      setSelectedHushChatId(null);
+      return;
+    }
+
+    if (
+      selectedHushChatId &&
+      !chats.some((chat) => chat.id === selectedHushChatId)
+    ) {
+      setSelectedHushChatId(null);
+    }
+
+    const chatIds = chats.map((chat) => chat.id);
+    const { data: members } = await supabase
+      .from("hush_chat_members")
+      .select("id, chat_id, user_id, role, status, created_at")
+      .in("chat_id", chatIds);
+
+    setHushMembers(members || []);
+
+    const userIds = Array.from(
+      new Set((members || []).map((member) => member.user_id))
+    );
+
+    if (userIds.length === 0) {
+      setHushUsers({});
+      return;
+    }
+
+    const { data: profiles } = await supabase
+      .from("profileskozmos")
+      .select("id, username")
+      .in("id", userIds);
+
+    const map: Record<string, string> = {};
+    (profiles || []).forEach((profile) => {
+      map[profile.id] = profile.username;
+    });
+
+    setHushUsers(map);
+  }
+
+  async function loadHushMessages(chatId: string) {
+    const { data } = await supabase
+      .from("hush_chat_messages")
+      .select("id, chat_id, user_id, content, created_at")
+      .eq("chat_id", chatId)
+      .order("created_at", { ascending: true });
+
+    setHushMessages(data || []);
+  }
+
+  function getHushUserName(id: string) {
+    return hushUsers[id] || "user";
+  }
+
+  function getHushChatLabel(chatId: string) {
+    const activeMembers = hushMembers.filter(
+      (member) =>
+        member.chat_id === chatId &&
+        member.status !== "declined" &&
+        member.status !== "removed" &&
+        member.status !== "left"
+    );
+
+    const names = activeMembers.map((member) =>
+      getHushUserName(member.user_id)
+    );
+
+    return names.length ? names.join(" + ") : "hush";
+  }
+
+  function getMyHushMembership(chatId: string) {
+    if (!userId) return null;
+    return hushMembers.find(
+      (member) => member.chat_id === chatId && member.user_id === userId
+    );
+  }
+
+  useEffect(() => {
+    if (!userId) return;
+    loadHush();
+  }, [userId]);
+
+  useEffect(() => {
+    if (!selectedHushChatId || !userId) {
+      setHushMessages([]);
+      return;
+    }
+
+    const myMembership = getMyHushMembership(selectedHushChatId);
+    if (!myMembership || myMembership.status !== "accepted") {
+      setHushMessages([]);
+      return;
+    }
+
+    loadHushMessages(selectedHushChatId);
+  }, [selectedHushChatId, userId, hushMembers]);
 
   /*  REALTIME (insert + delete) */
   useEffect(() => {
@@ -178,10 +331,180 @@ export default function Main() {
     setAxyMsgLoadingId(null);
   }
 
+  async function createHushWith(targetUserId: string) {
+    if (!userId || hushLoading) return;
+
+    setHushLoading(true);
+
+    const { data: chat, error: chatError } = await supabase
+      .from("hush_chats")
+      .insert({ created_by: userId })
+      .select("id, created_by, status, created_at")
+      .single();
+
+    if (chatError || !chat) {
+      setHushLoading(false);
+      return;
+    }
+
+    const { error: memberError } = await supabase
+      .from("hush_chat_members")
+      .insert([
+        {
+          chat_id: chat.id,
+          user_id: userId,
+          role: "owner",
+          status: "accepted",
+        },
+        {
+          chat_id: chat.id,
+          user_id: targetUserId,
+          role: "member",
+          status: "invited",
+        },
+      ]);
+
+    if (!memberError) {
+      setSelectedHushChatId(chat.id);
+      setHushInviteTarget(null);
+      await loadHush();
+    }
+
+    setHushLoading(false);
+  }
+
+  async function inviteToHushChat(chatId: string, targetUserId: string) {
+    if (!userId || hushLoading) return;
+
+    setHushLoading(true);
+
+    await supabase.from("hush_chat_members").insert({
+      chat_id: chatId,
+      user_id: targetUserId,
+      role: "member",
+      status: "invited",
+    });
+
+    setHushInviteTarget(null);
+    await loadHush();
+    setHushLoading(false);
+  }
+
+  async function acceptHushInvite(chatId: string) {
+    if (!userId) return;
+
+    await supabase
+      .from("hush_chat_members")
+      .update({ status: "accepted" })
+      .eq("chat_id", chatId)
+      .eq("user_id", userId);
+
+    setSelectedHushChatId(chatId);
+    await loadHush();
+  }
+
+  async function declineHushInvite(chatId: string) {
+    if (!userId) return;
+
+    await supabase
+      .from("hush_chat_members")
+      .update({ status: "declined" })
+      .eq("chat_id", chatId)
+      .eq("user_id", userId);
+
+    await loadHush();
+  }
+
+  async function leaveHushChat(chatId: string) {
+    if (!userId) return;
+
+    const myMembership = getMyHushMembership(chatId);
+    const activeMembers = hushMembers.filter(
+      (member) =>
+        member.chat_id === chatId &&
+        member.status !== "declined" &&
+        member.status !== "removed" &&
+        member.status !== "left"
+    );
+
+    await supabase
+      .from("hush_chat_members")
+      .update({ status: "left" })
+      .eq("chat_id", chatId)
+      .eq("user_id", userId);
+
+    if (myMembership?.role === "owner" && activeMembers.length <= 2) {
+      await supabase
+        .from("hush_chats")
+        .update({ status: "closed" })
+        .eq("id", chatId);
+    }
+
+    if (selectedHushChatId === chatId) {
+      setSelectedHushChatId(null);
+    }
+
+    await loadHush();
+  }
+
+  async function removeHushMember(chatId: string, memberUserId: string) {
+    await supabase
+      .from("hush_chat_members")
+      .update({ status: "removed" })
+      .eq("chat_id", chatId)
+      .eq("user_id", memberUserId);
+
+    await loadHush();
+  }
+
+  async function sendHushMessage() {
+    if (!selectedHushChatId || !userId || !hushInput.trim() || hushSending)
+      return;
+
+    const myMembership = getMyHushMembership(selectedHushChatId);
+    if (!myMembership || myMembership.status !== "accepted") return;
+
+    setHushSending(true);
+
+    await supabase.from("hush_chat_messages").insert({
+      chat_id: selectedHushChatId,
+      user_id: userId,
+      content: hushInput.trim(),
+    });
+
+    setHushInput("");
+    setHushSending(false);
+    await loadHushMessages(selectedHushChatId);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/");
   }
+
+  const invitesForMe = userId
+    ? hushMembers.filter(
+        (member) => member.user_id === userId && member.status === "invited"
+      )
+    : [];
+
+  const selectedHushMembership = selectedHushChatId
+    ? getMyHushMembership(selectedHushChatId)
+    : null;
+
+  const selectedHushMembers = selectedHushChatId
+    ? hushMembers.filter(
+        (member) =>
+          member.chat_id === selectedHushChatId &&
+          member.status !== "declined" &&
+          member.status !== "removed" &&
+          member.status !== "left"
+      )
+    : [];
+
+  const canChatInSelectedHush =
+    selectedHushMembership?.status === "accepted";
+  const isSelectedHushOwner = selectedHushMembership?.role === "owner";
 
   return (
     <main
@@ -279,6 +602,259 @@ export default function Main() {
         </span>
       </div>
 
+      {/* HUSH PANEL */}
+      <div style={hushPanelStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ opacity: 0.6, letterSpacing: "0.2em" }}>
+            {"hush\u00b7chat"}
+          </div>
+          <div
+            style={{ opacity: 0.4, cursor: "pointer" }}
+            onClick={loadHush}
+          >
+            refresh
+          </div>
+        </div>
+
+        {hushInviteTarget && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ opacity: 0.5, marginBottom: 4 }}>
+              {hushInviteTarget.chatId ? "invite to hush" : "invite"}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <span>{hushInviteTarget.username}</span>
+              <span
+                style={{ cursor: "pointer", opacity: 0.7 }}
+                onClick={() => {
+                  if (hushInviteTarget.chatId) {
+                    inviteToHushChat(
+                      hushInviteTarget.chatId,
+                      hushInviteTarget.userId
+                    );
+                  } else {
+                    createHushWith(hushInviteTarget.userId);
+                  }
+                }}
+              >
+                {hushLoading ? "..." : "send"}
+              </span>
+            </div>
+            <div
+              style={{ opacity: 0.4, cursor: "pointer" }}
+              onClick={() => setHushInviteTarget(null)}
+            >
+              cancel
+            </div>
+          </div>
+        )}
+
+        {invitesForMe.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ opacity: 0.5, marginBottom: 4 }}>invites</div>
+            {invitesForMe.map((invite) => (
+              <div
+                key={invite.chat_id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 6,
+                }}
+              >
+                <span>{getHushChatLabel(invite.chat_id)}</span>
+                <span
+                  style={{ cursor: "pointer", opacity: 0.7, marginLeft: 8 }}
+                  onClick={() => acceptHushInvite(invite.chat_id)}
+                >
+                  accept
+                </span>
+                <span
+                  style={{ cursor: "pointer", opacity: 0.4, marginLeft: 6 }}
+                  onClick={() => declineHushInvite(invite.chat_id)}
+                >
+                  decline
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ opacity: 0.5, marginBottom: 6 }}>active hushes</div>
+        <div style={{ marginBottom: 12 }}>
+          {hushChats.map((chat) => {
+            const myMember = getMyHushMembership(chat.id);
+            const isSelected = selectedHushChatId === chat.id;
+
+            return (
+              <div
+                key={chat.id}
+                style={{
+                  marginBottom: 6,
+                  cursor: "pointer",
+                  opacity: isSelected ? 0.9 : 0.6,
+                }}
+                onClick={() => setSelectedHushChatId(chat.id)}
+              >
+                <div>{getHushChatLabel(chat.id)}</div>
+                {myMember?.status === "invited" && (
+                  <div style={{ fontSize: 11, opacity: 0.4 }}>invited</div>
+                )}
+                {myMember?.status === "accepted" && (
+                  <div style={{ fontSize: 11, opacity: 0.4 }}>member</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {selectedHushChatId && (
+          <div
+            style={{
+              borderTop: "1px solid rgba(255,255,255,0.08)",
+              paddingTop: 12,
+            }}
+          >
+            <div style={{ opacity: 0.5, marginBottom: 6 }}>hush chat</div>
+
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 8 }}>
+              {getHushChatLabel(selectedHushChatId)}
+            </div>
+
+            <div style={{ marginBottom: 8 }}>
+              {selectedHushMembers.map((member) => (
+                <div
+                  key={member.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 4,
+                  }}
+                >
+                  <span>{getHushUserName(member.user_id)}</span>
+                  <span style={{ opacity: 0.4, fontSize: 11 }}>
+                    {member.status}
+                  </span>
+                      {isSelectedHushOwner &&
+                        member.user_id !== userId &&
+                        member.status !== "removed" &&
+                        member.status !== "declined" && (
+                      <span
+                        style={{ cursor: "pointer", opacity: 0.4 }}
+                        onClick={() =>
+                          removeHushMember(selectedHushChatId!, member.user_id)
+                        }
+                      >
+                        remove
+                      </span>
+                    )}
+                </div>
+              ))}
+            </div>
+
+            {canChatInSelectedHush ? (
+              <>
+                <div
+                  style={{
+                    maxHeight: 160,
+                    overflowY: "auto",
+                    marginBottom: 8,
+                  }}
+                >
+                  {hushMessages.map((msg) => (
+                    <div key={msg.id} style={{ marginBottom: 6 }}>
+                      <span style={{ opacity: 0.6 }}>
+                        {getHushUserName(msg.user_id)}:
+                      </span>{" "}
+                      <span>{msg.content}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <input
+                  value={hushInput}
+                  onChange={(e) => setHushInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      sendHushMessage();
+                    }
+                  }}
+                  placeholder="hush message..."
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: "1px solid rgba(255,255,255,0.2)",
+                    color: "#eaeaea",
+                    fontSize: 12,
+                    outline: "none",
+                    paddingBottom: 6,
+                  }}
+                />
+
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 11,
+                    opacity: 0.6,
+                    cursor: "pointer",
+                  }}
+                  onClick={sendHushMessage}
+                >
+                  {hushSending ? "..." : "send"}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 11,
+                    opacity: 0.4,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => leaveHushChat(selectedHushChatId!)}
+                >
+                  leave
+                </div>
+              </>
+            ) : selectedHushMembership?.status === "invited" ? (
+              <div style={{ opacity: 0.5 }}>
+                invite pending.{" "}
+                <span
+                  style={{ cursor: "pointer", opacity: 0.8 }}
+                  onClick={() => acceptHushInvite(selectedHushChatId!)}
+                >
+                  accept
+                </span>{" "}
+                /{" "}
+                <span
+                  style={{ cursor: "pointer", opacity: 0.6 }}
+                  onClick={() => declineHushInvite(selectedHushChatId!)}
+                >
+                  decline
+                </span>
+              </div>
+            ) : (
+              <div style={{ opacity: 0.4 }}>not a member</div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* CHAT */}
       <div style={{ maxWidth: 640, margin: "120px auto 0" }}>
         <div
@@ -305,7 +881,29 @@ export default function Main() {
           >
             <div style={{ flex: 1, lineHeight: 1.6 }}>
               <div>
-                <span style={{ opacity: 0.6 }}>{m.username}:</span>{" "}
+                <span
+                  style={{
+                    opacity: 0.6,
+                    cursor: m.user_id === userId ? "default" : "pointer",
+                  }}
+                  onMouseEnter={() => setHoveredMsgId(m.id)}
+                  onMouseLeave={() => setHoveredMsgId(null)}
+                  onClick={() => {
+                    if (m.user_id === userId) return;
+                    setHushInviteTarget({
+                      userId: m.user_id,
+                      username: m.username,
+                      chatId: isSelectedHushOwner
+                        ? selectedHushChatId ?? undefined
+                        : undefined,
+                    });
+                  }}
+                >
+                  {m.user_id !== userId && hoveredMsgId === m.id && (
+                    <span style={hushPillStyle}>hush-chat</span>
+                  )}
+                  {m.username}:
+                </span>{" "}
                 <span>{m.content}</span>
                 {m.user_id === userId && (
                   <span
@@ -480,5 +1078,35 @@ export default function Main() {
     </main>
   );
 }
+
+const hushPillStyle: React.CSSProperties = {
+  display: "inline-block",
+  marginRight: 6,
+  padding: "2px 6px",
+  border: "1px solid rgba(255,255,255,0.18)",
+  borderRadius: 999,
+  fontSize: 10,
+  letterSpacing: "0.12em",
+  textTransform: "lowercase",
+  opacity: 0.6,
+};
+
+const hushPanelStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 72,
+  left: 16,
+  width: 248,
+  padding: 12,
+  fontSize: 12,
+  letterSpacing: "0.04em",
+  opacity: 0.9,
+  borderRadius: 12,
+  border: "1px solid rgba(107,255,142,0.15)",
+  background:
+    "linear-gradient(180deg, rgba(10,16,12,0.92), rgba(6,10,8,0.78))",
+  boxShadow:
+    "0 0 24px rgba(107,255,142,0.16), inset 0 0 12px rgba(107,255,142,0.08)",
+  backdropFilter: "blur(6px)",
+};
 
 
