@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type Message = {
   id: string;
+  user_id: string;
   username: string;
   content: string;
 };
@@ -13,14 +14,27 @@ type Message = {
 export default function Main() {
   const router = useRouter();
 
-  const [username, setUsername] = useState<string>("user");
+  const [username, setUsername] = useState("user");
   const [userId, setUserId] = useState<string | null>(null);
 
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 🔐 Load user + messages
+  /* AXY */
+  const [showAxy, setShowAxy] = useState(false);
+  const [openAxy, setOpenAxy] = useState(false);
+  const [axyInput, setAxyInput] = useState("");
+  const [axyReply, setAxyReply] = useState<string | null>(null);
+  const [axyLoading, setAxyLoading] = useState(false);
+
+  /* delayed presence */
+  useEffect(() => {
+    const t = setTimeout(() => setShowAxy(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  /* 🔐 load user + messages */
   useEffect(() => {
     async function load() {
       const {
@@ -34,7 +48,6 @@ export default function Main() {
 
       setUserId(user.id);
 
-      // username
       const { data: profile } = await supabase
         .from("profileskozmos")
         .select("username")
@@ -43,10 +56,9 @@ export default function Main() {
 
       setUsername(profile?.username ?? "user");
 
-      // messages
       const { data } = await supabase
         .from("main_messages")
-        .select("id, username, content")
+        .select("id, user_id, username, content")
         .order("created_at", { ascending: true });
 
       setMessages(data || []);
@@ -55,26 +67,26 @@ export default function Main() {
     load();
   }, [router]);
 
-  // 🔁 REALTIME — yeni mesajları anında al
+  /* 🔁 REALTIME (insert + delete) */
   useEffect(() => {
     const channel = supabase
       .channel("main-messages-realtime")
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "main_messages",
-        },
+        { event: "INSERT", schema: "public", table: "main_messages" },
         (payload) => {
-          const newMessage = payload.new as Message;
-
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMessage.id)) {
-              return prev;
-            }
-            return [...prev, newMessage];
-          });
+          const msg = payload.new as Message;
+          setMessages((prev) =>
+            prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "main_messages" },
+        (payload) => {
+          const id = payload.old.id;
+          setMessages((prev) => prev.filter((m) => m.id !== id));
         }
       )
       .subscribe();
@@ -84,28 +96,49 @@ export default function Main() {
     };
   }, []);
 
-  // 💬 send message
+  /* 💬 send */
   async function sendMessage() {
     if (!input.trim() || !userId) return;
 
     setLoading(true);
 
-    const { data } = await supabase
-      .from("main_messages")
-      .insert({
-        user_id: userId,
-        username,
-        content: input,
-      })
-      .select("id, username, content")
-      .single();
-
-    if (data) {
-      setMessages((prev) => [...prev, data]);
-    }
+    await supabase.from("main_messages").insert({
+      user_id: userId,
+      username,
+      content: input,
+    });
 
     setInput("");
     setLoading(false);
+  }
+
+  /* 🗑 delete */
+  async function deleteMessage(id: string) {
+    await supabase.from("main_messages").delete().eq("id", id);
+  }
+
+  /* AXY ask */
+  async function askAxy() {
+    if (!axyInput.trim()) return;
+
+    setAxyLoading(true);
+    setAxyReply(null);
+
+    try {
+      const res = await fetch("/api/axy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: axyInput }),
+      });
+
+      const data = await res.json();
+      setAxyReply(data.reply);
+    } catch {
+      setAxyReply("...");
+    }
+
+    setAxyInput("");
+    setAxyLoading(false);
   }
 
   async function handleLogout() {
@@ -123,7 +156,7 @@ export default function Main() {
         position: "relative",
       }}
     >
-      {/* TOP LEFT — main / my home */}
+      {/* TOP LEFT */}
       <div
         style={{
           position: "absolute",
@@ -134,10 +167,7 @@ export default function Main() {
           opacity: 0.6,
         }}
       >
-        <span
-          style={{ cursor: "pointer" }}
-          onClick={() => router.push("/main")}
-        >
+        <span style={{ cursor: "pointer" }} onClick={() => router.push("/main")}>
           main
         </span>{" "}
         /{" "}
@@ -149,7 +179,7 @@ export default function Main() {
         </span>
       </div>
 
-      {/* TOP RIGHT — username / logout */}
+      {/* TOP RIGHT */}
       <div
         style={{
           position: "absolute",
@@ -167,10 +197,7 @@ export default function Main() {
           {username}
         </span>
         /{" "}
-        <span
-          style={{ cursor: "pointer" }}
-          onClick={handleLogout}
-        >
+        <span style={{ cursor: "pointer" }} onClick={handleLogout}>
           logout
         </span>
       </div>
@@ -188,25 +215,26 @@ export default function Main() {
           shared space
         </div>
 
-        {/* messages */}
-        <div style={{ marginBottom: 32 }}>
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              style={{
-                marginBottom: 12,
-                lineHeight: 1.6,
-              }}
-            >
-              <span style={{ opacity: 0.6 }}>
-                {m.username}:
-              </span>{" "}
-              <span>{m.content}</span>
-            </div>
-          ))}
-        </div>
+        {messages.map((m) => (
+          <div key={m.id} style={{ marginBottom: 12, lineHeight: 1.6 }}>
+            <span style={{ opacity: 0.6 }}>{m.username}:</span>{" "}
+            <span>{m.content}</span>
+            {m.user_id === userId && (
+              <span
+                onClick={() => deleteMessage(m.id)}
+                style={{
+                  marginLeft: 8,
+                  fontSize: 11,
+                  opacity: 0.4,
+                  cursor: "pointer",
+                }}
+              >
+                delete
+              </span>
+            )}
+          </div>
+        ))}
 
-        {/* input */}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -221,7 +249,6 @@ export default function Main() {
             resize: "none",
             outline: "none",
             fontSize: 14,
-            lineHeight: 1.6,
           }}
         />
 
@@ -238,6 +265,63 @@ export default function Main() {
           {loading ? "sending…" : "send"}
         </div>
       </div>
+
+      {/* AXY */}
+      {showAxy && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 96,
+            right: 24,
+            fontSize: 13,
+            textAlign: "right",
+            width: 260,
+          }}
+        >
+          <div
+            style={{ color: "#6BFF8E", cursor: "pointer" }}
+            onClick={() => setOpenAxy(!openAxy)}
+          >
+            Axy is here.
+          </div>
+
+          {openAxy && (
+            <div style={{ marginTop: 8, opacity: 0.85 }}>
+              <div style={{ marginBottom: 6 }}>
+                {axyReply || "I exist inside Kozmos."}
+              </div>
+
+              <input
+                value={axyInput}
+                onChange={(e) => setAxyInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && askAxy()}
+                placeholder="say something"
+                style={{
+                  width: "100%",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: "1px solid rgba(255,255,255,0.2)",
+                  color: "#eaeaea",
+                  fontSize: 12,
+                  outline: "none",
+                }}
+              />
+
+              <div
+                onClick={askAxy}
+                style={{
+                  marginTop: 6,
+                  fontSize: 11,
+                  opacity: 0.6,
+                  cursor: "pointer",
+                }}
+              >
+                {axyLoading ? "…" : "ask"}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </main>
   );
 }
