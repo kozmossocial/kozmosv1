@@ -1,8 +1,33 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+
+function buildMatrixStream(seed: number, length = 42) {
+  const chars = "0123456789abcdef";
+  let s = seed;
+  const lines: string[] = [];
+  for (let i = 0; i < length; i += 1) {
+    s = (s * 9301 + 49297) % 233280;
+    const a = chars[s % chars.length];
+    s = (s * 9301 + 49297) % 233280;
+    const b = chars[s % chars.length];
+    lines.push(`${a}${b}`);
+  }
+  return lines.join("\n");
+}
+
+function buildMatrixStreamSingle(seed: number, length = 42) {
+  const chars = "0123456789abcdef";
+  let s = seed;
+  const lines: string[] = [];
+  for (let i = 0; i < length; i += 1) {
+    s = (s * 9301 + 49297) % 233280;
+    lines.push(chars[s % chars.length]);
+  }
+  return lines.join("\n");
+}
 
 export default function Home() {
   const router = useRouter();
@@ -17,6 +42,60 @@ export default function Home() {
 
   const [user, setUser] = useState<any>(null);
   const [username, setUsername] = useState<string | null>(null);
+
+  const matrixColumns = useMemo(() => {
+    const doubleCount = 46;
+    const singleCount = Math.floor(doubleCount / 2);
+    const rand = (min: number, max: number) =>
+      min + Math.random() * (max - min);
+    const randInt = (min: number, max: number) =>
+      Math.floor(rand(min, max + 1));
+
+    const makeColumn = (i: number, kind: "double" | "single") => {
+      const extraStreams = Math.random() > 0.8 ? 1 : 0;
+      const baseCount = kind === "double" ? 3 : 2;
+      const streamCount = baseCount + extraStreams;
+      const opacityBoost = kind === "single" ? 0.72 : 1;
+      const streams = Array.from({ length: streamCount }, (_, idx) => {
+        const isLong = Math.random() > (kind === "double" ? 0.78 : 0.68);
+        const length = isLong
+          ? randInt(kind === "double" ? 140 : 180, 240)
+          : randInt(kind === "double" ? 80 : 120, 170);
+        return {
+          key: `col-${kind}-${i}-s-${idx}`,
+          text:
+            kind === "double"
+              ? buildMatrixStream(i * 13 + idx * 77 + 5, length)
+              : buildMatrixStreamSingle(i * 19 + idx * 61 + 11, length),
+          duration: rand(7.6, 13.4) + (isLong ? rand(1.6, 3.4) : 0),
+          delay: -rand(0.2, 2.6),
+          opacity: Math.max(0.45, (0.98 - idx * 0.12) * opacityBoost),
+          blur: idx * 0.05,
+        };
+      });
+      return { key: `col-${kind}-${i}`, streams };
+    };
+
+    const doubles = Array.from({ length: doubleCount }, (_, i) =>
+      makeColumn(i, "double")
+    );
+    const singles = Array.from({ length: singleCount }, (_, i) =>
+      makeColumn(i, "single")
+    );
+
+    const total = doubleCount + singleCount;
+    const mixed: { key: string; streams: any[] }[] = [];
+    let di = 0;
+    let si = 0;
+    for (let idx = 0; idx < total; idx += 1) {
+      if ((idx % 3 === 2 && si < singleCount) || di >= doubleCount) {
+        mixed.push(singles[si++]);
+      } else {
+        mixed.push(doubles[di++]);
+      }
+    }
+    return mixed;
+  }, []);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -289,8 +368,31 @@ export default function Home() {
           flexDirection: "column",
           alignItems: "center",
           padding: 40,
+          position: "relative",
         }}
       >
+        <div className="matrix-rain" aria-hidden="true">
+          {matrixColumns.map((col) => (
+            <div key={col.key} className="matrix-column">
+              {col.streams.map((stream) => (
+                <span
+                  key={stream.key}
+                  className="matrix-stream"
+                  style={
+                    {
+                      "--duration": `${stream.duration}s`,
+                      "--delay": `${stream.delay}s`,
+                      opacity: stream.opacity,
+                      filter: `blur(${stream.blur}px)`,
+                    } as React.CSSProperties
+                  }
+                >
+                  {stream.text}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
         <div
           style={{
             flex: 1,
@@ -298,6 +400,8 @@ export default function Home() {
             alignItems: "center",
             justifyContent: "center",
             transform: "translateY(-40px)",
+            position: "relative",
+            zIndex: 1,
           }}
         >
           <div
@@ -318,6 +422,7 @@ export default function Home() {
           role="button"
           tabIndex={0}
           aria-expanded={axyOpen}
+          style={{ position: "relative", zIndex: 2 }}
         >
           <img src="/axy-banner.png" alt="Axy" className="axy-shell-logo" />
 
