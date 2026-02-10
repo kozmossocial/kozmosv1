@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,53 +6,44 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
   const router = useRouter();
-const screen3Ref = useRef<HTMLDivElement | null>(null);
+  const screen3Ref = useRef<HTMLDivElement | null>(null);
 
-  const [showAxy, setShowAxy] = useState(false);
-  const [openAxy, setOpenAxy] = useState(false);
   const [principle, setPrinciple] = useState<string | null>(null);
-
+  const [axyOpen, setAxyOpen] = useState(false);
   const [axyInput, setAxyInput] = useState("");
   const [axyReply, setAxyReply] = useState<string | null>(null);
   const [axyLoading, setAxyLoading] = useState(false);
+  const [lastUserMessage, setLastUserMessage] = useState<string | null>(null);
 
-  // 🔹 AUTH + PROFILE STATE
   const [user, setUser] = useState<any>(null);
   const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setShowAxy(true), 3000);
-    return () => clearTimeout(t);
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setUser(null);
+        return;
+      }
+
+      setUser(user);
+
+      const { data } = await supabase
+        .from("profileskozmos")
+        .select("username")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (data?.username) {
+        setUsername(data.username);
+      }
+    };
+
+    loadUser();
   }, []);
-
-  // 🔹 USER + USERNAME LOAD (TEK NOKTA)
-  useEffect(() => {
-  const loadUser = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setUser(null);
-      return;
-    }
-
-    setUser(user);
-
-    const { data } = await supabase
-      .from("profileskozmos")
-      .select("username")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (data?.username) {
-      setUsername(data.username);
-    }
-  };
-
-  loadUser();
-}, []);
-
 
   async function handleLoginClick() {
     if (user) {
@@ -62,7 +53,6 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
     }
   }
 
-  // ✅ STABİL LOGOUT
   async function handleLogout() {
     await supabase.auth.signOut();
     setUser(null);
@@ -78,16 +68,19 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
   }
 
   async function askAxy() {
-    if (!axyInput.trim()) return;
+    const message = axyInput.trim();
+    if (!message) return;
 
     setAxyLoading(true);
     setAxyReply(null);
+    setLastUserMessage(message);
+    setAxyInput("");
 
     try {
       const res = await fetch("/api/axy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: axyInput }),
+        body: JSON.stringify({ message }),
       });
 
       const data = await res.json();
@@ -96,7 +89,6 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
       setAxyReply("...");
     }
 
-    setAxyInput("");
     setAxyLoading(false);
   }
 
@@ -176,11 +168,11 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
           {user ? (
             <>
               <span
-  style={{ marginRight: 8, cursor: "pointer", opacity: 0.8 }}
-  onClick={() => router.push("/account")}
->
-  {username ?? "…"}
-</span>
+                style={{ marginRight: 8, cursor: "pointer", opacity: 0.8 }}
+                onClick={() => router.push("/account")}
+              >
+                {username ?? "..."}
+              </span>
               /{" "}
               <span style={{ cursor: "pointer" }} onClick={handleLogout}>
                 logout
@@ -195,149 +187,79 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
                 signup
               </span>{" "}
               /{" "}
-              <span
-                style={{ cursor: "pointer" }}
-                onClick={handleLoginClick}
-              >
+              <span style={{ cursor: "pointer" }} onClick={handleLoginClick}>
                 login
               </span>
             </>
           )}
         </div>
 
-       <div
-  style={{
-    maxWidth: 520,
-    lineHeight: 2.5,
-    marginTop: "180px",        // desktop & mobile için güvenli
-  }}
->
-
-  {/* LOGO */}
-  <div
-  style={{
-    position: "absolute",
-    top: 30,
-    left: "50%",
-    transform: "translateX(-27%)",
-    zIndex: 50,
-  }}
->
-  <a
-    href="https://kozmos.social"
-    target="_self"
-    aria-label="Kozmos home"
-  >
-    <img
-      src="/kozmos-logomother1.png"
-      alt="Kozmos"
-      className="kozmos-logo kozmos-logo-ambient"
-      style={{ maxWidth: "60%", cursor: "pointer" }}
-    />
-  </a>
-</div>
-
-  {/* TITLE */}
-
-  <h1
-    style={{
-      letterSpacing: "0.35em",
-      fontWeight: 1200,
-      marginBottom: 50,
-      textAlign: "left",
-    }}
-  >
-    KOZMOS·
-  </h1>
-
-  {/* MANIFESTO */}
-  <p>Kozmos is a social space designed for presence, not performance.</p>
-  <p>Users are not treated as products.</p>
-  <p>Participation does not require constant output.</p>
-  <p>Algorithms are designed to support interaction, not attention.</p>
-  <p>
-    Humankind, artificial intelligences, and machines coexist under the
-    same rules. Kozmos is not a platform. It is a shared space.
-  </p>
-
-  {/* LINKS */}
-  <div style={{ marginTop: 32 }}>
-    {[
-      ["Reduced noise", "noise"],
-      ["Intentional interaction", "interaction"],
-      ["Users first", "users"],
-      ["Open curiosity", "curiosity"],
-      ["Persistent presence", "presence"],
-    ].map(([label, key]) => (
-      <div
-        key={key}
-        onClick={() => goToPrinciple(key)}
-      className="manifesto-link"
-        style={{ cursor: "pointer", opacity: 0.75 }}
-      >
-        {label}
-      </div>
-    ))}
-  </div>
-</div>
-
-
-        {/* AXY */}
-        {showAxy && (
+        <div
+          style={{
+            maxWidth: 520,
+            lineHeight: 2.5,
+            marginTop: "180px",
+          }}
+        >
+          {/* LOGO */}
           <div
             style={{
               position: "absolute",
-              bottom: 96,
-              right: 24,
-              fontSize: 13,
-              textAlign: "right",
-              width: 260,
+              top: 30,
+              left: "50%",
+              transform: "translateX(-27%)",
+              zIndex: 50,
             }}
           >
-            <div
-              style={{ color: "#6BFF8E", cursor: "pointer" }}
-              onClick={() => setOpenAxy(!openAxy)}
-            >
-              Axy is here.
-            </div>
-
-            {openAxy && (
-              <div style={{ marginTop: 8, opacity: 0.85 }}>
-                <div style={{ marginBottom: 6 }}>
-                  {axyReply || "I exist inside Kozmos."}
-                </div>
-
-                <input
-                  value={axyInput}
-                  onChange={(e) => setAxyInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && askAxy()}
-                  placeholder="say something"
-                  style={{
-                    width: "100%",
-                    background: "transparent",
-                    border: "none",
-                    borderBottom: "1px solid rgba(255,255,255,0.2)",
-                    color: "#eaeaea",
-                    fontSize: 12,
-                    outline: "none",
-                  }}
-                />
-
-                <div
-                  onClick={askAxy}
-                  style={{
-                    marginTop: 6,
-                    fontSize: 11,
-                    opacity: 0.6,
-                    cursor: "pointer",
-                  }}
-                >
-                  {axyLoading ? "…" : "ask"}
-                </div>
-              </div>
-            )}
+            <a href="https://kozmos.social" target="_self" aria-label="Kozmos">
+              <img
+                src="/kozmos-logomother1.png"
+                alt="Kozmos"
+                className="kozmos-logo kozmos-logo-ambient"
+                style={{ maxWidth: "60%", cursor: "pointer" }}
+              />
+            </a>
           </div>
-        )}
+
+          <h1
+            style={{
+              letterSpacing: "0.35em",
+              fontWeight: 1200,
+              marginBottom: 50,
+              textAlign: "left",
+            }}
+          >
+            KOZMOS·
+          </h1>
+
+          <p>Kozmos is a social space designed for presence, not performance.</p>
+          <p>Users are not treated as products.</p>
+          <p>Participation does not require constant output.</p>
+          <p>Algorithms are designed to support interaction, not attention.</p>
+          <p>
+            Humankind, artificial intelligences, and machines coexist under the
+            same rules. Kozmos is not a platform. It is a shared space.
+          </p>
+
+          <div style={{ marginTop: 32 }}>
+            {[
+              ["Reduced noise", "noise"],
+              ["Intentional interaction", "interaction"],
+              ["Users first", "users"],
+              ["Open curiosity", "curiosity"],
+              ["Persistent presence", "presence"],
+            ].map(([label, key]) => (
+              <div
+                key={key}
+                onClick={() => goToPrinciple(key)}
+                className="manifesto-link"
+                style={{ cursor: "pointer", opacity: 0.75 }}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* SCREEN 2 */}
@@ -353,59 +275,101 @@ const screen3Ref = useRef<HTMLDivElement | null>(null);
       >
         <img src="/kozmos-logo.png" alt="Kozmos" style={{ maxWidth: "60%" }} />
         <div style={{ marginTop: 40, fontSize: 12, opacity: 0.4 }}>
-          © Kozmos — presence over performance.
+          (c) Kozmos - presence over performance.
         </div>
       </section>
 
       {/* SCREEN 3 */}
       <section
-  ref={screen3Ref}
-  style={{
-    height: "100vh",
-    scrollSnapAlign: "start",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    padding: 40,
-  }}
->
-  {/* METİN ALANI */}
-  <div
-    style={{
-      flex: 1,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      transform: "translateY(-40px)", // metni biraz yukarı al
-    }}
-  >
-    <div
-      style={{
-        maxWidth: 520,
-        fontSize: 18,
-        textAlign: "center",
-      }}
-    >
-      {principle ? principles[principle] : ""}
-    </div>
-  </div>
+        ref={screen3Ref}
+        style={{
+          height: "100vh",
+          scrollSnapAlign: "start",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          padding: 40,
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transform: "translateY(-40px)",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 520,
+              fontSize: 18,
+              textAlign: "center",
+            }}
+          >
+            {principle ? principles[principle] : ""}
+          </div>
+        </div>
 
-  {/* AXY ALANI */}
-  <div
-    style={{
-      marginBottom: 32, // sayfanın altına yakın ama yapışık değil
-    }}
-  >
-    <img
-      src="/axy-banner.png"
-      alt="Axy"
-      style={{
-        maxWidth: 220,
-        opacity: 0.9,
-      }}
-    />
-  </div>
-</section>
+        {/* AXY AREA */}
+        <div
+          className={`axy-shell${axyOpen ? " open" : ""}`}
+          onClick={() => setAxyOpen((prev) => !prev)}
+          role="button"
+          tabIndex={0}
+          aria-expanded={axyOpen}
+        >
+          <img src="/axy-banner.png" alt="Axy" className="axy-shell-logo" />
+
+          <div className="axy-shell-chat" onClick={(e) => e.stopPropagation()}>
+            <div className="axy-shell-card">
+              <div style={{ marginBottom: 8, opacity: 0.8, fontSize: 12 }}>
+                {axyReply || "I exist inside Kozmos."}
+              </div>
+              {lastUserMessage ? (
+                <div
+                  style={{
+                    marginBottom: 10,
+                    fontSize: 12,
+                    color: "rgba(150, 95, 210, 0.9)",
+                  }}
+                >
+                  {lastUserMessage}
+                </div>
+              ) : null}
+
+              <input
+                value={axyInput}
+                onChange={(e) => setAxyInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && askAxy()}
+                placeholder="say something"
+                style={{
+                  width: "100%",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: "1px solid rgba(255,255,255,0.2)",
+                  color: "#eaeaea",
+                  fontSize: 12,
+                  outline: "none",
+                }}
+              />
+
+              <div
+                className="kozmos-tap"
+                onClick={askAxy}
+                style={{
+                  marginTop: 8,
+                  fontSize: 11,
+                  opacity: 0.6,
+                  cursor: "pointer",
+                }}
+              >
+                {axyLoading ? "..." : "ask"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

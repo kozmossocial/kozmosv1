@@ -141,6 +141,89 @@ body {
   text-shadow: 0 0 6px rgba(107, 255, 142, 0.6);
 }
 
+/* AXY shell (inline expand + fade) */
+.axy-shell {
+  position: relative;
+  width: min(560px, 92vw);
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.axy-shell-logo {
+  width: min(240px, 60%);
+  opacity: 0.9;
+  filter: drop-shadow(0 0 12px rgba(255, 230, 170, 0.28));
+  transition:
+    transform 0.6s ease,
+    opacity 0.6s ease,
+    filter 0.4s ease;
+}
+
+.axy-shell:hover .axy-shell-logo {
+  transform: scale(0.98);
+  filter: drop-shadow(0 0 18px rgba(255, 230, 170, 0.45));
+}
+
+.axy-shell.open .axy-shell-logo {
+  animation: axyLogoExpand 0.55s ease forwards;
+}
+
+.axy-shell-chat {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.88);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease,
+    visibility 0s linear 0.5s;
+}
+
+.axy-shell.open .axy-shell-chat {
+  opacity: 1;
+  transform: scale(1);
+  visibility: visible;
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease;
+  pointer-events: auto;
+}
+
+.axy-shell-card {
+  width: min(440px, 88vw);
+  min-height: 200px;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 255, 170, 0.2);
+  background: rgba(10, 12, 10, 0.82);
+  box-shadow: 0 0 18px rgba(0, 255, 170, 0.25);
+  text-align: center;
+}
+
+@keyframes axyLogoExpand {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.95;
+  }
+  35% {
+    transform: scale(0.9);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0.07;
+    filter: drop-shadow(0 0 22px rgba(255, 230, 170, 0.2));
+  }
+}
+
 /* Main layout responsive */
 @media (max-width: 900px) {
   .main-grid {

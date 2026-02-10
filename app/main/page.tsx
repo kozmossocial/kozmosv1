@@ -52,13 +52,6 @@ export default function Main() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
 
-  /* AXY */
-  const [showAxy, setShowAxy] = useState(false);
-  const [openAxy, setOpenAxy] = useState(false);
-  const [axyInput, setAxyInput] = useState("");
-  const [axyReply, setAxyReply] = useState<string | null>(null);
-  const [axyLoading, setAxyLoading] = useState(false);
-
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
     Record<string, string>
@@ -94,12 +87,6 @@ export default function Main() {
   const [playOpen, setPlayOpen] = useState(false);
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
-
-  /* delayed presence */
-  useEffect(() => {
-    const t = setTimeout(() => setShowAxy(true), 3000);
-    return () => clearTimeout(t);
-  }, []);
 
   /*  load user + messages */
   useEffect(() => {
@@ -384,30 +371,6 @@ export default function Main() {
   /*  delete */
   async function deleteMessage(id: string) {
     await supabase.from("main_messages").delete().eq("id", id);
-  }
-
-  /* AXY ask */
-  async function askAxy() {
-    if (!axyInput.trim()) return;
-
-    setAxyLoading(true);
-    setAxyReply(null);
-
-    try {
-      const res = await fetch("/api/axy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: axyInput }),
-      });
-
-      const data = await res.json();
-      setAxyReply(data.reply);
-    } catch {
-      setAxyReply("...");
-    }
-
-    setAxyInput("");
-    setAxyLoading(false);
   }
 
   /* AXY reflect (message) */
@@ -1364,62 +1327,6 @@ export default function Main() {
         </div>
       </div>
 
-      {/* AXY */}
-      {showAxy && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: 96,
-            right: 24,
-            fontSize: 13,
-            textAlign: "right",
-            width: 260,
-          }}
-        >
-          <div
-            style={{ color: "#6BFF8E", cursor: "pointer" }}
-            onClick={() => setOpenAxy(!openAxy)}
-          >
-            Axy is here.
-          </div>
-
-          {openAxy && (
-            <div style={{ marginTop: 8, opacity: 0.85 }}>
-              <div style={{ marginBottom: 6 }}>
-                {axyReply || "I exist inside Kozmos."}
-              </div>
-
-              <input
-                value={axyInput}
-                onChange={(e) => setAxyInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && askAxy()}
-                placeholder="say something"
-                style={{
-                  width: "100%",
-                  background: "transparent",
-                  border: "none",
-                  borderBottom: "1px solid rgba(255,255,255,0.2)",
-                  color: "#eaeaea",
-                  fontSize: 12,
-                  outline: "none",
-                }}
-              />
-
-              <div
-                onClick={askAxy}
-                style={{
-                  marginTop: 6,
-                  fontSize: 11,
-                  opacity: 0.6,
-                  cursor: "pointer",
-                }}
-              >
-                {axyLoading ? "..." : "ask"}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </main>
   );
 }
