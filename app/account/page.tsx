@@ -1,22 +1,33 @@
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+"use client";
 
-export default async function AccountPage() {
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies,
-    }
-  );
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function AccountPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
 
-  if (!user) {
-    redirect("/login");
+  useEffect(() => {
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      setEmail(user.email);
+    };
+
+    loadUser();
+  }, []);
+
+  async function handleChangePassword() {
+    if (!email) return;
+    await supabase.auth.resetPasswordForEmail(email);
   }
 
   return (
@@ -35,21 +46,19 @@ export default async function AccountPage() {
       <div style={{ maxWidth: 420 }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 12, opacity: 0.5 }}>email</div>
-          <div style={{ fontSize: 14 }}>{user.email}</div>
+          <div style={{ fontSize: 14 }}>{email}</div>
         </div>
 
-        <form action="/auth/change-password" method="post">
-          <button
-            type="submit"
-            style={{
-              fontSize: 13,
-              opacity: 0.7,
-              cursor: "pointer",
-            }}
-          >
-            change password
-          </button>
-        </form>
+        <button
+          onClick={handleChangePassword}
+          style={{
+            fontSize: 13,
+            opacity: 0.7,
+            cursor: "pointer",
+          }}
+        >
+          change password
+        </button>
       </div>
     </main>
   );
