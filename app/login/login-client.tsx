@@ -54,17 +54,6 @@ export default function LoginClient() {
     router.replace(redirectTo);
   }
 
-  // ✅ FORGOT PASSWORD
-  async function handleForgotPassword() {
-    if (!email) return;
-
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
-    });
-
-    alert("password reset email sent");
-  }
-
   if (checkingSession) {
     return null;
   }
@@ -128,20 +117,6 @@ export default function LoginClient() {
         <button style={buttonStyle} type="submit" disabled={loading}>
           {loading ? "..." : "enter"}
         </button>
-
-        {/* FORGOT PASSWORD */}
-        <div
-          style={{
-            marginTop: 16,
-            fontSize: 12,
-            opacity: 0.5,
-            textAlign: "center",
-            cursor: email ? "pointer" : "default",
-          }}
-          onClick={email ? handleForgotPassword : undefined}
-        >
-          forgot password
-        </div>
 
         <div
           style={{
