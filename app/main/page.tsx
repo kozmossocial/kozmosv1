@@ -23,7 +23,13 @@ type HushMember = {
   chat_id: string;
   user_id: string;
   role: "owner" | "member";
-  status: "invited" | "accepted" | "declined" | "left" | "removed";
+  status:
+    | "invited"
+    | "accepted"
+    | "declined"
+    | "left"
+    | "removed"
+    | "requested";
   display_name?: string | null;
   created_at: string;
 };
@@ -61,6 +67,12 @@ export default function Main() {
   const [axyMsgPulseId, setAxyMsgPulseId] = useState<string | null>(null);
   const [axyMsgFadeId, setAxyMsgFadeId] = useState<string | null>(null);
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
+  const [hoveredHushChatId, setHoveredHushChatId] = useState<string | null>(
+    null
+  );
+  const [hoveredHushMemberId, setHoveredHushMemberId] = useState<number | null>(
+    null
+  );
 
   /* HUSH */
   const [hushChats, setHushChats] = useState<HushChat[]>([]);
@@ -203,6 +215,7 @@ export default function Main() {
       (member) =>
         member.chat_id === chatId &&
         member.status !== "declined" &&
+        member.status !== "requested" &&
         member.status !== "removed" &&
         member.status !== "left"
     );
@@ -212,6 +225,16 @@ export default function Main() {
     );
 
     return names.length ? names.join(" + ") : "hush";
+  }
+
+  function canRequestHush(chatId: string) {
+    const myMember = getMyHushMembership(chatId);
+    if (!myMember) return true;
+    return (
+      myMember.status === "declined" ||
+      myMember.status === "left" ||
+      myMember.status === "removed"
+    );
   }
 
   function getMyHushMembership(chatId: string) {
@@ -456,6 +479,49 @@ export default function Main() {
     setHushLoading(false);
   }
 
+  async function requestHushJoin(chatId: string) {
+    if (!userId || hushLoading) return;
+    if (!canRequestHush(chatId)) return;
+
+    setHushLoading(true);
+
+    await supabase
+      .from("hush_chat_members")
+      .upsert(
+        {
+          chat_id: chatId,
+          user_id: userId,
+          role: "member",
+          status: "requested",
+          display_name: username,
+        },
+        { onConflict: "chat_id,user_id" }
+      );
+
+    await loadHush();
+    setHushLoading(false);
+  }
+
+  async function acceptHushRequest(chatId: string, memberUserId: string) {
+    await supabase
+      .from("hush_chat_members")
+      .update({ status: "accepted" })
+      .eq("chat_id", chatId)
+      .eq("user_id", memberUserId);
+
+    await loadHush();
+  }
+
+  async function declineHushRequest(chatId: string, memberUserId: string) {
+    await supabase
+      .from("hush_chat_members")
+      .update({ status: "declined" })
+      .eq("chat_id", chatId)
+      .eq("user_id", memberUserId);
+
+    await loadHush();
+  }
+
   async function acceptHushInvite(chatId: string) {
     if (!userId) return;
 
@@ -554,6 +620,18 @@ export default function Main() {
       )
     : [];
 
+  const myHushChatIds = userId
+    ? hushChats.filter((chat) => chat.created_by === userId).map((chat) => chat.id)
+    : [];
+
+  const requestsForMe = myHushChatIds.length
+    ? hushMembers.filter(
+        (member) =>
+          member.status === "requested" &&
+          myHushChatIds.includes(member.chat_id)
+      )
+    : [];
+
   const selectedHushMembership = selectedHushChatId
     ? getMyHushMembership(selectedHushChatId)
     : null;
@@ -563,6 +641,7 @@ export default function Main() {
         (member) =>
           member.chat_id === selectedHushChatId &&
           member.status !== "declined" &&
+          member.status !== "requested" &&
           member.status !== "removed" &&
           member.status !== "left"
       )
@@ -759,11 +838,47 @@ export default function Main() {
           </div>
         )}
 
+        {requestsForMe.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ opacity: 0.5, marginBottom: 4 }}>requests</div>
+            {requestsForMe.map((request) => (
+              <div
+                key={`${request.chat_id}-${request.user_id}`}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 6,
+                }}
+              >
+                <span>{getHushUserName(request.user_id)}</span>
+                <span
+                  style={{ cursor: "pointer", opacity: 0.7, marginLeft: 8 }}
+                  onClick={() =>
+                    acceptHushRequest(request.chat_id, request.user_id)
+                  }
+                >
+                  yes
+                </span>
+                <span
+                  style={{ cursor: "pointer", opacity: 0.4, marginLeft: 6 }}
+                  onClick={() =>
+                    declineHushRequest(request.chat_id, request.user_id)
+                  }
+                >
+                  no
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={{ opacity: 0.5, marginBottom: 6 }}>active hushes</div>
         <div style={{ marginBottom: 12 }}>
           {hushChats.map((chat) => {
             const myMember = getMyHushMembership(chat.id);
             const isSelected = selectedHushChatId === chat.id;
+            const canRequest = canRequestHush(chat.id);
 
             return (
               <div
@@ -774,13 +889,37 @@ export default function Main() {
                   opacity: isSelected ? 0.9 : 0.6,
                 }}
                 onClick={() => setSelectedHushChatId(chat.id)}
+                onMouseEnter={() => setHoveredHushChatId(chat.id)}
+                onMouseLeave={() => setHoveredHushChatId(null)}
               >
-                <div>{getHushChatLabel(chat.id)}</div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span>{getHushChatLabel(chat.id)}</span>
+                  {hoveredHushChatId === chat.id && canRequest && (
+                    <span
+                      style={{ opacity: 0.6, cursor: "pointer" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        requestHushJoin(chat.id);
+                      }}
+                    >
+                      request
+                    </span>
+                  )}
+                </div>
                 {myMember?.status === "invited" && (
                   <div style={{ fontSize: 11, opacity: 0.4 }}>invited</div>
                 )}
                 {myMember?.status === "accepted" && (
                   <div style={{ fontSize: 11, opacity: 0.4 }}>member</div>
+                )}
+                {myMember?.status === "requested" && (
+                  <div style={{ fontSize: 11, opacity: 0.4 }}>requested</div>
                 )}
               </div>
             );
@@ -811,23 +950,36 @@ export default function Main() {
                     marginBottom: 4,
                   }}
                 >
-                  <span>{getHushUserName(member.user_id)}</span>
+                  <span
+                    style={{
+                      cursor:
+                        isSelectedHushOwner && member.user_id !== userId
+                          ? "pointer"
+                          : "default",
+                      opacity:
+                        isSelectedHushOwner &&
+                        member.user_id !== userId &&
+                        hoveredHushMemberId === member.id
+                          ? 0.85
+                          : 0.6,
+                    }}
+                    onMouseEnter={() => setHoveredHushMemberId(member.id)}
+                    onMouseLeave={() => setHoveredHushMemberId(null)}
+                    onClick={() => {
+                      if (!isSelectedHushOwner) return;
+                      if (member.user_id === userId) return;
+                      removeHushMember(selectedHushChatId!, member.user_id);
+                    }}
+                  >
+                    {isSelectedHushOwner &&
+                    member.user_id !== userId &&
+                    hoveredHushMemberId === member.id
+                      ? "goodbye"
+                      : getHushUserName(member.user_id)}
+                  </span>
                   <span style={{ opacity: 0.4, fontSize: 11 }}>
                     {member.status}
                   </span>
-                      {isSelectedHushOwner &&
-                        member.user_id !== userId &&
-                        member.status !== "removed" &&
-                        member.status !== "declined" && (
-                      <span
-                        style={{ cursor: "pointer", opacity: 0.4 }}
-                        onClick={() =>
-                          removeHushMember(selectedHushChatId!, member.user_id)
-                        }
-                      >
-                        remove
-                      </span>
-                    )}
                 </div>
               ))}
             </div>
