@@ -114,3 +114,12 @@ body {
 .kozmos-soft-glow:hover {
   text-shadow: 0 0 4px rgba(107, 255, 142, 0.25);
 }
+
+/* Subtle click feedback */
+.kozmos-tap {
+  transition: text-shadow 0.2s ease, color 0.2s ease;
+}
+
+.kozmos-tap:active {
+  text-shadow: 0 0 6px rgba(107, 255, 142, 0.6);
+}

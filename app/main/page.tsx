@@ -73,6 +73,7 @@ export default function Main() {
   const [hoveredHushMemberId, setHoveredHushMemberId] = useState<number | null>(
     null
   );
+  const [requestingChatId, setRequestingChatId] = useState<string | null>(null);
 
   /* HUSH */
   const [hushChats, setHushChats] = useState<HushChat[]>([]);
@@ -484,6 +485,7 @@ export default function Main() {
     if (!canRequestHush(chatId)) return;
 
     setHushLoading(true);
+    setRequestingChatId(chatId);
 
     await supabase
       .from("hush_chat_members")
@@ -500,6 +502,7 @@ export default function Main() {
 
     await loadHush();
     setHushLoading(false);
+    setRequestingChatId(null);
   }
 
   async function acceptHushRequest(chatId: string, memberUserId: string) {
@@ -761,6 +764,7 @@ export default function Main() {
             {"hush\u00b7chat"}
           </div>
           <div
+            className="kozmos-tap"
             style={{ opacity: 0.4, cursor: "pointer" }}
             onClick={loadHush}
           >
@@ -783,6 +787,7 @@ export default function Main() {
             >
               <span>{hushInviteTarget.username}</span>
               <span
+                className="kozmos-tap"
                 style={{ cursor: "pointer", opacity: 0.7 }}
                 onClick={() => {
                   if (hushInviteTarget.chatId) {
@@ -798,12 +803,13 @@ export default function Main() {
                 {hushLoading ? "..." : "send"}
               </span>
             </div>
-            <div
-              style={{ opacity: 0.4, cursor: "pointer" }}
-              onClick={() => setHushInviteTarget(null)}
-            >
-              cancel
-            </div>
+          <div
+            className="kozmos-tap"
+            style={{ opacity: 0.4, cursor: "pointer" }}
+            onClick={() => setHushInviteTarget(null)}
+          >
+            cancel
+          </div>
           </div>
         )}
 
@@ -822,12 +828,14 @@ export default function Main() {
               >
                 <span>{getHushChatLabel(invite.chat_id)}</span>
                 <span
+                  className="kozmos-tap"
                   style={{ cursor: "pointer", opacity: 0.7, marginLeft: 8 }}
                   onClick={() => acceptHushInvite(invite.chat_id)}
                 >
                   accept
                 </span>
                 <span
+                  className="kozmos-tap"
                   style={{ cursor: "pointer", opacity: 0.4, marginLeft: 6 }}
                   onClick={() => declineHushInvite(invite.chat_id)}
                 >
@@ -851,8 +859,9 @@ export default function Main() {
                   marginBottom: 6,
                 }}
               >
-                <span>{getHushUserName(request.user_id)}</span>
+                <span>{`request by ${getHushUserName(request.user_id)}?`}</span>
                 <span
+                  className="kozmos-tap"
                   style={{ cursor: "pointer", opacity: 0.7, marginLeft: 8 }}
                   onClick={() =>
                     acceptHushRequest(request.chat_id, request.user_id)
@@ -861,6 +870,7 @@ export default function Main() {
                   yes
                 </span>
                 <span
+                  className="kozmos-tap"
                   style={{ cursor: "pointer", opacity: 0.4, marginLeft: 6 }}
                   onClick={() =>
                     declineHushRequest(request.chat_id, request.user_id)
@@ -902,13 +912,14 @@ export default function Main() {
                   <span>{getHushChatLabel(chat.id)}</span>
                   {hoveredHushChatId === chat.id && canRequest && (
                     <span
+                      className="kozmos-tap"
                       style={{ opacity: 0.6, cursor: "pointer" }}
                       onClick={(e) => {
                         e.stopPropagation();
                         requestHushJoin(chat.id);
                       }}
                     >
-                      request
+                      {requestingChatId === chat.id ? "..." : "request"}
                     </span>
                   )}
                 </div>
@@ -950,35 +961,36 @@ export default function Main() {
                     marginBottom: 4,
                   }}
                 >
+                  <span style={{ opacity: 0.6 }}>
+                    {getHushUserName(member.user_id)}
+                  </span>
                   <span
+                    className={isSelectedHushOwner ? "kozmos-tap" : undefined}
                     style={{
+                      opacity: 0.4,
+                      fontSize: 11,
                       cursor:
-                        isSelectedHushOwner && member.user_id !== userId
-                          ? "pointer"
-                          : "default",
-                      opacity:
                         isSelectedHushOwner &&
                         member.user_id !== userId &&
-                        hoveredHushMemberId === member.id
-                          ? 0.85
-                          : 0.6,
+                        member.status === "accepted"
+                          ? "pointer"
+                          : "default",
                     }}
                     onMouseEnter={() => setHoveredHushMemberId(member.id)}
                     onMouseLeave={() => setHoveredHushMemberId(null)}
                     onClick={() => {
                       if (!isSelectedHushOwner) return;
                       if (member.user_id === userId) return;
+                      if (member.status !== "accepted") return;
                       removeHushMember(selectedHushChatId!, member.user_id);
                     }}
                   >
                     {isSelectedHushOwner &&
                     member.user_id !== userId &&
+                    member.status === "accepted" &&
                     hoveredHushMemberId === member.id
-                      ? "goodbye"
-                      : getHushUserName(member.user_id)}
-                  </span>
-                  <span style={{ opacity: 0.4, fontSize: 11 }}>
-                    {member.status}
+                      ? "remove"
+                      : member.status}
                   </span>
                 </div>
               ))}
@@ -1026,6 +1038,7 @@ export default function Main() {
                 />
 
                 <div
+                  className="kozmos-tap"
                   style={{
                     marginTop: 6,
                     fontSize: 11,
@@ -1038,6 +1051,7 @@ export default function Main() {
                 </div>
 
                 <div
+                  className="kozmos-tap"
                   style={{
                     marginTop: 6,
                     fontSize: 11,
