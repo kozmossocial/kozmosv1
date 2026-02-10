@@ -894,9 +894,11 @@ export default function Main() {
               <div
                 key={chat.id}
                 style={{
-                  marginBottom: 6,
+                  marginBottom: 10,
                   cursor: "pointer",
                   opacity: isSelected ? 0.9 : 0.6,
+                  paddingBottom: 8,
+                  borderBottom: "1px solid rgba(255,255,255,0.06)",
                 }}
                 onClick={() =>
                   setSelectedHushChatId((prev) =>
@@ -929,9 +931,6 @@ export default function Main() {
                 </div>
                 {myMember?.status === "invited" && (
                   <div style={{ fontSize: 11, opacity: 0.4 }}>invited</div>
-                )}
-                {myMember?.status === "accepted" && (
-                  <div style={{ fontSize: 11, opacity: 0.4 }}>member</div>
                 )}
                 {myMember?.status === "requested" && (
                   <div style={{ fontSize: 11, opacity: 0.4 }}>requested</div>
