@@ -71,6 +71,47 @@ export default function LoginClient() {
         position: "relative",
       }}
     >
+      {/* 🌌 KOZMOS LOGO — STABİL, SCROLL ETMEZ */}
+      <div
+        style={{
+          position: "absolute",
+          top: 32,
+          left: "50%",
+          transform: "translateX(-50%)",
+          cursor: "pointer",
+          zIndex: 10,
+        }}
+        onClick={() => router.push("/")}
+      >
+        <img
+          src="/kozmos-logomother1.png"
+          alt="Kozmos"
+          style={{
+            width: 120,
+            opacity: 0.85,
+            borderRadius: 6,
+            transition:
+              "opacity 0.25s ease, box-shadow 0.25s ease, transform 0.08s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = "1";
+            e.currentTarget.style.boxShadow =
+              "0 0 18px rgba(0,255,170,0.45)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = "0.85";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = "scale(0.97)";
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = "scale(1)";
+          }}
+        />
+      </div>
+
+      {/* ← go back */}
       <div
         style={{
           position: "absolute",
@@ -86,6 +127,7 @@ export default function LoginClient() {
         ← go back
       </div>
 
+      {/* FORM */}
       <form style={{ width: 320 }} onSubmit={handleLogin}>
         <h1
           style={{

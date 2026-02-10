@@ -156,6 +156,45 @@ export default function Main() {
         position: "relative",
       }}
     >
+{/* LOGO */}
+<div
+  style={{
+    position: "absolute",
+    top: 30,
+    left: "50%",
+    transform: "translateX(-54%)",
+    zIndex: 5,
+  }}
+>
+  <img
+    src="/kozmos-logomother1.png"
+    alt="Kozmos"
+    style={{
+      maxWidth: 80,          // ana sayfadakiyle uyumlu
+      opacity: 0.9,
+      cursor: "pointer",
+      transition:
+        "opacity 0.25s ease, transform 0.08s ease, box-shadow 0.25s ease",
+    }}
+    onClick={() => window.location.href = "https://kozmos.social"}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.opacity = "1";
+      e.currentTarget.style.boxShadow =
+        "0 0 18px rgba(107,255,142,0.45)";
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.opacity = "0.9";
+      e.currentTarget.style.boxShadow = "none";
+    }}
+    onMouseDown={(e) => {
+      e.currentTarget.style.transform = "scale(0.97)";
+    }}
+    onMouseUp={(e) => {
+      e.currentTarget.style.transform = "scale(1)";
+    }}
+  />
+</div>
+
       {/* TOP LEFT */}
       <div
         style={{

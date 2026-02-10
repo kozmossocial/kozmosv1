@@ -13,12 +13,11 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
 
   async function handleRegister(e: React.FormEvent) {
-    e.preventDefault(); // ✅ ENTER FIX
+    e.preventDefault();
     if (!email || !password || !username) return;
 
     setLoading(true);
 
-    // 1️⃣ Supabase Auth signup
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -32,13 +31,12 @@ export default function Register() {
 
     const user = data.user;
 
-    // 2️⃣ Custom profile insert
     if (user) {
       const { error: profileError } = await supabase
         .from("profileskozmos")
         .insert({
           id: user.id,
-          username: username,
+          username,
         });
 
       if (profileError) {
@@ -65,7 +63,47 @@ export default function Register() {
         position: "relative",
       }}
     >
-      {/* TOP LEFT — GO BACK */}
+      {/* 🌌 KOZMOS LOGO — STABİL */}
+      <div
+        style={{
+          position: "absolute",
+          top: 32,
+          left: "50%",
+          transform: "translateX(-50%)",
+          cursor: "pointer",
+          zIndex: 10,
+        }}
+        onClick={() => router.push("/")}
+      >
+        <img
+          src="/kozmos-logomother1.png"
+          alt="Kozmos"
+          style={{
+            width: 120,
+            opacity: 0.85,
+            borderRadius: 6,
+            transition:
+              "opacity 0.25s ease, box-shadow 0.25s ease, transform 0.08s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = "1";
+            e.currentTarget.style.boxShadow =
+              "0 0 18px rgba(0,255,170,0.45)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = "0.85";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = "scale(0.97)";
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = "scale(1)";
+          }}
+        />
+      </div>
+
+      {/* ← GO BACK */}
       <div
         style={{
           position: "absolute",
@@ -77,13 +115,11 @@ export default function Register() {
           cursor: "pointer",
         }}
         onClick={() => router.push("/")}
-        onMouseEnter={(e) => (e.currentTarget.style.fontWeight = "600")}
-        onMouseLeave={(e) => (e.currentTarget.style.fontWeight = "400")}
       >
         ← go back
       </div>
 
-      {/* ✅ FORM */}
+      {/* FORM */}
       <form style={{ width: 320 }} onSubmit={handleRegister}>
         <h1
           style={{
@@ -119,11 +155,7 @@ export default function Register() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <button
-          style={buttonStyle}
-          type="submit"
-          disabled={loading}
-        >
+        <button style={buttonStyle} type="submit" disabled={loading}>
           {loading ? "..." : "register"}
         </button>
 
