@@ -86,6 +86,7 @@ export default function Main() {
   } | null>(null);
   const [playOpen, setPlayOpen] = useState(false);
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
+  const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
 
   /*  load user + messages */
@@ -322,6 +323,12 @@ export default function Main() {
 
     return () => observer.disconnect();
   }, [playOpen]);
+
+  useEffect(() => {
+    const el = sharedMessagesRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   /*  REALTIME (insert + delete) */
   useEffect(() => {
@@ -1096,125 +1103,127 @@ export default function Main() {
           shared space
         </div>
 
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            style={{
-              marginBottom: 12,
-              display: "flex",
-              gap: 16,
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-            }}
-          >
-            <div style={{ flex: 1, lineHeight: 1.6 }}>
-              <div>
-                <span
-                  style={{
-                    opacity: 0.6,
-                    cursor: m.user_id === userId ? "default" : "pointer",
-                  }}
-                  onMouseEnter={() => setHoveredMsgId(m.id)}
-                  onMouseLeave={() => setHoveredMsgId(null)}
-                  onClick={() => {
-                    if (m.user_id === userId) return;
-                    setHushInviteTarget({
-                      userId: m.user_id,
-                      username: m.username,
-                      chatId: isSelectedHushOwner
-                        ? selectedHushChatId ?? undefined
-                        : undefined,
-                    });
-                  }}
-                >
-                  {m.user_id !== userId && hoveredMsgId === m.id && (
-                    <span style={hushPillStyle}>hush-chat</span>
-                  )}
-                  {m.username}:
-                </span>{" "}
-                <span>{m.content}</span>
-                {m.user_id === userId && (
+        <div ref={sharedMessagesRef} style={sharedMessagesScrollStyle}>
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              style={{
+                marginBottom: 12,
+                display: "flex",
+                gap: 16,
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
+              <div style={{ flex: 1, lineHeight: 1.6 }}>
+                <div>
                   <span
-                    onClick={() => deleteMessage(m.id)}
                     style={{
-                      marginLeft: 8,
-                      fontSize: 11,
-                      opacity: 0.4,
-                      cursor: "pointer",
+                      opacity: 0.6,
+                      cursor: m.user_id === userId ? "default" : "pointer",
+                    }}
+                    onMouseEnter={() => setHoveredMsgId(m.id)}
+                    onMouseLeave={() => setHoveredMsgId(null)}
+                    onClick={() => {
+                      if (m.user_id === userId) return;
+                      setHushInviteTarget({
+                        userId: m.user_id,
+                        username: m.username,
+                        chatId: isSelectedHushOwner
+                          ? selectedHushChatId ?? undefined
+                          : undefined,
+                      });
                     }}
                   >
-                    delete
-                  </span>
+                    {m.user_id !== userId && hoveredMsgId === m.id && (
+                      <span style={hushPillStyle}>hush-chat</span>
+                    )}
+                    {m.username}:
+                  </span>{" "}
+                  <span>{m.content}</span>
+                  {m.user_id === userId && (
+                    <span
+                      onClick={() => deleteMessage(m.id)}
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 11,
+                        opacity: 0.4,
+                        cursor: "pointer",
+                      }}
+                    >
+                      delete
+                    </span>
+                  )}
+                </div>
+
+                {axyMsgReflection[m.id] && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 13,
+                      opacity: 0.75,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "#6BFF8E",
+                        letterSpacing: "0.12em",
+                        marginRight: 4,
+                        cursor: "pointer",
+                      }}
+                      onClick={() => {
+                        setAxyMsgFadeId(m.id);
+
+                        setAxyMsgReflection((prev) => {
+                          const copy = { ...prev };
+                          delete copy[m.id];
+                          return copy;
+                        });
+
+                        setTimeout(() => {
+                          setAxyMsgFadeId(null);
+                        }, 400);
+                      }}
+                    >
+                      Axy reflects:
+                    </span>
+                    {axyMsgReflection[m.id]}
+                  </div>
                 )}
               </div>
 
-              {axyMsgReflection[m.id] && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 13,
-                    opacity: 0.75,
-                    fontStyle: "italic",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "#6BFF8E",
-                      letterSpacing: "0.12em",
-                      marginRight: 4,
-                      cursor: "pointer",
-                    }}
-                    onClick={() => {
-                      setAxyMsgFadeId(m.id);
+              <img
+                src="/axy-logofav.png"
+                alt="Axy"
+                style={{
+                  width: 22,
+                  height: 22,
+                  cursor: "pointer",
+                  opacity: axyMsgFadeId === m.id ? 0.25 : 0.6,
+                  transform: axyMsgPulseId === m.id ? "scale(1.2)" : "scale(1)",
+                  transition:
+                    "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.filter =
+                    "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = "none";
+                }}
+                onClick={() => {
+                  setAxyMsgPulseId(m.id);
+                  askAxyOnMessage(m.id, m.content);
 
-                      setAxyMsgReflection((prev) => {
-                        const copy = { ...prev };
-                        delete copy[m.id];
-                        return copy;
-                      });
-
-                      setTimeout(() => {
-                        setAxyMsgFadeId(null);
-                      }, 400);
-                    }}
-                  >
-                    Axy reflects:
-                  </span>
-                  {axyMsgReflection[m.id]}
-                </div>
-              )}
+                  setTimeout(() => {
+                    setAxyMsgPulseId(null);
+                  }, 300);
+                }}
+              />
             </div>
-
-            <img
-              src="/axy-logofav.png"
-              alt="Axy"
-              style={{
-                width: 22,
-                height: 22,
-                cursor: "pointer",
-                opacity: axyMsgFadeId === m.id ? 0.25 : 0.6,
-                transform: axyMsgPulseId === m.id ? "scale(1.2)" : "scale(1)",
-                transition:
-                  "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.filter =
-                  "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.filter = "none";
-              }}
-              onClick={() => {
-                setAxyMsgPulseId(m.id);
-                askAxyOnMessage(m.id, m.content);
-
-                setTimeout(() => {
-                  setAxyMsgPulseId(null);
-                }, 300);
-              }}
-            />
-          </div>
-        ))}
+          ))}
+        </div>
 
         <textarea
           value={input}
@@ -1371,6 +1380,14 @@ const mainGridStyle: React.CSSProperties = {
 
 const chatColumnStyle: React.CSSProperties = {
   width: "100%",
+};
+
+const sharedMessagesScrollStyle: React.CSSProperties = {
+  maxHeight: "clamp(360px, 45vh, 540px)",
+  overflowY: "auto",
+  overflowX: "hidden",
+  paddingRight: 8,
+  marginBottom: 12,
 };
 
 const playPanelStyle: React.CSSProperties = {

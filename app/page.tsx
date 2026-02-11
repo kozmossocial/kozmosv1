@@ -53,6 +53,7 @@ export default function Home() {
   const screen3Ref = useRef<HTMLDivElement | null>(null);
 
   const [principle, setPrinciple] = useState<string | null>(null);
+  const [principleDissolving, setPrincipleDissolving] = useState(false);
   const [axyOpen, setAxyOpen] = useState(false);
   const [axyInput, setAxyInput] = useState("");
   const [axyReply, setAxyReply] = useState<string | null>(null);
@@ -180,10 +181,20 @@ export default function Home() {
   }
 
   function goToPrinciple(key: string) {
+    setPrincipleDissolving(false);
     setPrinciple(key);
     setTimeout(() => {
       screen3Ref.current?.scrollIntoView({ behavior: "smooth" });
     }, 80);
+  }
+
+  function dissolvePrinciple() {
+    if (!principle || principleDissolving) return;
+    setPrincipleDissolving(true);
+    setTimeout(() => {
+      setPrinciple(null);
+      setPrincipleDissolving(false);
+    }, 1300);
   }
 
   async function askAxy() {
@@ -230,6 +241,7 @@ export default function Home() {
     presence:
       "Presence does not depend on activity. You do not disappear when you stop interacting. Continuity exists beyond visibility.",
   };
+  const activePrincipleText = principle ? principles[principle] : "";
 
   return (
     <main
@@ -466,13 +478,40 @@ export default function Home() {
           }}
         >
           <div
+            className={`principle-fade${principleDissolving ? " dissolve" : ""}`}
+            onClick={dissolvePrinciple}
             style={{
               maxWidth: 520,
               fontSize: 18,
               textAlign: "center",
+              cursor: principle ? "pointer" : "default",
+              pointerEvents: principle ? "auto" : "none",
             }}
           >
-            {principle ? principles[principle] : ""}
+            {activePrincipleText
+              ? activePrincipleText.split("").map((char, idx) => {
+                  const dx = ((idx * 17) % 11) - 5;
+                  const dy = ((idx * 23) % 9) - 4;
+                  const rot = ((idx * 29) % 16) - 8;
+                  const delay = ((idx * 13) % 19) / 100;
+                  return (
+                    <span
+                      key={`p-char-${idx}-${char}`}
+                      className="principle-char"
+                      style={
+                        {
+                          "--char-dx": `${dx * 1.6}px`,
+                          "--char-dy": `${dy * 1.2}px`,
+                          "--char-rot": `${rot}deg`,
+                          "--char-delay": `${delay}s`,
+                        } as React.CSSProperties
+                      }
+                    >
+                      {char}
+                    </span>
+                  );
+                })
+              : ""}
           </div>
         </div>
 

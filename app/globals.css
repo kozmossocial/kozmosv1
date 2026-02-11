@@ -115,6 +115,76 @@ body {
   text-shadow: 0 0 4px rgba(107, 255, 142, 0.25);
 }
 
+.principle-fade {
+  opacity: 0.62;
+  color: rgba(245, 245, 245, 0.78);
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.34),
+    0 0 24px rgba(255, 255, 255, 0.16);
+  user-select: none;
+  -webkit-user-select: none;
+  white-space: pre-wrap;
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease,
+    filter 0.45s ease,
+    text-shadow 0.45s ease;
+}
+
+.principle-char {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}
+
+.principle-fade:hover {
+  opacity: 0.92;
+  filter: brightness(1.2);
+  text-shadow:
+    0 0 18px rgba(255, 255, 255, 0.72),
+    0 0 34px rgba(255, 255, 255, 0.42);
+}
+
+.principle-fade.dissolve {
+  opacity: 0;
+  transform: translateY(16px) scale(1.05);
+  filter: blur(1.8px) brightness(1.28);
+  text-shadow:
+    0 0 24px rgba(255, 255, 255, 0.95),
+    0 0 52px rgba(255, 255, 255, 0.75),
+    0 0 92px rgba(255, 255, 255, 0.35);
+}
+
+.principle-fade.dissolve .principle-char {
+  animation: principle-fragment 1.05s cubic-bezier(0.2, 0.6, 0.25, 1) forwards;
+  animation-delay: var(--char-delay);
+}
+
+@keyframes principle-fragment {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    filter: blur(0);
+  }
+  40% {
+    opacity: 0.92;
+  }
+  65% {
+    opacity: 0.65;
+    transform: translate(
+        calc(var(--char-dx) * 0.5),
+        calc(var(--char-dy) * 0.25 + 18px)
+      )
+      rotate(calc(var(--char-rot) * 0.45)) scale(0.92);
+    filter: blur(0.6px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--char-dx), calc(var(--char-dy) + 56px))
+      rotate(var(--char-rot)) scale(0.74);
+    filter: blur(2.1px);
+  }
+}
+
 /* Shared space glow (match logo breathe) */
 @keyframes kozmosTextGlow {
   0% {
