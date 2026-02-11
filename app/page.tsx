@@ -599,8 +599,8 @@ export default function Home() {
               <img
                 src="/kozmos-logomother1.png"
                 alt="Kozmos"
-                className="kozmos-logo kozmos-logo-ambient"
-                style={{ maxWidth: "60%", cursor: "pointer" }}
+                className="kozmos-logo kozmos-logo-ambient home-hero-logo-image"
+                style={{ cursor: "pointer" }}
               />
             </a>
           </div>

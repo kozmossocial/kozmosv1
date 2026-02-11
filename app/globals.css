@@ -454,6 +454,10 @@ body {
   display: none;
 }
 
+.home-hero-logo-image {
+  max-width: 60%;
+}
+
 .runtime-connect-panel::before {
   content: "";
   position: absolute;
@@ -547,9 +551,9 @@ body {
     z-index: 40 !important;
   }
 
-  .home-hero-logo-wrap .kozmos-logo {
-    max-width: min(34vw, 130px) !important;
-    width: 100% !important;
+  .home-hero-logo-wrap .home-hero-logo-image {
+    max-width: none !important;
+    width: min(40vw, 160px) !important;
     height: auto !important;
   }
 
