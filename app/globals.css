@@ -211,6 +211,13 @@ body {
   text-shadow: 0 0 6px rgba(107, 255, 142, 0.6);
 }
 
+.hush-refresh:active {
+  color: rgba(150, 255, 176, 0.95);
+  text-shadow:
+    0 0 8px rgba(107, 255, 142, 0.85),
+    0 0 16px rgba(107, 255, 142, 0.5);
+}
+
 .present-user-chip {
   display: inline-block;
   transition:

@@ -382,22 +382,12 @@ export default function Main() {
   }, [selectedHushChatId, userId, hushMembers]);
 
   useEffect(() => {
+    if (playClosedHeight !== null) return;
     const el = hushPanelRef.current;
     if (!el) return;
 
-    const update = () => {
-      if (!playOpen) {
-        setPlayClosedHeight(el.getBoundingClientRect().height);
-      }
-    };
-
-    update();
-
-    const observer = new ResizeObserver(() => update());
-    observer.observe(el);
-
-    return () => observer.disconnect();
-  }, [playOpen]);
+    setPlayClosedHeight(el.getBoundingClientRect().height);
+  }, [playClosedHeight]);
 
   useEffect(() => {
     if (!playOpen || activePlay !== "signal-drift" || !driftRunning) return;
@@ -1040,7 +1030,7 @@ export default function Main() {
             {"hush\u00b7chat"}
           </div>
           <div
-            className="kozmos-tap"
+            className="kozmos-tap hush-refresh"
             style={{ opacity: 0.4, cursor: "pointer" }}
             onClick={loadHush}
           >
