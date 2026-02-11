@@ -41,18 +41,18 @@ export async function POST(req: Request) {
     const tokenHash = token ? hashToken(token) : tokenHashInput;
 
     if (tokenHash) {
-      const { error, count } = await supabaseAdmin
+      const { data: revokedRows, error } = await supabaseAdmin
         .from("runtime_user_tokens")
         .update({ is_active: false })
         .eq("token_hash", tokenHash)
         .eq("is_active", true)
-        .select("id", { count: "exact" });
+        .select("id");
 
       if (error) {
         return NextResponse.json({ error: "revoke failed" }, { status: 500 });
       }
 
-      return NextResponse.json({ ok: true, revoked: count ?? 0 });
+      return NextResponse.json({ ok: true, revoked: revokedRows?.length ?? 0 });
     }
 
     if (!revokeAllForUser) {
@@ -74,12 +74,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error, count } = await supabaseAdmin
+    const { data: revokedRows, error } = await supabaseAdmin
       .from("runtime_user_tokens")
       .update({ is_active: false })
       .eq("user_id", targetUserId)
       .eq("is_active", true)
-      .select("id", { count: "exact" });
+      .select("id");
 
     if (error) {
       return NextResponse.json({ error: "revoke failed" }, { status: 500 });
@@ -90,9 +90,8 @@ export async function POST(req: Request) {
       .delete()
       .eq("user_id", targetUserId);
 
-    return NextResponse.json({ ok: true, revoked: count ?? 0 });
+    return NextResponse.json({ ok: true, revoked: revokedRows?.length ?? 0 });
   } catch {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
 }
-
