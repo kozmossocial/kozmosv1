@@ -537,13 +537,13 @@ body {
 /* Main layout responsive */
 @media (max-width: 900px) {
   .home-hero-content {
-    margin-top: 104px !important;
-    line-height: 2.15 !important;
+    margin-top: 172px !important;
+    line-height: 1.95 !important;
   }
 
   .home-hero-logo-wrap {
-    position: fixed !important;
-    top: 8px !important;
+    position: absolute !important;
+    top: 12px !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
     text-align: center !important;
@@ -563,15 +563,15 @@ body {
   }
 
   .home-hero-manifesto-links {
-    position: relative !important;
-    top: 260px !important;
-    margin-top: 32px !important;
+    position: static !important;
+    top: auto !important;
+    margin-top: 34px !important;
   }
 
   .home-hero-runtime-mobile {
-    position: relative !important;
-    top: 340px !important;
-    margin-top: 24px !important;
+    position: static !important;
+    top: auto !important;
+    margin-top: 26px !important;
   }
 
   .runtime-connect-desktop {
