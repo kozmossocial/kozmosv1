@@ -458,6 +458,10 @@ body {
   max-width: 60%;
 }
 
+.user-build-mobile {
+  display: none;
+}
+
 .runtime-connect-panel::before {
   content: "";
   position: absolute;
@@ -590,11 +594,16 @@ body {
   }
 
   .chat-panel {
-    order: 1;
+    order: 2;
   }
 
   .left-panel-stack {
-    order: 2;
+    order: 3;
+  }
+
+  .right-panel-stack {
+    order: 1;
+    margin-right: 0 !important;
   }
 
   .hush-panel,
@@ -602,13 +611,20 @@ body {
     margin-left: 0 !important;
   }
 
+  .space-tv-panel {
+    margin-top: 20px !important;
+  }
+
   .play-panel {
-    order: 3;
     margin-right: 0 !important;
   }
 
-  .user-build-panel {
-    order: 4;
+  .user-build-mobile {
+    display: block !important;
     margin-top: 20px !important;
+  }
+
+  .right-panel-stack .user-build-desktop {
+    display: none !important;
   }
 }

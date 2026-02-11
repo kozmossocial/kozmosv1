@@ -1409,6 +1409,33 @@ export default function Main() {
         )}
           </div>
 
+          <div
+            className="play-panel user-build-panel user-build-mobile"
+            style={userBuildPanelStyle}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ opacity: 0.72, letterSpacing: "0.2em" }}>
+                {"user🔨build"}
+              </div>
+              <div style={{ opacity: 0.4 }}>soon</div>
+            </div>
+
+            <div style={{ opacity: 0.58, marginBottom: 6 }}>
+              user-built modules inside kozmos
+            </div>
+
+            <div style={{ opacity: 0.46, fontSize: 11 }}>
+              creation lane opening quietly
+            </div>
+          </div>
+
           <div className="hush-panel space-tv-panel" style={spaceTvPanelStyle}>
             <div
               style={{
@@ -1701,7 +1728,7 @@ export default function Main() {
         </div>
 
         {/* RIGHT PANELS */}
-        <div style={rightPanelStackStyle}>
+        <div className="right-panel-stack" style={rightPanelStackStyle}>
           {/* PLAY PANEL */}
           <div
             className="play-panel"
@@ -2081,7 +2108,7 @@ export default function Main() {
           </div>
 
           <div
-            className="play-panel user-build-panel"
+            className="play-panel user-build-panel user-build-desktop"
             style={userBuildPanelStyle}
           >
             <div
