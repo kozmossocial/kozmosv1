@@ -533,17 +533,24 @@ body {
 /* Main layout responsive */
 @media (max-width: 900px) {
   .home-hero-content {
-    margin-top: 88px !important;
+    margin-top: 138px !important;
     line-height: 2.15 !important;
   }
 
   .home-hero-logo-wrap {
-    position: static !important;
-    top: auto !important;
-    left: auto !important;
-    transform: none !important;
+    position: fixed !important;
+    top: 8px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
     text-align: center !important;
-    margin-bottom: 18px !important;
+    margin-bottom: 0 !important;
+    z-index: 40 !important;
+  }
+
+  .home-hero-logo-wrap .kozmos-logo {
+    max-width: min(34vw, 130px) !important;
+    width: 100% !important;
+    height: auto !important;
   }
 
   .home-hero-title {
