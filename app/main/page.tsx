@@ -1557,7 +1557,7 @@ export default function Main() {
         >
           <div
             style={{
-              fontSize: 12,
+              fontSize: 13,
               letterSpacing: "0.12em",
               opacity: 0.55,
               textAlign: "center",
