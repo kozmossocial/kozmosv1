@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function RuntimeConnectPage() {
+function RuntimeConnectClient() {
   const params = useSearchParams();
   const code = params.get("code") || "";
 
@@ -166,5 +166,41 @@ export default function RuntimeConnectPage() {
         ) : null}
       </div>
     </main>
+  );
+}
+
+export default function RuntimeConnectPage() {
+  return (
+    <Suspense
+      fallback={
+        <main
+          style={{
+            minHeight: "100vh",
+            background: "#0b0b0b",
+            color: "#eaeaea",
+            padding: 24,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "min(560px, 92vw)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              borderRadius: 12,
+              padding: 20,
+              background: "rgba(255,255,255,0.02)",
+              fontSize: 12,
+              opacity: 0.7,
+            }}
+          >
+            loading runtime connect...
+          </div>
+        </main>
+      }
+    >
+      <RuntimeConnectClient />
+    </Suspense>
   );
 }
