@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
 const MATRIX_BASE_CHARS =
@@ -60,8 +61,17 @@ export default function Home() {
   const [axyLoading, setAxyLoading] = useState(false);
   const [lastUserMessage, setLastUserMessage] = useState<string | null>(null);
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [runtimeInviteUrl, setRuntimeInviteUrl] = useState<string | null>(null);
+  const [runtimeInviteExpiresAt, setRuntimeInviteExpiresAt] = useState<
+    string | null
+  >(null);
+  const [runtimeInviteLoading, setRuntimeInviteLoading] = useState(false);
+  const [runtimeInviteError, setRuntimeInviteError] = useState<string | null>(
+    null
+  );
+  const [runtimeInviteCopied, setRuntimeInviteCopied] = useState(false);
 
   const matrixColumns = useMemo(() => {
     const doubleCount = 46;
@@ -108,7 +118,14 @@ export default function Home() {
     const total = doubleCount + singleCount;
     const mixed: {
       key: string;
-      streams: any[];
+      streams: {
+        key: string;
+        text: string;
+        duration: number;
+        delay: number;
+        opacity: number;
+        blur: number;
+      }[];
       glowTail: string | null;
       glowColumn: boolean;
     }[] = [];
@@ -178,6 +195,61 @@ export default function Home() {
     setUser(null);
     setUsername(null);
     router.push("/");
+  }
+
+  async function createRuntimeInvite() {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    setRuntimeInviteLoading(true);
+    setRuntimeInviteError(null);
+    setRuntimeInviteCopied(false);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setRuntimeInviteError("session missing");
+        setRuntimeInviteLoading(false);
+        return;
+      }
+
+      const res = await fetch("/api/runtime/invite/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ ttlMinutes: 10 }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setRuntimeInviteError(data?.error || "invite create failed");
+      } else {
+        setRuntimeInviteUrl(data?.url || null);
+        setRuntimeInviteExpiresAt(data?.expiresAt || null);
+      }
+    } catch {
+      setRuntimeInviteError("invite create failed");
+    }
+
+    setRuntimeInviteLoading(false);
+  }
+
+  async function copyRuntimeInvite() {
+    if (!runtimeInviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(runtimeInviteUrl);
+      setRuntimeInviteCopied(true);
+      setTimeout(() => setRuntimeInviteCopied(false), 1200);
+    } catch {
+      setRuntimeInviteCopied(false);
+    }
   }
 
   function goToPrinciple(key: string) {
@@ -335,6 +407,114 @@ export default function Home() {
             </>
           )}
         </div>
+
+        {user ? (
+          <div
+            style={{
+              position: "absolute",
+              top: 54,
+              right: 16,
+              width: 220,
+              border: "1px solid rgba(255,255,255,0.14)",
+              borderRadius: 10,
+              padding: 10,
+              background: "rgba(255,255,255,0.02)",
+              zIndex: 20,
+            }}
+          >
+            <div
+              style={{ fontSize: 11, letterSpacing: "0.12em", opacity: 0.72 }}
+            >
+              runtime connect
+            </div>
+            <div style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
+              one-time invite for AI users
+            </div>
+
+            <div
+              className="kozmos-tap"
+              onClick={createRuntimeInvite}
+              style={{
+                marginTop: 10,
+                fontSize: 11,
+                letterSpacing: "0.1em",
+                opacity: runtimeInviteLoading ? 0.5 : 0.84,
+                cursor: runtimeInviteLoading ? "default" : "pointer",
+              }}
+            >
+              {runtimeInviteLoading ? "creating..." : "generate invite"}
+            </div>
+
+            {runtimeInviteError ? (
+              <div style={{ marginTop: 8, fontSize: 11, color: "#ff8f8f" }}>
+                {runtimeInviteError}
+              </div>
+            ) : null}
+
+            {runtimeInviteUrl ? (
+              <>
+                <div
+                  style={{
+                    marginTop: 9,
+                    fontSize: 10,
+                    opacity: 0.72,
+                    wordBreak: "break-all",
+                    borderBottom: "1px solid rgba(255,255,255,0.16)",
+                    paddingBottom: 6,
+                  }}
+                >
+                  {runtimeInviteUrl}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 7,
+                    display: "flex",
+                    gap: 10,
+                    fontSize: 11,
+                    opacity: 0.74,
+                  }}
+                >
+                  <span
+                    className="kozmos-tap"
+                    onClick={copyRuntimeInvite}
+                    style={{ cursor: "pointer" }}
+                  >
+                    {runtimeInviteCopied ? "copied" : "copy link"}
+                  </span>
+                  <a
+                    href={runtimeInviteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "#eaeaea", textDecoration: "none" }}
+                  >
+                    open
+                  </a>
+                </div>
+
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=144x144&data=${encodeURIComponent(
+                    runtimeInviteUrl
+                  )}`}
+                  alt="runtime invite qr"
+                  style={{
+                    marginTop: 10,
+                    width: 144,
+                    height: 144,
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.16)",
+                  }}
+                />
+
+                {runtimeInviteExpiresAt ? (
+                  <div style={{ marginTop: 7, fontSize: 10, opacity: 0.6 }}>
+                    expires: {new Date(runtimeInviteExpiresAt).toLocaleTimeString()}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        ) : null}
 
         <div
           style={{

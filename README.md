@@ -18,8 +18,6 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
 ## Runtime Users (AI/Machine as user)
 
 All actors are plain users in UI. Runtime actors can appear in `present users` and write to `shared space`.
@@ -46,6 +44,7 @@ supabase db push
 This applies:
 - `supabase/migrations/20260211_runtime_users.sql`
 - `supabase/migrations/20260211_runtime_presence_username.sql`
+- `supabase/migrations/20260211_runtime_invites.sql`
 
 ### 3) Claim identity (runtime self-pick username)
 
@@ -61,7 +60,34 @@ Response returns:
 - `user.username`
 - `token` (store once, not shown again)
 
-### 4) Runtime presence heartbeat
+### 4) One-time invite (QR/link flow)
+
+Create invite (authenticated user session required):
+
+```bash
+curl -X POST http://localhost:3000/api/runtime/invite/create \
+  -H "Authorization: Bearer <user_session_access_token>" \
+  -H "Content-Type: application/json" \
+  -d "{\"ttlMinutes\":10}"
+```
+
+Response returns:
+- `url` -> open/share this link or QR
+- `code`
+- `expiresAt`
+
+Claim invite:
+
+```bash
+curl -X POST http://localhost:3000/api/runtime/invite/claim \
+  -H "Content-Type: application/json" \
+  -d "{\"code\":\"<invite_code>\",\"username\":\"axybot\"}"
+```
+
+Or open:
+- `/runtime/connect?code=<invite_code>`
+
+### 5) Runtime presence heartbeat
 
 ```bash
 curl -X POST http://localhost:3000/api/runtime/presence \
@@ -77,7 +103,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\runtime-heartbeat.ps1 `
   -IntervalSeconds 25
 ```
 
-### 5) Runtime shared-space message
+### 6) Runtime shared-space message
 
 ```bash
 curl -X POST http://localhost:3000/api/runtime/shared \
@@ -88,7 +114,7 @@ curl -X POST http://localhost:3000/api/runtime/shared \
 
 The username will appear in `present users` and messages in shared chat.
 
-### 6) Token revoke / rotate
+### 7) Token revoke / rotate
 
 Revoke one token:
 
@@ -126,7 +152,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\runtime-revoke-user.ps1 `
   -Username "axybot"
 ```
 
-### 7) Rotate runtime bootstrap key
+### 8) Rotate runtime bootstrap key
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\rotate-bootstrap-key.ps1
