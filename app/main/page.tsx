@@ -42,6 +42,56 @@ type HushMessage = {
   created_at: string;
 };
 
+const ORBIT_TRACK_SIZE = 12;
+
+function nextOrbitTarget(prev: number) {
+  let next = prev;
+  while (next === prev) {
+    next = Math.floor(Math.random() * ORBIT_TRACK_SIZE);
+  }
+  return next;
+}
+
+function puzzleToggle(board: boolean[], idx: number) {
+  const row = Math.floor(idx / 3);
+  const col = idx % 3;
+  const next = [...board];
+  const cells = [
+    [row, col],
+    [row - 1, col],
+    [row + 1, col],
+    [row, col - 1],
+    [row, col + 1],
+  ];
+
+  cells.forEach(([r, c]) => {
+    if (r < 0 || r > 2 || c < 0 || c > 2) return;
+    const flat = r * 3 + c;
+    next[flat] = !next[flat];
+  });
+
+  return next;
+}
+
+function puzzleEqual(a: boolean[], b: boolean[]) {
+  return a.every((v, idx) => v === b[idx]);
+}
+
+function createPuzzle() {
+  const goals: boolean[][] = [
+    [false, true, false, true, true, true, false, true, false],
+    [true, false, true, false, true, false, true, false, true],
+    [false, false, false, true, true, true, false, false, false],
+  ];
+  const goal = goals[Math.floor(Math.random() * goals.length)];
+  let board = [...goal];
+  const scramble = 4 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < scramble; i += 1) {
+    board = puzzleToggle(board, Math.floor(Math.random() * 9));
+  }
+  return { board, goal };
+}
+
 export default function Main() {
   const router = useRouter();
 
@@ -67,6 +117,7 @@ export default function Main() {
     null
   );
   const [requestingChatId, setRequestingChatId] = useState<string | null>(null);
+  const [initialPuzzle] = useState(() => createPuzzle());
 
   /* HUSH */
   const [hushChats, setHushChats] = useState<HushChat[]>([]);
@@ -85,6 +136,28 @@ export default function Main() {
     chatId?: string;
   } | null>(null);
   const [playOpen, setPlayOpen] = useState(false);
+  const [activePlay, setActivePlay] = useState<
+    "signal-drift" | "slow-orbit" | "hush-puzzle" | null
+  >(null);
+  const [driftRunning, setDriftRunning] = useState(false);
+  const [driftScore, setDriftScore] = useState(0);
+  const [driftTimeLeft, setDriftTimeLeft] = useState(25);
+  const [driftCell, setDriftCell] = useState(5);
+  const [driftFlashCell, setDriftFlashCell] = useState<number | null>(null);
+  const [orbitRunning, setOrbitRunning] = useState(false);
+  const [orbitScore, setOrbitScore] = useState(0);
+  const [orbitTimeLeft, setOrbitTimeLeft] = useState(22);
+  const [orbitPosition, setOrbitPosition] = useState(0);
+  const [orbitTarget, setOrbitTarget] = useState(4);
+  const [orbitPulse, setOrbitPulse] = useState(false);
+  const [puzzleBoard, setPuzzleBoard] = useState<boolean[]>(
+    initialPuzzle.board
+  );
+  const [puzzleGoal, setPuzzleGoal] = useState<boolean[]>(
+    initialPuzzle.goal
+  );
+  const [puzzleMoves, setPuzzleMoves] = useState(0);
+  const [puzzleSolved, setPuzzleSolved] = useState(false);
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
@@ -325,6 +398,51 @@ export default function Main() {
   }, [playOpen]);
 
   useEffect(() => {
+    if (!playOpen || activePlay !== "signal-drift" || !driftRunning) return;
+    const timer = window.setInterval(() => {
+      setDriftTimeLeft((prev) => {
+        if (prev <= 1) {
+          setDriftRunning(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+      setDriftCell((prev) => {
+        let next = prev;
+        while (next === prev) {
+          next = Math.floor(Math.random() * 16);
+        }
+        return next;
+      });
+    }, 850);
+
+    return () => window.clearInterval(timer);
+  }, [playOpen, activePlay, driftRunning]);
+
+  useEffect(() => {
+    if (!playOpen || activePlay !== "slow-orbit" || !orbitRunning) return;
+
+    const orbitTick = window.setInterval(() => {
+      setOrbitPosition((prev) => (prev + 1) % ORBIT_TRACK_SIZE);
+    }, 170);
+
+    const secondTick = window.setInterval(() => {
+      setOrbitTimeLeft((prev) => {
+        if (prev <= 1) {
+          setOrbitRunning(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(orbitTick);
+      window.clearInterval(secondTick);
+    };
+  }, [playOpen, activePlay, orbitRunning]);
+
+  useEffect(() => {
     const el = sharedMessagesRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
@@ -407,6 +525,107 @@ export default function Main() {
     }
 
     setAxyMsgLoadingId(null);
+  }
+
+  function openPlay(game: "signal-drift" | "slow-orbit" | "hush-puzzle") {
+    setActivePlay(game);
+    if (game === "signal-drift") {
+      setDriftRunning(false);
+      setDriftScore(0);
+      setDriftTimeLeft(25);
+      setDriftCell(Math.floor(Math.random() * 16));
+      setDriftFlashCell(null);
+    }
+    if (game === "slow-orbit") {
+      setOrbitRunning(false);
+      setOrbitScore(0);
+      setOrbitTimeLeft(22);
+      setOrbitPosition(0);
+      setOrbitTarget(Math.floor(Math.random() * ORBIT_TRACK_SIZE));
+      setOrbitPulse(false);
+    }
+    if (game === "hush-puzzle") {
+      const puzzle = createPuzzle();
+      setPuzzleBoard(puzzle.board);
+      setPuzzleGoal(puzzle.goal);
+      setPuzzleMoves(0);
+      setPuzzleSolved(false);
+    }
+  }
+
+  function togglePlayPanel() {
+    setPlayOpen((prev) => {
+      const next = !prev;
+      if (!next) {
+        setActivePlay(null);
+        setDriftRunning(false);
+        setOrbitRunning(false);
+      }
+      return next;
+    });
+  }
+
+  function startSignalDrift() {
+    setDriftScore(0);
+    setDriftTimeLeft(25);
+    setDriftCell(Math.floor(Math.random() * 16));
+    setDriftFlashCell(null);
+    setDriftRunning(true);
+  }
+
+  function tapDriftCell(cell: number) {
+    if (!driftRunning) return;
+    if (cell !== driftCell) return;
+    setDriftScore((prev) => prev + 1);
+    setDriftFlashCell(cell);
+    setTimeout(() => setDriftFlashCell(null), 180);
+    setDriftCell((prev) => {
+      let next = prev;
+      while (next === prev) {
+        next = Math.floor(Math.random() * 16);
+      }
+      return next;
+    });
+  }
+
+  function startSlowOrbit() {
+    setOrbitRunning(true);
+    setOrbitScore(0);
+    setOrbitTimeLeft(22);
+    setOrbitPosition(0);
+    setOrbitTarget(Math.floor(Math.random() * ORBIT_TRACK_SIZE));
+    setOrbitPulse(false);
+  }
+
+  function syncSlowOrbit() {
+    if (!orbitRunning) return;
+    const dist = Math.abs(orbitPosition - orbitTarget);
+    const wrapDist = Math.min(dist, ORBIT_TRACK_SIZE - dist);
+    if (wrapDist <= 1) {
+      setOrbitScore((prev) => prev + (wrapDist === 0 ? 2 : 1));
+      setOrbitTarget((prev) => nextOrbitTarget(prev));
+      setOrbitPulse(true);
+      setTimeout(() => setOrbitPulse(false), 170);
+    }
+  }
+
+  function resetHushPuzzle() {
+    const puzzle = createPuzzle();
+    setPuzzleBoard(puzzle.board);
+    setPuzzleGoal(puzzle.goal);
+    setPuzzleMoves(0);
+    setPuzzleSolved(false);
+  }
+
+  function tapPuzzleCell(idx: number) {
+    if (puzzleSolved) return;
+    setPuzzleBoard((prev) => {
+      const next = puzzleToggle(prev, idx);
+      const solved = puzzleEqual(next, puzzleGoal);
+      setPuzzleSolved(solved);
+      return next;
+    });
+    setPuzzleMoves((prev) => prev + 1);
   }
 
   async function createHushWith(targetUserId: string) {
@@ -1283,7 +1502,7 @@ export default function Main() {
             ...playPanelStyle,
             minHeight: playOpen ? undefined : playClosedHeight ?? undefined,
           }}
-          onClick={() => setPlayOpen((prev) => !prev)}
+          onClick={togglePlayPanel}
         >
           <div
             style={{
@@ -1315,7 +1534,14 @@ export default function Main() {
                   }}
                 >
                   <span>signal drift</span>
-                  <span className="kozmos-tap" style={{ opacity: 0.6 }}>
+                  <span
+                    className="kozmos-tap"
+                    style={{ opacity: 0.6, cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPlay("signal-drift");
+                    }}
+                  >
                     enter
                   </span>
                 </div>
@@ -1329,7 +1555,14 @@ export default function Main() {
                   }}
                 >
                   <span>slow orbit</span>
-                  <span className="kozmos-tap" style={{ opacity: 0.6 }}>
+                  <span
+                    className="kozmos-tap"
+                    style={{ opacity: 0.6, cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPlay("slow-orbit");
+                    }}
+                  >
                     enter
                   </span>
                 </div>
@@ -1342,11 +1575,296 @@ export default function Main() {
                   }}
                 >
                   <span>hush puzzle</span>
-                  <span className="kozmos-tap" style={{ opacity: 0.6 }}>
+                  <span
+                    className="kozmos-tap"
+                    style={{ opacity: 0.6, cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPlay("hush-puzzle");
+                    }}
+                  >
                     enter
                   </span>
                 </div>
               </div>
+
+              {activePlay === "signal-drift" && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    marginTop: 12,
+                    border: "1px solid rgba(102, 2, 60, 0.32)",
+                    borderRadius: 10,
+                    padding: 10,
+                    background: "rgba(12, 8, 18, 0.72)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
+                      fontSize: 11,
+                    }}
+                  >
+                    <span>signal drift: catch the pulse</span>
+                    <span style={{ opacity: 0.7 }}>
+                      score {driftScore} · {driftTimeLeft}s
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gap: 6,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {Array.from({ length: 16 }, (_, idx) => {
+                      const isTarget = idx === driftCell;
+                      const isFlash = idx === driftFlashCell;
+                      return (
+                        <button
+                          key={`drift-${idx}`}
+                          onClick={() => tapDriftCell(idx)}
+                          style={{
+                            height: 30,
+                            borderRadius: 6,
+                            border: "1px solid rgba(255,255,255,0.16)",
+                            background: isTarget
+                              ? "rgba(255,120,210,0.28)"
+                              : "rgba(255,255,255,0.04)",
+                            boxShadow: isFlash
+                              ? "0 0 14px rgba(255, 120, 210, 0.7)"
+                              : isTarget
+                                ? "0 0 8px rgba(255, 120, 210, 0.32)"
+                                : "none",
+                            cursor: driftRunning ? "pointer" : "default",
+                            transition: "all 0.16s ease",
+                            color: "rgba(255,255,255,0.75)",
+                            fontSize: 11,
+                          }}
+                        >
+                          {isTarget ? "•" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      fontSize: 11,
+                      opacity: 0.8,
+                    }}
+                  >
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer" }}
+                      onClick={startSignalDrift}
+                    >
+                      {driftRunning ? "restart" : "start"}
+                    </span>
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        setDriftRunning(false);
+                        setDriftScore(0);
+                        setDriftTimeLeft(25);
+                        setDriftFlashCell(null);
+                      }}
+                    >
+                      reset
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {activePlay === "slow-orbit" && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    marginTop: 12,
+                    border: "1px solid rgba(102, 2, 60, 0.32)",
+                    borderRadius: 10,
+                    padding: 10,
+                    background: "rgba(12, 8, 18, 0.72)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
+                      fontSize: 11,
+                    }}
+                  >
+                    <span>slow orbit: sync at the pulse</span>
+                    <span style={{ opacity: 0.7 }}>
+                      score {orbitScore} · {orbitTimeLeft}s
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(6, 1fr)",
+                      gap: 6,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {Array.from({ length: ORBIT_TRACK_SIZE }, (_, idx) => {
+                      const isTarget = idx === orbitTarget;
+                      const isCursor = idx === orbitPosition;
+                      return (
+                        <div
+                          key={`orbit-${idx}`}
+                          style={{
+                            height: 22,
+                            borderRadius: 999,
+                            border: "1px solid rgba(255,255,255,0.14)",
+                            background: isTarget
+                              ? "rgba(255,120,210,0.18)"
+                              : "rgba(255,255,255,0.03)",
+                            boxShadow: isCursor
+                              ? orbitPulse
+                                ? "0 0 16px rgba(255, 120, 210, 0.82)"
+                                : "0 0 8px rgba(255,255,255,0.25)"
+                              : "none",
+                            transform: isCursor ? "scale(1.06)" : "scale(1)",
+                            transition: "all 0.14s ease",
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      fontSize: 11,
+                      opacity: 0.82,
+                    }}
+                  >
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer" }}
+                      onClick={startSlowOrbit}
+                    >
+                      {orbitRunning ? "restart" : "start"}
+                    </span>
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: orbitRunning ? "pointer" : "default" }}
+                      onClick={syncSlowOrbit}
+                    >
+                      sync
+                    </span>
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        setOrbitRunning(false);
+                        setOrbitScore(0);
+                        setOrbitTimeLeft(22);
+                        setOrbitPosition(0);
+                      }}
+                    >
+                      reset
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {activePlay === "hush-puzzle" && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    marginTop: 12,
+                    border: "1px solid rgba(102, 2, 60, 0.32)",
+                    borderRadius: 10,
+                    padding: 10,
+                    background: "rgba(12, 8, 18, 0.72)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
+                      fontSize: 11,
+                    }}
+                  >
+                    <span>hush puzzle: align the quiet pattern</span>
+                    <span style={{ opacity: 0.7 }}>
+                      {puzzleSolved ? `solved in ${puzzleMoves}` : `moves ${puzzleMoves}`}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, 1fr)",
+                      gap: 7,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {Array.from({ length: 9 }, (_, idx) => (
+                      <button
+                        key={`puzzle-${idx}`}
+                        onClick={() => tapPuzzleCell(idx)}
+                        style={{
+                          height: 36,
+                          borderRadius: 8,
+                          border: "1px solid rgba(255,255,255,0.16)",
+                          background: puzzleBoard[idx]
+                            ? "rgba(255, 206, 120, 0.24)"
+                            : "rgba(255,255,255,0.04)",
+                          boxShadow: puzzleGoal[idx]
+                            ? "inset 0 0 0 1px rgba(255, 120, 210, 0.36)"
+                            : "none",
+                          cursor: puzzleSolved ? "default" : "pointer",
+                          transition: "all 0.16s ease",
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      fontSize: 11,
+                      opacity: 0.82,
+                    }}
+                  >
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer" }}
+                      onClick={resetHushPuzzle}
+                    >
+                      new
+                    </span>
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        setPuzzleBoard([...puzzleGoal]);
+                        setPuzzleSolved(true);
+                      }}
+                    >
+                      reveal
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div style={{ opacity: 0.35, fontSize: 11 }}>
                 more arriving soon
