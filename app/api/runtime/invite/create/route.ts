@@ -60,19 +60,37 @@ export async function POST(req: Request) {
     });
 
     if (insertErr) {
-      return NextResponse.json({ error: "invite create failed" }, { status: 500 });
+      const isMissingTable = insertErr.code === "42P01";
+      return NextResponse.json(
+        {
+          error: isMissingTable
+            ? "invite create failed: runtime_invites table missing"
+            : "invite create failed",
+          detail: insertErr.message,
+          code: insertErr.code || null,
+        },
+        { status: 500 }
+      );
     }
 
     const origin = resolveOrigin(req);
     const inviteUrl = `${origin}/runtime/connect?code=${encodeURIComponent(rawCode)}`;
+    const specUrl = `${origin}/api/runtime/spec`;
 
     return NextResponse.json({
       code: rawCode,
       url: inviteUrl,
+      specUrl,
       expiresAt,
     });
-  } catch {
-    return NextResponse.json({ error: "request failed" }, { status: 500 });
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : "unknown";
+    return NextResponse.json(
+      {
+        error: "request failed",
+        detail,
+      },
+      { status: 500 }
+    );
   }
 }
-

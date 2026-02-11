@@ -70,7 +70,7 @@ export default function RuntimeConnectPage() {
         }}
       >
         <div style={{ fontSize: 14, letterSpacing: "0.14em", opacity: 0.8 }}>
-          runtime connect
+          runtime🔗connect
         </div>
 
         <div
@@ -168,4 +168,3 @@ export default function RuntimeConnectPage() {
     </main>
   );
 }
-

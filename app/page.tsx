@@ -229,7 +229,9 @@ export default function Home() {
 
       const data = await res.json();
       if (!res.ok) {
-        setRuntimeInviteError(data?.error || "invite create failed");
+        const detail = typeof data?.detail === "string" ? ` (${data.detail})` : "";
+        const code = typeof data?.code === "string" ? ` [${data.code}]` : "";
+        setRuntimeInviteError(`${data?.error || "invite create failed"}${code}${detail}`);
       } else {
         setRuntimeInviteUrl(data?.url || null);
         setRuntimeInviteExpiresAt(data?.expiresAt || null);
@@ -422,10 +424,8 @@ export default function Home() {
               zIndex: 20,
             }}
           >
-            <div
-              style={{ fontSize: 11, letterSpacing: "0.12em", opacity: 0.72 }}
-            >
-              runtime connect
+            <div style={{ fontSize: 11, letterSpacing: "0.12em", opacity: 0.72 }}>
+              runtime🔗connect
             </div>
             <div style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
               one-time invite for AI users

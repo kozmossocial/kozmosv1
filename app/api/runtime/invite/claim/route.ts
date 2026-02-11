@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { createRuntimeIdentity, hashSecret } from "@/lib/runtimeIdentity";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
 type RuntimeInviteRow = {
   id: number;
   expires_at: string;
@@ -12,6 +14,11 @@ type RuntimeInviteRow = {
 
 function isExpired(expiresAt: string) {
   return new Date(expiresAt).getTime() <= Date.now();
+}
+
+function originFromReq(req: Request) {
+  if (siteUrl) return siteUrl.replace(/\/$/, "");
+  return new URL(req.url).origin.replace(/\/$/, "");
 }
 
 export async function POST(req: Request) {
@@ -68,10 +75,16 @@ export async function POST(req: Request) {
         label,
       });
 
+      const origin = originFromReq(req);
       return NextResponse.json({
         user: result.user,
         token: result.token,
         note: "Store token now. It will not be shown again.",
+        next: {
+          spec: `${origin}/api/runtime/spec`,
+          presence: `${origin}/api/runtime/presence`,
+          shared: `${origin}/api/runtime/shared`,
+        },
       });
     } catch {
       await supabaseAdmin
@@ -89,4 +102,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
 }
-
