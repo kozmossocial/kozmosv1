@@ -4,27 +4,46 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
+const MATRIX_BASE_CHARS =
+  'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾔﾖﾙﾚﾛﾝ:・."=*+-<>¦｜çöşğı:."=*+-¦|_kozmos';
+const MATRIX_DIGITS = "012345678";
+
+function createSeededRng(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+function pickMatrixChar(seed: number) {
+  const digitChance = 0.03;
+  const useDigit = (seed % 100) / 100 < digitChance;
+  if (useDigit) {
+    return MATRIX_DIGITS[seed % MATRIX_DIGITS.length];
+  }
+  return MATRIX_BASE_CHARS[seed % MATRIX_BASE_CHARS.length];
+}
+
 function buildMatrixStream(seed: number, length = 42) {
-  const chars = "0123456789abcdef";
   let s = seed;
   const lines: string[] = [];
   for (let i = 0; i < length; i += 1) {
     s = (s * 9301 + 49297) % 233280;
-    const a = chars[s % chars.length];
+    const a = pickMatrixChar(s);
     s = (s * 9301 + 49297) % 233280;
-    const b = chars[s % chars.length];
+    const b = pickMatrixChar(s);
     lines.push(`${a}${b}`);
   }
   return lines.join("\n");
 }
 
 function buildMatrixStreamSingle(seed: number, length = 42) {
-  const chars = "0123456789abcdef";
   let s = seed;
   const lines: string[] = [];
   for (let i = 0; i < length; i += 1) {
     s = (s * 9301 + 49297) % 233280;
-    lines.push(chars[s % chars.length]);
+    lines.push(pickMatrixChar(s));
   }
   return lines.join("\n");
 }
@@ -45,30 +64,32 @@ export default function Home() {
 
   const matrixColumns = useMemo(() => {
     const doubleCount = 46;
-    const singleCount = Math.floor(doubleCount / 2);
-    const rand = (min: number, max: number) =>
-      min + Math.random() * (max - min);
-    const randInt = (min: number, max: number) =>
-      Math.floor(rand(min, max + 1));
+    const singleCount = Math.floor(doubleCount * 0.9);
+    const rand = (rng: () => number, min: number, max: number) =>
+      min + rng() * (max - min);
+    const randInt = (rng: () => number, min: number, max: number) =>
+      Math.floor(rand(rng, min, max + 1));
 
     const makeColumn = (i: number, kind: "double" | "single") => {
-      const extraStreams = Math.random() > 0.8 ? 1 : 0;
+      const rng = createSeededRng(4200 + i * 97 + (kind === "single" ? 31 : 0));
+      const extraStreams = rng() > 0.8 ? 1 : 0;
       const baseCount = kind === "double" ? 3 : 2;
       const streamCount = baseCount + extraStreams;
       const opacityBoost = kind === "single" ? 0.72 : 1;
       const streams = Array.from({ length: streamCount }, (_, idx) => {
-        const isLong = Math.random() > (kind === "double" ? 0.78 : 0.68);
+        const isLong = rng() > (kind === "double" ? 0.78 : 0.68);
         const length = isLong
-          ? randInt(kind === "double" ? 140 : 180, 240)
-          : randInt(kind === "double" ? 80 : 120, 170);
+          ? randInt(rng, kind === "double" ? 140 : 180, 240)
+          : randInt(rng, kind === "double" ? 80 : 120, 170);
         return {
           key: `col-${kind}-${i}-s-${idx}`,
           text:
             kind === "double"
               ? buildMatrixStream(i * 13 + idx * 77 + 5, length)
               : buildMatrixStreamSingle(i * 19 + idx * 61 + 11, length),
-          duration: rand(7.6, 13.4) + (isLong ? rand(1.6, 3.4) : 0),
-          delay: -rand(0.2, 2.6),
+          duration:
+            rand(rng, 7.6, 13.4) + (isLong ? rand(rng, 1.6, 3.4) : 0),
+          delay: -rand(rng, 0.2, 2.6),
           opacity: Math.max(0.45, (0.98 - idx * 0.12) * opacityBoost),
           blur: idx * 0.05,
         };
@@ -84,16 +105,35 @@ export default function Home() {
     );
 
     const total = doubleCount + singleCount;
-    const mixed: { key: string; streams: any[] }[] = [];
+    const mixed: {
+      key: string;
+      streams: any[];
+      glowTail: string | null;
+      glowColumn: boolean;
+    }[] = [];
     let di = 0;
     let si = 0;
     for (let idx = 0; idx < total; idx += 1) {
       if ((idx % 3 === 2 && si < singleCount) || di >= doubleCount) {
-        mixed.push(singles[si++]);
+        mixed.push({ ...singles[si++], glowTail: null, glowColumn: false });
       } else {
-        mixed.push(doubles[di++]);
+        mixed.push({ ...doubles[di++], glowTail: null, glowColumn: false });
       }
     }
+
+    for (let idx = 0; idx < mixed.length; idx += 1) {
+      if (idx % 5 !== 0) continue;
+      const text = mixed[idx].streams[0]?.text ?? "";
+      const lines = text.split("\n");
+      mixed[idx].glowTail = lines.length ? lines[lines.length - 1] : null;
+    }
+
+    for (let idx = 0; idx < mixed.length; idx += 1) {
+      if ((idx * 7 + 3) % 11 === 0) {
+        mixed[idx].glowColumn = true;
+      }
+    }
+
     return mixed;
   }, []);
 
@@ -371,9 +411,20 @@ export default function Home() {
           position: "relative",
         }}
       >
-        <div className="matrix-rain" aria-hidden="true">
+        <div
+          className="matrix-rain"
+          aria-hidden="true"
+          style={
+            {
+              "--matrix-cols": matrixColumns.length,
+            } as React.CSSProperties
+          }
+        >
           {matrixColumns.map((col) => (
-            <div key={col.key} className="matrix-column">
+            <div
+              key={col.key}
+              className={`matrix-column${col.glowColumn ? " matrix-column-glow" : ""}`}
+            >
               {col.streams.map((stream) => (
                 <span
                   key={stream.key}
@@ -390,6 +441,9 @@ export default function Home() {
                   {stream.text}
                 </span>
               ))}
+              {col.glowTail ? (
+                <span className="matrix-tail-glow">{col.glowTail}</span>
+              ) : null}
             </div>
           ))}
         </div>
