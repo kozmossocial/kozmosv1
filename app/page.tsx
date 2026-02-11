@@ -618,6 +618,10 @@ export default function Home() {
               fontWeight: 1200,
               marginBottom: 50,
               textAlign: "left",
+              userSelect: "none",
+              WebkitUserSelect: "none",
+              cursor: "default",
+              pointerEvents: "none",
             }}
           >
             KOZMOS·
