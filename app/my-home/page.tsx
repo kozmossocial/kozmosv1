@@ -151,10 +151,22 @@ useEffect(() => {
     setPersonalAxyInput("");
 
     try {
-      const res = await fetch("/api/axy", {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const res = await fetch("/api/axy/personal", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          message,
+          recentNotes: notes.slice(0, 6).map((n) => n.content),
+        }),
       });
 
       const data = await res.json();
