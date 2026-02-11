@@ -628,3 +628,30 @@ body {
     display: none !important;
   }
 }
+
+@media (max-width: 360px) {
+  .home-hero-content {
+    margin-top: 186px !important;
+    line-height: 1.82 !important;
+  }
+
+  .home-hero-title {
+    letter-spacing: 0.24em !important;
+    margin-bottom: 16px !important;
+  }
+
+  .home-hero-manifesto-links {
+    margin-top: 22px !important;
+  }
+
+  .home-hero-runtime-mobile {
+    width: min(236px, 90vw) !important;
+    margin-top: 18px !important;
+  }
+
+  .main-grid {
+    row-gap: 18px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}

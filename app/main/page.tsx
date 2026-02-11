@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -111,7 +112,7 @@ export default function Main() {
   const [axyMsgReflection, setAxyMsgReflection] = useState<
     Record<string, string>
   >({});
-  const [axyMsgLoadingId, setAxyMsgLoadingId] = useState<string | null>(null);
+  const [, setAxyMsgLoadingId] = useState<string | null>(null);
   const [axyMsgPulseId, setAxyMsgPulseId] = useState<string | null>(null);
   const [axyMsgFadeId, setAxyMsgFadeId] = useState<string | null>(null);
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
@@ -207,7 +208,7 @@ export default function Main() {
     load();
   }, [router]);
 
-  async function loadHush() {
+  const loadHush = useCallback(async () => {
     const { data: chats } = await supabase
       .from("hush_chats")
       .select("id, created_by, status, created_at")
@@ -271,9 +272,9 @@ export default function Main() {
     });
 
     setHushUsers(map);
-  }
+  }, [selectedHushChatId]);
 
-  async function loadHushMessages(chatId: string) {
+  const loadHushMessages = useCallback(async (chatId: string) => {
     const { data } = await supabase
       .from("hush_chat_messages")
       .select("id, chat_id, user_id, content, created_at")
@@ -281,9 +282,9 @@ export default function Main() {
       .order("created_at", { ascending: true });
 
     setHushMessages(data || []);
-  }
+  }, []);
 
-  async function loadRuntimePresentUsers() {
+  const loadRuntimePresentUsers = useCallback(async () => {
     try {
       const thresholdIso = new Date(Date.now() - 90 * 1000).toISOString();
 
@@ -306,7 +307,7 @@ export default function Main() {
     } catch {
       setRuntimePresentUsers([]);
     }
-  }
+  }, []);
 
   function getHushUserName(id: string) {
     return hushUsers[id] || "user";
@@ -339,20 +340,24 @@ export default function Main() {
     );
   }
 
-  function getMyHushMembership(chatId: string) {
+  const getMyHushMembership = useCallback((chatId: string) => {
     if (!userId) return null;
     return hushMembers.find(
       (member) => member.chat_id === chatId && member.user_id === userId
     );
-  }
+  }, [hushMembers, userId]);
 
   useEffect(() => {
     if (!userId) return;
-    loadHush();
-  }, [userId]);
 
-  useEffect(() => {
-    if (!userId) return;
+    const run = () => {
+      void loadHush();
+      if (selectedHushChatId) {
+        void loadHushMessages(selectedHushChatId);
+      }
+    };
+
+    const first = window.setTimeout(run, 0);
 
     const channel = supabase
       .channel("hush-realtime")
@@ -360,16 +365,16 @@ export default function Main() {
         "postgres_changes",
         { event: "*", schema: "public", table: "hush_chats" },
         () => {
-          loadHush();
+          void loadHush();
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "hush_chat_members" },
         () => {
-          loadHush();
+          void loadHush();
           if (selectedHushChatId) {
-            loadHushMessages(selectedHushChatId);
+            void loadHushMessages(selectedHushChatId);
           }
         }
       )
@@ -382,39 +387,43 @@ export default function Main() {
           const chatId = next?.chat_id || prev?.chat_id;
 
           if (selectedHushChatId && chatId === selectedHushChatId) {
-            loadHushMessages(selectedHushChatId);
+            void loadHushMessages(selectedHushChatId);
           }
         }
       )
       .subscribe();
 
     const poll = setInterval(() => {
-      loadHush();
+      void loadHush();
       if (selectedHushChatId) {
-        loadHushMessages(selectedHushChatId);
+        void loadHushMessages(selectedHushChatId);
       }
     }, 6000);
 
     return () => {
+      window.clearTimeout(first);
       clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [userId, selectedHushChatId]);
+  }, [loadHush, loadHushMessages, selectedHushChatId, userId]);
 
   useEffect(() => {
-    if (!selectedHushChatId || !userId) {
-      setHushMessages([]);
-      return;
-    }
+    if (!selectedHushChatId || !userId) return;
 
-    const myMembership = getMyHushMembership(selectedHushChatId);
-    if (!myMembership || myMembership.status !== "accepted") {
-      setHushMessages([]);
-      return;
-    }
+    const myMembership = hushMembers.find(
+      (member) =>
+        member.chat_id === selectedHushChatId && member.user_id === userId
+    );
+    if (!myMembership || myMembership.status !== "accepted") return;
 
-    loadHushMessages(selectedHushChatId);
-  }, [selectedHushChatId, userId, hushMembers]);
+    const tick = window.setTimeout(() => {
+      void loadHushMessages(selectedHushChatId);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(tick);
+    };
+  }, [hushMembers, loadHushMessages, selectedHushChatId, userId]);
 
   useEffect(() => {
     if (playClosedHeight !== null) return;
@@ -576,7 +585,7 @@ export default function Main() {
       window.clearTimeout(first);
       window.clearInterval(poll);
     };
-  }, [userId]);
+  }, [loadRuntimePresentUsers, userId]);
 
   /*  send */
   async function sendMessage() {
@@ -961,6 +970,10 @@ export default function Main() {
       )
     : [];
 
+  const selectedChatMessages = selectedHushChatId
+    ? hushMessages.filter((msg) => msg.chat_id === selectedHushChatId)
+    : [];
+
   const canChatInSelectedHush =
     selectedHushMembership?.status === "accepted";
   const isSelectedHushOwner = selectedHushMembership?.role === "owner";
@@ -985,12 +998,15 @@ export default function Main() {
     zIndex: 5,
   }}
 >
-  <img
+  <Image
     src="/kozmos-logomother1.png"
     alt="Kozmos"
-      className="kozmos-logo kozmos-logo-ambient"
+    width={131}
+    height={98}
+    className="kozmos-logo kozmos-logo-ambient"
     style={{
-      maxWidth: 80,          // ana sayfadakiyle uyumlu
+      maxWidth: 80, // ana sayfadakiyle uyumlu
+      height: "auto",
       opacity: 0.9,
       cursor: "pointer",
       transition:
@@ -1327,7 +1343,7 @@ export default function Main() {
                     marginBottom: 8,
                   }}
                 >
-                  {hushMessages.map((msg) => (
+                  {selectedChatMessages.map((msg) => (
                     <div key={msg.id} style={{ marginBottom: 6 }}>
                       <span style={{ opacity: 0.6 }}>
                         {getHushUserName(msg.user_id)}:
@@ -1587,9 +1603,11 @@ export default function Main() {
                 )}
               </div>
 
-              <img
+              <Image
                 src="/axy-logofav.png"
                 alt="Axy"
+                width={22}
+                height={22}
                 style={{
                   width: 22,
                   height: 22,

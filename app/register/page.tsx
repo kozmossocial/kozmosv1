@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -75,13 +76,15 @@ export default function Register() {
         }}
         onClick={() => router.push("/")}
       >
-        <img
+        <Image
           src="/kozmos-logomother1.png"
           alt="Kozmos"
-            className="kozmos-logo kozmos-logo-ambient"
+          width={131}
+          height={98}
+          className="kozmos-logo kozmos-logo-ambient"
           style={{
-            
             width: 120,
+            height: "auto",
             opacity: 0.85,
             borderRadius: 6,
             transition:

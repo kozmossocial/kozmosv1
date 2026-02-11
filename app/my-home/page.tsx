@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -25,7 +26,7 @@ export default function MyHome() {
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
-  const [axyLoadingId, setAxyLoadingId] = useState<string | null>(null);
+  const [, setAxyLoadingId] = useState<string | null>(null);
   const [personalAxyOpen, setPersonalAxyOpen] = useState(false);
   const [personalAxyInput, setPersonalAxyInput] = useState("");
   const [personalAxyReply, setPersonalAxyReply] = useState<string | null>(null);
@@ -199,12 +200,15 @@ useEffect(() => {
   }}
   onClick={() => router.push("/")}
 >
-  <img
+  <Image
     src="/kozmos-logomother1.png"
     alt="Kozmos"
-      className="kozmos-logo kozmos-logo-ambient"
+    width={131}
+    height={98}
+    className="kozmos-logo kozmos-logo-ambient"
     style={{
       width: 80,
+      height: "auto",
       opacity: 0.85,
       borderRadius: 6,
       transition:
@@ -334,34 +338,36 @@ useEffect(() => {
               </div>
 
               {/* AXY LOGO */}
-             <img
-  src="/axy-logofav.png"
-  alt="Axy"
-  style={{
-    width: 22,
-    height: 22,
-    cursor: "pointer",
-    opacity: axyFadeId === note.id ? 0.25 : 0.6,
-    transform: axyPulseId === note.id ? "scale(1.2)" : "scale(1)",
-    transition:
-      "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.filter =
-      "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.filter = "none";
-  }}
-  onClick={() => {
-    setAxyPulseId(note.id);
-    askAxy(note.id, note.content);
+              <Image
+                src="/axy-logofav.png"
+                alt="Axy"
+                width={22}
+                height={22}
+                style={{
+                  width: 22,
+                  height: 22,
+                  cursor: "pointer",
+                  opacity: axyFadeId === note.id ? 0.25 : 0.6,
+                  transform: axyPulseId === note.id ? "scale(1.2)" : "scale(1)",
+                  transition:
+                    "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.filter =
+                    "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.filter = "none";
+                }}
+                onClick={() => {
+                  setAxyPulseId(note.id);
+                  askAxy(note.id, note.content);
 
-    setTimeout(() => {
-      setAxyPulseId(null);
-    }, 300);
-  }}
-/>
+                  setTimeout(() => {
+                    setAxyPulseId(null);
+                  }, 300);
+                }}
+              />
 
             </div>
           ))}
@@ -376,9 +382,11 @@ useEffect(() => {
             aria-expanded={personalAxyOpen}
             style={personalAxyShellStyle}
           >
-            <img
+            <Image
               src="/axy-banner.png"
               alt="Personal Axy"
+              width={504}
+              height={360}
               className="axy-shell-logo"
               style={personalAxyLogoStyle}
             />

@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
@@ -447,11 +448,14 @@ export default function Home() {
             </a>
           </div>
 
-          <img
+          <Image
             src={`https://api.qrserver.com/v1/create-qr-code/?size=144x144&data=${encodeURIComponent(
               runtimeInviteUrl
             )}`}
             alt="runtime invite qr"
+            width={144}
+            height={144}
+            unoptimized
             style={{
               marginTop: 10,
               width: 144,
@@ -596,11 +600,13 @@ export default function Home() {
             }}
           >
             <a href="https://kozmos.social" target="_self" aria-label="Kozmos">
-              <img
+              <Image
                 src="/kozmos-logomother1.png"
                 alt="Kozmos"
+                width={131}
+                height={98}
                 className="kozmos-logo kozmos-logo-ambient home-hero-logo-image"
-                style={{ cursor: "pointer" }}
+                style={{ cursor: "pointer", height: "auto" }}
               />
             </a>
           </div>
@@ -671,7 +677,13 @@ export default function Home() {
           flexDirection: "column",
         }}
       >
-        <img src="/kozmos-logo.png" alt="Kozmos" style={{ maxWidth: "60%" }} />
+        <Image
+          src="/kozmos-logo.png"
+          alt="Kozmos"
+          width={1536}
+          height={768}
+          style={{ maxWidth: "60%", height: "auto" }}
+        />
         <div style={{ marginTop: 40, fontSize: 12, opacity: 0.4 }}>
           (c) Kozmos - presence over performance.
         </div>
@@ -784,7 +796,13 @@ export default function Home() {
           aria-expanded={axyOpen}
           style={{ position: "relative", zIndex: 3 }}
         >
-          <img src="/axy-banner.png" alt="Axy" className="axy-shell-logo" />
+          <Image
+            src="/axy-banner.png"
+            alt="Axy"
+            width={504}
+            height={360}
+            className="axy-shell-logo"
+          />
 
           <div className="axy-shell-chat" onClick={(e) => e.stopPropagation()}>
             <div className="axy-shell-card">
