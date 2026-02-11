@@ -537,7 +537,7 @@ body {
 /* Main layout responsive */
 @media (max-width: 900px) {
   .home-hero-content {
-    margin-top: 138px !important;
+    margin-top: 104px !important;
     line-height: 2.15 !important;
   }
 
@@ -553,7 +553,7 @@ body {
 
   .home-hero-logo-wrap .home-hero-logo-image {
     max-width: none !important;
-    width: min(40vw, 160px) !important;
+    width: min(20vw, 80px) !important;
     height: auto !important;
   }
 
