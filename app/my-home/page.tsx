@@ -26,6 +26,13 @@ export default function MyHome() {
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
   const [axyLoadingId, setAxyLoadingId] = useState<string | null>(null);
+  const [personalAxyOpen, setPersonalAxyOpen] = useState(false);
+  const [personalAxyInput, setPersonalAxyInput] = useState("");
+  const [personalAxyReply, setPersonalAxyReply] = useState<string | null>(null);
+  const [personalAxyLoading, setPersonalAxyLoading] = useState(false);
+  const [personalLastMessage, setPersonalLastMessage] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
 
@@ -134,6 +141,38 @@ useEffect(() => {
     setAxyLoadingId(null);
   }
 
+  async function askPersonalAxy() {
+    const message = personalAxyInput.trim();
+    if (!message) return;
+
+    setPersonalAxyLoading(true);
+    setPersonalAxyReply(null);
+    setPersonalLastMessage(message);
+    setPersonalAxyInput("");
+
+    try {
+      const res = await fetch("/api/axy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+
+      const data = await res.json();
+      setPersonalAxyReply(data.reply);
+    } catch {
+      setPersonalAxyReply("...");
+    }
+
+    setPersonalAxyLoading(false);
+  }
+
+  function resetPersonalAxy() {
+    setPersonalAxyReply(null);
+    setPersonalLastMessage(null);
+    setPersonalAxyInput("");
+    setPersonalAxyLoading(false);
+  }
+
   return (
     <main style={pageStyle}>
 {/*  KOZMOS LOGO */}
@@ -225,7 +264,7 @@ useEffect(() => {
         </div>
 
         {/* NOTES */}
-        <div style={{ marginTop: 40 }}>
+        <div style={notesListStyle}>
           {notes.map((note) => (
             <div
               key={note.id}
@@ -237,7 +276,7 @@ useEffect(() => {
               }}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                <div style={noteContentStyle}>
                   {note.content}
                 </div>
 
@@ -315,6 +354,79 @@ useEffect(() => {
             </div>
           ))}
         </div>
+
+        <div style={personalAxyWrapStyle}>
+          <div
+            className={`axy-shell${personalAxyOpen ? " open" : ""}`}
+            onClick={() => setPersonalAxyOpen((prev) => !prev)}
+            role="button"
+            tabIndex={0}
+            aria-expanded={personalAxyOpen}
+            style={personalAxyShellStyle}
+          >
+            <img
+              src="/axy-banner.png"
+              alt="Personal Axy"
+              className="axy-shell-logo"
+              style={personalAxyLogoStyle}
+            />
+
+            <div
+              className="axy-shell-chat"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="axy-shell-card" style={personalAxyCardStyle}>
+                <div style={{ marginBottom: 8, opacity: 0.8, fontSize: 11 }}>
+                  {personalAxyReply ? (
+                    personalAxyReply
+                  ) : (
+                    <>
+                      I&apos;m <span className="axy-name-glow">Axy</span>. I
+                      exist inside Kozmos·
+                    </>
+                  )}
+                </div>
+
+                {personalLastMessage ? (
+                  <div
+                    style={{
+                      marginBottom: 8,
+                      fontSize: 11,
+                      color: "rgba(150, 95, 210, 0.9)",
+                    }}
+                  >
+                    {personalLastMessage}
+                  </div>
+                ) : null}
+
+                <input
+                  value={personalAxyInput}
+                  onChange={(e) => setPersonalAxyInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && askPersonalAxy()}
+                  placeholder="say something"
+                  style={personalAxyInputStyle}
+                />
+
+                <div style={personalAxyActionsStyle}>
+                  <span
+                    className="kozmos-tap"
+                    onClick={askPersonalAxy}
+                    style={{ cursor: "pointer" }}
+                  >
+                    {personalAxyLoading ? "..." : "ask"}
+                  </span>
+                  <span
+                    className="kozmos-tap"
+                    onClick={resetPersonalAxy}
+                    style={{ cursor: "pointer" }}
+                  >
+                    reset
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   );
@@ -349,8 +461,9 @@ const topRightStyle: React.CSSProperties = {
 };
 
 const contentStyle: React.CSSProperties = {
-  maxWidth: 520,
+  maxWidth: 580,
   margin: "120px auto 0",
+  paddingBottom: 36,
 };
 
 const labelStyle: React.CSSProperties = {
@@ -382,8 +495,8 @@ const saveStyle: React.CSSProperties = {
 };
 
 const noteStyle: React.CSSProperties = {
-  marginBottom: 20,
-  paddingBottom: 12,
+  marginBottom: 14,
+  paddingBottom: 10,
   borderBottom: "1px solid rgba(255,255,255,0.08)",
 };
 
@@ -392,6 +505,60 @@ const noteActionsStyle: React.CSSProperties = {
   fontSize: 12,
   opacity: 0.5,
   cursor: "pointer",
+};
+
+const notesListStyle: React.CSSProperties = {
+  marginTop: 24,
+  maxHeight: "clamp(340px, 46vh, 560px)",
+  overflowY: "auto",
+  overflowX: "hidden",
+  paddingRight: 8,
+};
+
+const noteContentStyle: React.CSSProperties = {
+  whiteSpace: "pre-wrap",
+  lineHeight: 1.45,
+};
+
+const personalAxyWrapStyle: React.CSSProperties = {
+  marginTop: 72,
+  marginBottom: 28,
+  display: "flex",
+  justifyContent: "center",
+};
+
+const personalAxyShellStyle: React.CSSProperties = {
+  width: "min(280px, 88vw)",
+  minHeight: 120,
+};
+
+const personalAxyLogoStyle: React.CSSProperties = {
+  width: "min(120px, 62%)",
+};
+
+const personalAxyCardStyle: React.CSSProperties = {
+  width: "min(220px, 84vw)",
+  minHeight: 108,
+  padding: 10,
+};
+
+const personalAxyInputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "transparent",
+  border: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.2)",
+  color: "#eaeaea",
+  fontSize: 11,
+  outline: "none",
+};
+
+const personalAxyActionsStyle: React.CSSProperties = {
+  marginTop: 8,
+  display: "flex",
+  gap: 12,
+  justifyContent: "center",
+  fontSize: 10,
+  opacity: 0.65,
 };
 
 

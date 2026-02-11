@@ -1090,17 +1090,37 @@ export default function Main() {
         {/* CHAT */}
         <div className="chat-panel" style={chatColumnStyle}>
         <div
-          className="kozmos-shared-glow"
           style={{
-            fontSize: 20,
-            letterSpacing: "0.12em",
-            fontWeight: 500,
-            opacity: 0.6,
-            marginBottom: 18,
-            textTransform: "none",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            marginBottom: 14,
+            transform: "translateX(-18px)",
           }}
         >
-          shared space
+          <div
+            className="kozmos-shared-glow"
+            style={{
+              fontSize: 20,
+              letterSpacing: "0.12em",
+              fontWeight: 500,
+              opacity: 0.6,
+              textTransform: "none",
+              textAlign: "center",
+            }}
+          >
+            shared space
+          </div>
+          <div
+            style={{
+              width: "min(220px, 64%)",
+              height: 1,
+              marginTop: 9,
+              background:
+                "linear-gradient(90deg, transparent 0%, rgba(255,230,170,0.75) 50%, transparent 100%)",
+              boxShadow: "0 0 8px rgba(255,230,170,0.35)",
+            }}
+          />
         </div>
 
         <div ref={sharedMessagesRef} style={sharedMessagesScrollStyle}>
