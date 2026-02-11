@@ -626,7 +626,7 @@ export default function Home() {
             same rules. Kozmos is not a platform. It is a shared space.
           </p>
 
-          <div style={{ marginTop: 32 }}>
+          <div className="home-hero-manifesto-links" style={{ marginTop: 32 }}>
             {[
               ["Reduced noise", "noise"],
               ["Intentional interaction", "interaction"],
@@ -646,7 +646,7 @@ export default function Home() {
           </div>
 
           <div
-            className="runtime-connect-panel runtime-connect-mobile"
+            className="runtime-connect-panel runtime-connect-mobile home-hero-runtime-mobile"
             style={{
               width: "min(260px, 92vw)",
               marginTop: 24,
