@@ -423,6 +423,7 @@ export default function Home() {
 
         {user ? (
           <div
+            className="runtime-connect-panel"
             style={{
               position: "absolute",
               top: 54,
@@ -431,7 +432,6 @@ export default function Home() {
               border: "1px solid rgba(255,255,255,0.14)",
               borderRadius: 10,
               padding: 10,
-              background: "rgba(255,255,255,0.02)",
               zIndex: 20,
             }}
           >
@@ -443,14 +443,14 @@ export default function Home() {
                 disabled={runtimeInviteLoading}
                 style={{
                   position: "absolute",
-                  top: 4,
-                  right: 6,
-                  width: 26,
-                  height: 26,
+                  top: 2,
+                  right: 4,
+                  width: 30,
+                  height: 30,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 15,
+                  fontSize: 17,
                   lineHeight: 1,
                   border: "none",
                   background: "transparent",
@@ -459,7 +459,8 @@ export default function Home() {
                   cursor: runtimeInviteLoading ? "default" : "pointer",
                   userSelect: "none",
                   padding: 0,
-                  zIndex: 2,
+                  zIndex: 12,
+                  pointerEvents: "auto",
                 }}
                 aria-label="close runtime connect"
               >
