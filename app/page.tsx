@@ -76,35 +76,41 @@ export default function Home() {
   const [runtimeConnectClosed, setRuntimeConnectClosed] = useState(false);
 
   const matrixColumns = useMemo(() => {
-    const doubleCount = 46;
-    const singleCount = Math.floor(doubleCount * 0.9);
+    const sessionOffset = 77123;
+    const doubleCount = 62;
+    const singleCount = 58;
     const rand = (rng: () => number, min: number, max: number) =>
       min + rng() * (max - min);
     const randInt = (rng: () => number, min: number, max: number) =>
       Math.floor(rand(rng, min, max + 1));
 
     const makeColumn = (i: number, kind: "double" | "single") => {
-      const rng = createSeededRng(4200 + i * 97 + (kind === "single" ? 31 : 0));
-      const extraStreams = rng() > 0.8 ? 1 : 0;
+      const rng = createSeededRng(
+        4200 + sessionOffset + i * 97 + (kind === "single" ? 31 : 0)
+      );
+      const slowColumn = rng() > 0.68;
+      const extraStreams = rng() > 0.72 ? 1 : 0;
       const baseCount = kind === "double" ? 3 : 2;
       const streamCount = baseCount + extraStreams;
       const opacityBoost = kind === "single" ? 0.72 : 1;
       const streams = Array.from({ length: streamCount }, (_, idx) => {
-        const isLong = rng() > (kind === "double" ? 0.78 : 0.68);
+        const isLong = rng() > (kind === "double" ? 0.72 : 0.62);
         const length = isLong
-          ? randInt(rng, kind === "double" ? 140 : 180, 240)
-          : randInt(rng, kind === "double" ? 80 : 120, 170);
+          ? randInt(rng, kind === "double" ? 120 : 170, 230)
+          : randInt(rng, kind === "double" ? 72 : 108, 160);
+        const baseDuration =
+          rand(rng, 6.6, 12.2) + (isLong ? rand(rng, 1.2, 2.8) : 0);
+        const slowFactor = slowColumn ? rand(rng, 1.08, 1.22) : 1;
         return {
           key: `col-${kind}-${i}-s-${idx}`,
           text:
             kind === "double"
               ? buildMatrixStream(i * 13 + idx * 77 + 5, length)
               : buildMatrixStreamSingle(i * 19 + idx * 61 + 11, length),
-          duration:
-            rand(rng, 7.6, 13.4) + (isLong ? rand(rng, 1.6, 3.4) : 0),
-          delay: -rand(rng, 0.2, 2.6),
-          opacity: Math.max(0.45, (0.98 - idx * 0.12) * opacityBoost),
-          blur: idx * 0.05,
+          duration: baseDuration * slowFactor,
+          delay: -rand(rng, 0.1, 6.8),
+          opacity: Math.max(0.38, (0.96 - idx * 0.11) * opacityBoost),
+          blur: idx * 0.04 + rand(rng, 0, 0.08),
         };
       });
       return { key: `col-${kind}-${i}`, streams };
@@ -133,8 +139,19 @@ export default function Home() {
     }[] = [];
     let di = 0;
     let si = 0;
+    const mixRng = createSeededRng(9100 + sessionOffset);
     for (let idx = 0; idx < total; idx += 1) {
-      if ((idx % 3 === 2 && si < singleCount) || di >= doubleCount) {
+      if (di >= doubleCount) {
+        mixed.push({ ...singles[si++], glowTail: null, glowColumn: false });
+        continue;
+      }
+      if (si >= singleCount) {
+        mixed.push({ ...doubles[di++], glowTail: null, glowColumn: false });
+        continue;
+      }
+
+      const useSingle = mixRng() > 0.5;
+      if (useSingle) {
         mixed.push({ ...singles[si++], glowTail: null, glowColumn: false });
       } else {
         mixed.push({ ...doubles[di++], glowTail: null, glowColumn: false });
@@ -142,14 +159,14 @@ export default function Home() {
     }
 
     for (let idx = 0; idx < mixed.length; idx += 1) {
-      if (idx % 5 !== 0) continue;
+      if (mixRng() > 0.23) continue;
       const text = mixed[idx].streams[0]?.text ?? "";
       const lines = text.split("\n");
       mixed[idx].glowTail = lines.length ? lines[lines.length - 1] : null;
     }
 
     for (let idx = 0; idx < mixed.length; idx += 1) {
-      if ((idx * 7 + 3) % 11 === 0) {
+      if (mixRng() > 0.84) {
         mixed[idx].glowColumn = true;
       }
     }

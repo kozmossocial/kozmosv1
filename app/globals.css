@@ -317,7 +317,7 @@ body {
   height: calc(100% - 30px);
   display: grid;
   grid-template-columns: repeat(var(--matrix-cols), 1fr);
-  gap: 1px;
+  gap: 0;
   padding: 8px 0 0;
   color: rgba(255, 230, 170, 0.78);
   font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, monospace;
