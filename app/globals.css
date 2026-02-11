@@ -563,11 +563,15 @@ body {
   }
 
   .home-hero-manifesto-links {
-    margin-top: 56px !important;
+    position: relative !important;
+    top: 96px !important;
+    margin-top: 32px !important;
   }
 
   .home-hero-runtime-mobile {
-    margin-top: 40px !important;
+    position: relative !important;
+    top: 128px !important;
+    margin-top: 24px !important;
   }
 
   .runtime-connect-desktop {
