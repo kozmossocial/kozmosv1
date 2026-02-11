@@ -31,8 +31,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "invalid token" }, { status: 401 });
     }
 
+    const { data: profile } = await supabaseAdmin
+      .from("profileskozmos")
+      .select("username")
+      .eq("id", runtimeToken.user_id)
+      .maybeSingle();
+
     await supabaseAdmin.from("runtime_presence").upsert({
       user_id: runtimeToken.user_id,
+      username: profile?.username || "user",
       last_seen_at: new Date().toISOString(),
     });
 
@@ -46,4 +53,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
 }
-

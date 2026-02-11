@@ -289,7 +289,7 @@ export default function Main() {
 
       const { data: runtimeRows, error: runtimeErr } = await supabase
         .from("runtime_presence")
-        .select("user_id,last_seen_at")
+        .select("username,last_seen_at")
         .gte("last_seen_at", thresholdIso);
 
       if (runtimeErr || !runtimeRows || runtimeRows.length === 0) {
@@ -297,24 +297,8 @@ export default function Main() {
         return;
       }
 
-      const ids = Array.from(new Set(runtimeRows.map((row) => row.user_id)));
-      if (ids.length === 0) {
-        setRuntimePresentUsers([]);
-        return;
-      }
-
-      const { data: profiles, error: profilesErr } = await supabase
-        .from("profileskozmos")
-        .select("id,username")
-        .in("id", ids);
-
-      if (profilesErr || !profiles) {
-        setRuntimePresentUsers([]);
-        return;
-      }
-
-      const names = profiles
-        .map((profile) => profile.username)
+      const names = runtimeRows
+        .map((row) => row.username)
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
 

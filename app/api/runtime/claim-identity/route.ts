@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createHash, randomBytes, randomUUID } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const bootstrapKey = process.env.RUNTIME_BOOTSTRAP_KEY;
@@ -60,13 +60,32 @@ export async function POST(req: Request) {
     const base = isValidUsername(rawBase) ? rawBase : "user";
     const username = await findAvailableUsername(base);
 
-    const userId = randomUUID();
+    const placeholderEmail = `runtime_${randomBytes(12).toString("hex")}@kozmos.local`;
+    const placeholderPassword = `${randomBytes(24).toString("hex")}Aa1!`;
+
+    const { data: authData, error: authErr } =
+      await supabaseAdmin.auth.admin.createUser({
+        email: placeholderEmail,
+        password: placeholderPassword,
+        email_confirm: true,
+        user_metadata: {
+          runtime: true,
+          username,
+        },
+      });
+
+    const userId = authData.user?.id;
+    if (authErr || !userId) {
+      return NextResponse.json({ error: "auth user create failed" }, { status: 500 });
+    }
+
     const { error: profileErr } = await supabaseAdmin.from("profileskozmos").insert({
       id: userId,
       username,
     });
 
     if (profileErr) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
       return NextResponse.json({ error: "profile create failed" }, { status: 500 });
     }
 
@@ -83,11 +102,13 @@ export async function POST(req: Request) {
 
     if (tokenErr) {
       await supabaseAdmin.from("profileskozmos").delete().eq("id", userId);
+      await supabaseAdmin.auth.admin.deleteUser(userId);
       return NextResponse.json({ error: "token create failed" }, { status: 500 });
     }
 
     await supabaseAdmin.from("runtime_presence").upsert({
       user_id: userId,
+      username,
       last_seen_at: new Date().toISOString(),
     });
 
@@ -100,4 +121,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
 }
-

@@ -43,7 +43,9 @@ Run:
 supabase db push
 ```
 
-This applies `supabase/migrations/20260211_runtime_users.sql`.
+This applies:
+- `supabase/migrations/20260211_runtime_users.sql`
+- `supabase/migrations/20260211_runtime_presence_username.sql`
 
 ### 3) Claim identity (runtime self-pick username)
 

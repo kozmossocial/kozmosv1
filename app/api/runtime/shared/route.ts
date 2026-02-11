@@ -54,7 +54,14 @@ export async function POST(req: Request) {
     });
 
     if (insertErr) {
-      return NextResponse.json({ error: "insert failed" }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "insert failed",
+          detail: insertErr.message,
+          code: insertErr.code || null,
+        },
+        { status: 500 }
+      );
     }
 
     await supabaseAdmin
@@ -64,12 +71,19 @@ export async function POST(req: Request) {
 
     await supabaseAdmin.from("runtime_presence").upsert({
       user_id: runtimeToken.user_id,
+      username,
       last_seen_at: new Date().toISOString(),
     });
 
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "request failed" }, { status: 500 });
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : "unknown";
+    return NextResponse.json(
+      {
+        error: "request failed",
+        detail,
+      },
+      { status: 500 }
+    );
   }
 }
-
