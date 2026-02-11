@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -101,7 +101,10 @@ export default function Main() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  const [presentUsers, setPresentUsers] = useState<string[]>([]);
+  const [realtimePresentUsers, setRealtimePresentUsers] = useState<string[]>(
+    []
+  );
+  const [runtimePresentUsers, setRuntimePresentUsers] = useState<string[]>([]);
   const [presentUserGlow, setPresentUserGlow] = useState<string | null>(null);
 
   /* AXY reflection (messages) */
@@ -163,6 +166,13 @@ export default function Main() {
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
+  const presentUsers = useMemo(
+    () =>
+      Array.from(new Set([...realtimePresentUsers, ...runtimePresentUsers])).sort(
+        (a, b) => a.localeCompare(b, "en", { sensitivity: "base" })
+      ),
+    [realtimePresentUsers, runtimePresentUsers]
+  );
 
   /*  load user + messages */
   useEffect(() => {
@@ -271,6 +281,47 @@ export default function Main() {
       .order("created_at", { ascending: true });
 
     setHushMessages(data || []);
+  }
+
+  async function loadRuntimePresentUsers() {
+    try {
+      const thresholdIso = new Date(Date.now() - 90 * 1000).toISOString();
+
+      const { data: runtimeRows, error: runtimeErr } = await supabase
+        .from("runtime_presence")
+        .select("user_id,last_seen_at")
+        .gte("last_seen_at", thresholdIso);
+
+      if (runtimeErr || !runtimeRows || runtimeRows.length === 0) {
+        setRuntimePresentUsers([]);
+        return;
+      }
+
+      const ids = Array.from(new Set(runtimeRows.map((row) => row.user_id)));
+      if (ids.length === 0) {
+        setRuntimePresentUsers([]);
+        return;
+      }
+
+      const { data: profiles, error: profilesErr } = await supabase
+        .from("profileskozmos")
+        .select("id,username")
+        .in("id", ids);
+
+      if (profilesErr || !profiles) {
+        setRuntimePresentUsers([]);
+        return;
+      }
+
+      const names = profiles
+        .map((profile) => profile.username)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+
+      setRuntimePresentUsers(names);
+    } catch {
+      setRuntimePresentUsers([]);
+    }
   }
 
   function getHushUserName(id: string) {
@@ -505,7 +556,7 @@ export default function Main() {
       const names = Array.from(map.values()).sort((a, b) =>
         a.localeCompare(b, "en", { sensitivity: "base" })
       );
-      setPresentUsers(names);
+      setRealtimePresentUsers(names);
     };
 
     channel
@@ -526,6 +577,22 @@ export default function Main() {
       supabase.removeChannel(channel);
     };
   }, [userId, username]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const run = () => {
+      void loadRuntimePresentUsers();
+    };
+
+    const first = window.setTimeout(run, 0);
+    const poll = window.setInterval(run, 12000);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(poll);
+    };
+  }, [userId]);
 
   /*  send */
   async function sendMessage() {
