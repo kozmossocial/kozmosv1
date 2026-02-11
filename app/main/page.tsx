@@ -449,6 +449,12 @@ export default function Main() {
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
+  useEffect(() => {
+    const el = sharedMessagesRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [axyMsgReflection]);
+
   /*  REALTIME (insert + delete) */
   useEffect(() => {
     const channel = supabase
