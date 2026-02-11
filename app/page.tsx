@@ -72,6 +72,7 @@ export default function Home() {
     null
   );
   const [runtimeInviteCopied, setRuntimeInviteCopied] = useState(false);
+  const [runtimeConnectClosed, setRuntimeConnectClosed] = useState(false);
 
   const matrixColumns = useMemo(() => {
     const doubleCount = 46;
@@ -206,6 +207,7 @@ export default function Home() {
     setRuntimeInviteLoading(true);
     setRuntimeInviteError(null);
     setRuntimeInviteCopied(false);
+    setRuntimeConnectClosed(false);
 
     try {
       const {
@@ -241,6 +243,15 @@ export default function Home() {
     }
 
     setRuntimeInviteLoading(false);
+  }
+
+  function closeRuntimeConnect() {
+    if (runtimeInviteLoading) return;
+    setRuntimeConnectClosed(true);
+    setRuntimeInviteUrl(null);
+    setRuntimeInviteExpiresAt(null);
+    setRuntimeInviteError(null);
+    setRuntimeInviteCopied(false);
   }
 
   async function copyRuntimeInvite() {
@@ -424,6 +435,38 @@ export default function Home() {
               zIndex: 20,
             }}
           >
+            {!runtimeConnectClosed && runtimeInviteUrl ? (
+              <button
+                type="button"
+                className="kozmos-tap"
+                onClick={closeRuntimeConnect}
+                disabled={runtimeInviteLoading}
+                style={{
+                  position: "absolute",
+                  top: 4,
+                  right: 6,
+                  width: 26,
+                  height: 26,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 15,
+                  lineHeight: 1,
+                  border: "none",
+                  background: "transparent",
+                  color: "#eaeaea",
+                  opacity: runtimeInviteLoading ? 0.45 : 0.88,
+                  cursor: runtimeInviteLoading ? "default" : "pointer",
+                  userSelect: "none",
+                  padding: 0,
+                  zIndex: 2,
+                }}
+                aria-label="close runtime connect"
+              >
+                x
+              </button>
+            ) : null}
+
             <div style={{ fontSize: 11, letterSpacing: "0.12em", opacity: 0.72 }}>
               runtime🔗connect
             </div>
@@ -445,13 +488,13 @@ export default function Home() {
               {runtimeInviteLoading ? "creating..." : "generate invite"}
             </div>
 
-            {runtimeInviteError ? (
+            {!runtimeConnectClosed && runtimeInviteError ? (
               <div style={{ marginTop: 8, fontSize: 11, color: "#ff8f8f" }}>
                 {runtimeInviteError}
               </div>
             ) : null}
 
-            {runtimeInviteUrl ? (
+            {!runtimeConnectClosed && runtimeInviteUrl ? (
               <>
                 <div
                   style={{
