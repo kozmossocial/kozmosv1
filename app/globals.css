@@ -532,6 +532,25 @@ body {
 
 /* Main layout responsive */
 @media (max-width: 900px) {
+  .home-hero-content {
+    margin-top: 88px !important;
+    line-height: 2.15 !important;
+  }
+
+  .home-hero-logo-wrap {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    text-align: center !important;
+    margin-bottom: 18px !important;
+  }
+
+  .home-hero-title {
+    margin-top: 0 !important;
+    margin-bottom: 22px !important;
+  }
+
   .runtime-connect-desktop {
     display: none !important;
   }

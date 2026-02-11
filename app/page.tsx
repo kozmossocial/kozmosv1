@@ -577,6 +577,7 @@ export default function Home() {
         </div>
 
         <div
+          className="home-hero-content"
           style={{
             maxWidth: 520,
             lineHeight: 2.5,
@@ -585,6 +586,7 @@ export default function Home() {
         >
           {/* LOGO */}
           <div
+            className="home-hero-logo-wrap"
             style={{
               position: "absolute",
               top: 30,
@@ -604,6 +606,7 @@ export default function Home() {
           </div>
 
           <h1
+            className="home-hero-title"
             style={{
               letterSpacing: "0.35em",
               fontWeight: 1200,
