@@ -1063,12 +1063,14 @@ export default function Main() {
 
       {/* MAIN GRID */}
       <div className="main-grid" style={mainGridStyle}>
-        {/* HUSH PANEL */}
-        <div
-          className="hush-panel"
-          style={hushPanelStyle}
-          ref={hushPanelRef}
-        >
+        {/* LEFT PANELS */}
+        <div className="left-panel-stack" style={leftPanelStackStyle}>
+          {/* HUSH PANEL */}
+          <div
+            className="hush-panel"
+            style={hushPanelStyle}
+            ref={hushPanelRef}
+          >
         <div
           style={{
             display: "flex",
@@ -1405,6 +1407,31 @@ export default function Main() {
             )}
           </div>
         )}
+          </div>
+
+          <div className="hush-panel space-tv-panel" style={spaceTvPanelStyle}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ opacity: 0.74, letterSpacing: "0.2em" }}>
+                {"space📺TV"}
+              </div>
+              <div style={{ opacity: 0.42 }}>soon</div>
+            </div>
+
+            <div style={{ opacity: 0.58, marginBottom: 6 }}>
+              ambient streams for shared presence
+            </div>
+
+            <div style={{ opacity: 0.48, fontSize: 11 }}>
+              channels arriving quietly
+            </div>
+          </div>
         </div>
 
         {/* CHAT */}
@@ -1673,15 +1700,17 @@ export default function Main() {
         </div>
         </div>
 
-        {/* PLAY PANEL */}
-        <div
-          className="play-panel"
-          style={{
-            ...playPanelStyle,
-            minHeight: playOpen ? undefined : playClosedHeight ?? undefined,
-          }}
-          onClick={togglePlayPanel}
-        >
+        {/* RIGHT PANELS */}
+        <div style={rightPanelStackStyle}>
+          {/* PLAY PANEL */}
+          <div
+            className="play-panel"
+            style={{
+              ...playPanelStyle,
+              minHeight: playOpen ? undefined : playClosedHeight ?? undefined,
+            }}
+            onClick={togglePlayPanel}
+          >
           <div
             style={{
               display: "flex",
@@ -1700,8 +1729,8 @@ export default function Main() {
             quiet games inside kozmos
           </div>
 
-          {playOpen && (
-            <>
+            {playOpen && (
+              <>
               <div style={{ marginBottom: 10 }}>
                 <div
                   style={{
@@ -2044,11 +2073,39 @@ export default function Main() {
                 </div>
               )}
 
-              <div style={{ opacity: 0.35, fontSize: 11 }}>
-                more arriving soon
+                <div style={{ opacity: 0.35, fontSize: 11 }}>
+                  more arriving soon
+                </div>
+              </>
+            )}
+          </div>
+
+          <div
+            className="play-panel user-build-panel"
+            style={userBuildPanelStyle}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ opacity: 0.72, letterSpacing: "0.2em" }}>
+                {"user🔨build"}
               </div>
-            </>
-          )}
+              <div style={{ opacity: 0.4 }}>soon</div>
+            </div>
+
+            <div style={{ opacity: 0.58, marginBottom: 6 }}>
+              user-built modules inside kozmos
+            </div>
+
+            <div style={{ opacity: 0.46, fontSize: 11 }}>
+              creation lane opening quietly
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2108,7 +2165,6 @@ const sharedMessagesScrollStyle: React.CSSProperties = {
 
 const playPanelStyle: React.CSSProperties = {
   width: "100%",
-  marginRight: 16,
   padding: 12,
   fontSize: 12,
   letterSpacing: "0.04em",
@@ -2120,6 +2176,48 @@ const playPanelStyle: React.CSSProperties = {
   boxShadow:
     "0 0 24px rgba(102, 2, 60, 0.28), inset 0 0 12px rgba(102, 2, 60, 0.18)",
   backdropFilter: "blur(6px)",
+};
+
+const userBuildPanelStyle: React.CSSProperties = {
+  width: "100%",
+  marginTop: 88,
+  padding: 12,
+  fontSize: 12,
+  letterSpacing: "0.04em",
+  opacity: 0.9,
+  borderRadius: 12,
+  border: "1px solid rgba(255, 230, 170, 0.36)",
+  background:
+    "linear-gradient(180deg, rgba(32,24,14,0.9), rgba(18,14,9,0.78))",
+  boxShadow:
+    "0 0 24px rgba(255, 230, 170, 0.24), inset 0 0 12px rgba(255, 230, 170, 0.14)",
+  backdropFilter: "blur(6px)",
+};
+
+const leftPanelStackStyle: React.CSSProperties = {
+  width: "100%",
+};
+
+const spaceTvPanelStyle: React.CSSProperties = {
+  width: "100%",
+  marginLeft: -32,
+  marginTop: 88,
+  padding: 12,
+  fontSize: 12,
+  letterSpacing: "0.04em",
+  opacity: 0.92,
+  borderRadius: 12,
+  border: "1px solid rgba(226, 232, 242, 0.38)",
+  background:
+    "linear-gradient(180deg, rgba(34,38,44,0.9), rgba(20,24,30,0.78))",
+  boxShadow:
+    "0 0 24px rgba(226, 232, 242, 0.2), inset 0 0 12px rgba(226, 232, 242, 0.12)",
+  backdropFilter: "blur(6px)",
+};
+
+const rightPanelStackStyle: React.CSSProperties = {
+  width: "100%",
+  marginRight: 16,
 };
 
 

@@ -535,13 +535,22 @@ body {
     order: 1;
   }
 
-  .hush-panel {
+  .left-panel-stack {
     order: 2;
+  }
+
+  .hush-panel,
+  .space-tv-panel {
     margin-left: 0 !important;
   }
 
   .play-panel {
     order: 3;
     margin-right: 0 !important;
+  }
+
+  .user-build-panel {
+    order: 4;
+    margin-top: 20px !important;
   }
 }
