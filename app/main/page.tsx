@@ -101,6 +101,7 @@ export default function Main() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [presentUsers, setPresentUsers] = useState<string[]>([]);
 
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
@@ -476,6 +477,58 @@ export default function Main() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase.channel("shared-space-presence", {
+      config: {
+        presence: {
+          key: userId,
+        },
+      },
+    });
+
+    const syncPresentUsers = () => {
+      const state = channel.presenceState<{
+        user_id: string;
+        username: string;
+        online_at: string;
+      }>();
+
+      const map = new Map<string, string>();
+      Object.values(state).forEach((metas) => {
+        metas.forEach((meta) => {
+          if (meta?.user_id && meta?.username) {
+            map.set(meta.user_id, meta.username);
+          }
+        });
+      });
+
+      const names = Array.from(map.values()).sort((a, b) =>
+        a.localeCompare(b, "en", { sensitivity: "base" })
+      );
+      setPresentUsers(names);
+    };
+
+    channel
+      .on("presence", { event: "sync" }, syncPresentUsers)
+      .on("presence", { event: "join" }, syncPresentUsers)
+      .on("presence", { event: "leave" }, syncPresentUsers)
+      .subscribe(async (status) => {
+        if (status !== "SUBSCRIBED") return;
+        await channel.track({
+          user_id: userId,
+          username: username || "user",
+          online_at: new Date().toISOString(),
+        });
+      });
+
+    return () => {
+      channel.untrack();
+      supabase.removeChannel(channel);
+    };
+  }, [userId, username]);
 
   /*  send */
   async function sendMessage() {
@@ -1492,6 +1545,70 @@ export default function Main() {
           onClick={sendMessage}
         >
           {loading ? "sending..." : "send"}
+        </div>
+
+        <div
+          style={{
+            marginTop: 22,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              letterSpacing: "0.12em",
+              opacity: 0.55,
+              textAlign: "center",
+            }}
+          >
+            present users
+          </div>
+          <div
+            style={{
+              width: "min(180px, 54%)",
+              height: 1,
+              marginTop: 8,
+              background:
+                "linear-gradient(90deg, transparent 0%, rgba(255,230,170,0.75) 50%, transparent 100%)",
+              boxShadow: "0 0 8px rgba(255,230,170,0.32)",
+            }}
+          />
+
+          <div
+            style={{
+              marginTop: 10,
+              minHeight: 42,
+              borderRadius: 10,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(255,255,255,0.03)",
+              padding: "8px 10px",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+            }}
+          >
+            {presentUsers.length === 0 ? (
+              <span style={{ fontSize: 11, opacity: 0.4 }}>nobody visible</span>
+            ) : (
+              presentUsers.map((name) => (
+                <span
+                  key={`present-${name}`}
+                  style={{
+                    fontSize: 11,
+                    opacity: 0.72,
+                    border: "1px solid rgba(255,255,255,0.14)",
+                    borderRadius: 999,
+                    padding: "2px 8px",
+                  }}
+                >
+                  {name}
+                </span>
+              ))
+            )}
+          </div>
         </div>
         </div>
 
