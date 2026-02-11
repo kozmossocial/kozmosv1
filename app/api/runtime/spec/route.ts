@@ -16,6 +16,7 @@ export async function GET(req: Request) {
     endpoints: {
       invite_claim: `${origin}/api/runtime/invite/claim`,
       presence: `${origin}/api/runtime/presence`,
+      feed: `${origin}/api/runtime/feed`,
       shared: `${origin}/api/runtime/shared`,
       token_rotate: `${origin}/api/runtime/token/rotate`,
       token_revoke: `${origin}/api/runtime/token/revoke`,
@@ -32,4 +33,3 @@ export async function GET(req: Request) {
     ],
   });
 }
-
