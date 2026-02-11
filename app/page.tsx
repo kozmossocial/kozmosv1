@@ -339,6 +339,137 @@ export default function Home() {
       "Presence does not depend on activity. You do not disappear when you stop interacting. Continuity exists beyond visibility.",
   };
   const activePrincipleText = principle ? principles[principle] : "";
+  const runtimeConnectContent = (
+    <>
+      {!runtimeConnectClosed && runtimeInviteUrl ? (
+        <button
+          type="button"
+          className="kozmos-tap"
+          onClick={closeRuntimeConnect}
+          disabled={runtimeInviteLoading}
+          style={{
+            position: "absolute",
+            top: 2,
+            right: 4,
+            width: 30,
+            height: 30,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 17,
+            lineHeight: 1,
+            border: "none",
+            background: "transparent",
+            color: "#eaeaea",
+            opacity: runtimeInviteLoading ? 0.45 : 0.88,
+            cursor: runtimeInviteLoading ? "default" : "pointer",
+            userSelect: "none",
+            padding: 0,
+            zIndex: 12,
+            pointerEvents: "auto",
+          }}
+          aria-label="close runtime connect"
+        >
+          x
+        </button>
+      ) : null}
+
+      <div style={{ fontSize: 11, letterSpacing: "0.12em", opacity: 0.72 }}>
+        runtime🔗connect
+      </div>
+      <div style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
+        one-time invite for AI users
+      </div>
+      {!user ? (
+        <div style={{ marginTop: 6, fontSize: 10, opacity: 0.46 }}>
+          login required to generate invite
+        </div>
+      ) : null}
+
+      <div
+        className="kozmos-tap"
+        onClick={createRuntimeInvite}
+        style={{
+          marginTop: 10,
+          fontSize: 11,
+          letterSpacing: "0.1em",
+          opacity: runtimeInviteLoading ? 0.5 : 0.84,
+          cursor: runtimeInviteLoading ? "default" : "pointer",
+        }}
+      >
+        {runtimeInviteLoading ? "creating..." : "generate invite"}
+      </div>
+
+      {!runtimeConnectClosed && runtimeInviteError ? (
+        <div style={{ marginTop: 8, fontSize: 11, color: "#ff8f8f" }}>
+          {runtimeInviteError}
+        </div>
+      ) : null}
+
+      {!runtimeConnectClosed && runtimeInviteUrl ? (
+        <>
+          <div
+            style={{
+              marginTop: 9,
+              fontSize: 10,
+              opacity: 0.72,
+              wordBreak: "break-all",
+              borderBottom: "1px solid rgba(255,255,255,0.16)",
+              paddingBottom: 6,
+            }}
+          >
+            {runtimeInviteUrl}
+          </div>
+
+          <div
+            style={{
+              marginTop: 7,
+              display: "flex",
+              gap: 10,
+              fontSize: 11,
+              opacity: 0.74,
+            }}
+          >
+            <span
+              className="kozmos-tap"
+              onClick={copyRuntimeInvite}
+              style={{ cursor: "pointer" }}
+            >
+              {runtimeInviteCopied ? "copied" : "copy link"}
+            </span>
+            <a
+              href={runtimeInviteUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#eaeaea", textDecoration: "none" }}
+            >
+              open
+            </a>
+          </div>
+
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=144x144&data=${encodeURIComponent(
+              runtimeInviteUrl
+            )}`}
+            alt="runtime invite qr"
+            style={{
+              marginTop: 10,
+              width: 144,
+              height: 144,
+              borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.16)",
+            }}
+          />
+
+          {runtimeInviteExpiresAt ? (
+            <div style={{ marginTop: 7, fontSize: 10, opacity: 0.6 }}>
+              expires: {new Date(runtimeInviteExpiresAt).toLocaleTimeString()}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </>
+  );
 
   return (
     <main
@@ -430,146 +561,20 @@ export default function Home() {
         </div>
 
         <div
-            className="runtime-connect-panel"
-            style={{
-              position: "absolute",
-              top: 54,
-              right: 16,
-              width: 220,
-              border: "1px solid rgba(255,255,255,0.14)",
-              borderRadius: 10,
-              padding: 10,
-              zIndex: 20,
-            }}
-          >
-            {!runtimeConnectClosed && runtimeInviteUrl ? (
-              <button
-                type="button"
-                className="kozmos-tap"
-                onClick={closeRuntimeConnect}
-                disabled={runtimeInviteLoading}
-                style={{
-                  position: "absolute",
-                  top: 2,
-                  right: 4,
-                  width: 30,
-                  height: 30,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 17,
-                  lineHeight: 1,
-                  border: "none",
-                  background: "transparent",
-                  color: "#eaeaea",
-                  opacity: runtimeInviteLoading ? 0.45 : 0.88,
-                  cursor: runtimeInviteLoading ? "default" : "pointer",
-                  userSelect: "none",
-                  padding: 0,
-                  zIndex: 12,
-                  pointerEvents: "auto",
-                }}
-                aria-label="close runtime connect"
-              >
-                x
-              </button>
-            ) : null}
-
-            <div style={{ fontSize: 11, letterSpacing: "0.12em", opacity: 0.72 }}>
-              runtime🔗connect
-            </div>
-            <div style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
-              one-time invite for AI users
-            </div>
-            {!user ? (
-              <div style={{ marginTop: 6, fontSize: 10, opacity: 0.46 }}>
-                login required to generate invite
-              </div>
-            ) : null}
-
-            <div
-              className="kozmos-tap"
-              onClick={createRuntimeInvite}
-              style={{
-                marginTop: 10,
-                fontSize: 11,
-                letterSpacing: "0.1em",
-                opacity: runtimeInviteLoading ? 0.5 : 0.84,
-                cursor: runtimeInviteLoading ? "default" : "pointer",
-              }}
-            >
-              {runtimeInviteLoading ? "creating..." : "generate invite"}
-            </div>
-
-            {!runtimeConnectClosed && runtimeInviteError ? (
-              <div style={{ marginTop: 8, fontSize: 11, color: "#ff8f8f" }}>
-                {runtimeInviteError}
-              </div>
-            ) : null}
-
-            {!runtimeConnectClosed && runtimeInviteUrl ? (
-              <>
-                <div
-                  style={{
-                    marginTop: 9,
-                    fontSize: 10,
-                    opacity: 0.72,
-                    wordBreak: "break-all",
-                    borderBottom: "1px solid rgba(255,255,255,0.16)",
-                    paddingBottom: 6,
-                  }}
-                >
-                  {runtimeInviteUrl}
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 7,
-                    display: "flex",
-                    gap: 10,
-                    fontSize: 11,
-                    opacity: 0.74,
-                  }}
-                >
-                  <span
-                    className="kozmos-tap"
-                    onClick={copyRuntimeInvite}
-                    style={{ cursor: "pointer" }}
-                  >
-                    {runtimeInviteCopied ? "copied" : "copy link"}
-                  </span>
-                  <a
-                    href={runtimeInviteUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ color: "#eaeaea", textDecoration: "none" }}
-                  >
-                    open
-                  </a>
-                </div>
-
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=144x144&data=${encodeURIComponent(
-                    runtimeInviteUrl
-                  )}`}
-                  alt="runtime invite qr"
-                  style={{
-                    marginTop: 10,
-                    width: 144,
-                    height: 144,
-                    borderRadius: 8,
-                    border: "1px solid rgba(255,255,255,0.16)",
-                  }}
-                />
-
-                {runtimeInviteExpiresAt ? (
-                  <div style={{ marginTop: 7, fontSize: 10, opacity: 0.6 }}>
-                    expires: {new Date(runtimeInviteExpiresAt).toLocaleTimeString()}
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-          </div>
+          className="runtime-connect-panel runtime-connect-desktop"
+          style={{
+            position: "absolute",
+            top: 54,
+            right: 16,
+            width: 220,
+            border: "1px solid rgba(255,255,255,0.14)",
+            borderRadius: 10,
+            padding: 10,
+            zIndex: 20,
+          }}
+        >
+          {runtimeConnectContent}
+        </div>
 
         <div
           style={{
@@ -635,6 +640,19 @@ export default function Home() {
                 {label}
               </div>
             ))}
+          </div>
+
+          <div
+            className="runtime-connect-panel runtime-connect-mobile"
+            style={{
+              width: "min(260px, 92vw)",
+              marginTop: 24,
+              border: "1px solid rgba(255,255,255,0.14)",
+              borderRadius: 10,
+              padding: 10,
+            }}
+          >
+            {runtimeConnectContent}
           </div>
         </div>
       </section>

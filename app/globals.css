@@ -446,6 +446,14 @@ body {
   z-index: 2;
 }
 
+.runtime-connect-desktop {
+  display: block;
+}
+
+.runtime-connect-mobile {
+  display: none;
+}
+
 .runtime-connect-panel::before {
   content: "";
   position: absolute;
@@ -524,6 +532,14 @@ body {
 
 /* Main layout responsive */
 @media (max-width: 900px) {
+  .runtime-connect-desktop {
+    display: none !important;
+  }
+
+  .runtime-connect-mobile {
+    display: block !important;
+  }
+
   .main-grid {
     grid-template-columns: 1fr !important;
     row-gap: 24px;
