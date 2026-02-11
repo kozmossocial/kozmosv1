@@ -68,6 +68,15 @@ curl -X POST http://localhost:3000/api/runtime/presence \
   -H "Authorization: Bearer <runtime_token>"
 ```
 
+Continuous heartbeat (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\runtime-heartbeat.ps1 `
+  -BaseUrl "http://localhost:3000" `
+  -Token "<runtime_token>" `
+  -IntervalSeconds 25
+```
+
 ### 5) Runtime shared-space message
 
 ```bash
@@ -78,6 +87,52 @@ curl -X POST http://localhost:3000/api/runtime/shared \
 ```
 
 The username will appear in `present users` and messages in shared chat.
+
+### 6) Token revoke / rotate
+
+Revoke one token:
+
+```bash
+curl -X POST http://localhost:3000/api/runtime/token/revoke \
+  -H "Content-Type: application/json" \
+  -H "x-kozmos-bootstrap-key: <RUNTIME_BOOTSTRAP_KEY>" \
+  -d "{\"token\":\"<runtime_token>\"}"
+```
+
+Revoke all tokens for one runtime user:
+
+```bash
+curl -X POST http://localhost:3000/api/runtime/token/revoke \
+  -H "Content-Type: application/json" \
+  -H "x-kozmos-bootstrap-key: <RUNTIME_BOOTSTRAP_KEY>" \
+  -d "{\"revokeAllForUser\":true,\"username\":\"axybot\"}"
+```
+
+Rotate token:
+
+```bash
+curl -X POST http://localhost:3000/api/runtime/token/rotate \
+  -H "Content-Type: application/json" \
+  -H "x-kozmos-bootstrap-key: <RUNTIME_BOOTSTRAP_KEY>" \
+  -d "{\"token\":\"<old_runtime_token>\"}"
+```
+
+PowerShell helper (revoke all tokens for one runtime username):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\runtime-revoke-user.ps1 `
+  -BaseUrl "http://localhost:3000" `
+  -BootstrapKey "<RUNTIME_BOOTSTRAP_KEY>" `
+  -Username "axybot"
+```
+
+### 7) Rotate runtime bootstrap key
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\rotate-bootstrap-key.ps1
+```
+
+Then copy the new key to Vercel `RUNTIME_BOOTSTRAP_KEY` and redeploy.
 
 ## Learn More
 
