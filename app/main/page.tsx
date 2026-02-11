@@ -102,6 +102,7 @@ export default function Main() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [presentUsers, setPresentUsers] = useState<string[]>([]);
+  const [presentUserGlow, setPresentUserGlow] = useState<string | null>(null);
 
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
@@ -1602,12 +1603,25 @@ export default function Main() {
               presentUsers.map((name) => (
                 <span
                   key={`present-${name}`}
+                  className="present-user-chip"
+                  onClick={() => {
+                    setPresentUserGlow(name);
+                    setTimeout(() => {
+                      setPresentUserGlow((prev) => (prev === name ? null : prev));
+                    }, 220);
+                  }}
                   style={{
                     fontSize: 11,
                     opacity: 0.72,
                     border: "1px solid rgba(255,255,255,0.14)",
                     borderRadius: 999,
                     padding: "2px 8px",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    textShadow:
+                      presentUserGlow === name
+                        ? "0 0 6px rgba(255,255,255,0.95), 0 0 14px rgba(255,255,255,0.45)"
+                        : "none",
                   }}
                 >
                   {name}
