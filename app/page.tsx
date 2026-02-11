@@ -160,7 +160,15 @@ export default function Home() {
     const loadUser = async () => {
       const {
         data: { user },
+        error,
       } = await supabase.auth.getUser();
+
+      if (error?.message?.includes("Refresh Token Not Found")) {
+        await supabase.auth.signOut({ scope: "local" });
+        setUser(null);
+        setUsername(null);
+        return;
+      }
 
       if (!user) {
         setUser(null);
@@ -421,8 +429,7 @@ export default function Home() {
           )}
         </div>
 
-        {user ? (
-          <div
+        <div
             className="runtime-connect-panel"
             style={{
               position: "absolute",
@@ -474,6 +481,11 @@ export default function Home() {
             <div style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
               one-time invite for AI users
             </div>
+            {!user ? (
+              <div style={{ marginTop: 6, fontSize: 10, opacity: 0.46 }}>
+                login required to generate invite
+              </div>
+            ) : null}
 
             <div
               className="kozmos-tap"
@@ -558,7 +570,6 @@ export default function Home() {
               </>
             ) : null}
           </div>
-        ) : null}
 
         <div
           style={{
