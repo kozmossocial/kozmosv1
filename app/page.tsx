@@ -229,6 +229,10 @@ export default function Home() {
     setAxyLoading(false);
   }
 
+  function toggleAxyShell() {
+    setAxyOpen((prev) => !prev);
+  }
+
   const principles: Record<string, string> = {
     noise:
       "Reduced noise does not mean less expression. It means removing artificial amplification, constant alerts, and forced visibility. Meaning is allowed to surface on its own. Silence is treated as space.",
@@ -474,7 +478,7 @@ export default function Home() {
             justifyContent: "center",
             transform: "translateY(-40px)",
             position: "relative",
-            zIndex: 1,
+            zIndex: 2,
           }}
         >
           <div
@@ -518,11 +522,11 @@ export default function Home() {
         {/* AXY AREA */}
         <div
           className={`axy-shell${axyOpen ? " open" : ""}`}
-          onClick={() => setAxyOpen((prev) => !prev)}
+          onClick={toggleAxyShell}
           role="button"
           tabIndex={0}
           aria-expanded={axyOpen}
-          style={{ position: "relative", zIndex: 2 }}
+          style={{ position: "relative", zIndex: 3 }}
         >
           <img src="/axy-banner.png" alt="Axy" className="axy-shell-logo" />
 
