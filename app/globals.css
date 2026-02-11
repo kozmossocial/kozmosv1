@@ -141,6 +141,13 @@ body {
   text-shadow: 0 0 6px rgba(107, 255, 142, 0.6);
 }
 
+.axy-name-glow {
+  color: rgba(132, 255, 172, 0.98);
+  text-shadow:
+    0 0 8px rgba(0, 255, 170, 0.8),
+    0 0 16px rgba(0, 255, 170, 0.45);
+}
+
 /* AXY shell (inline expand + fade) */
 .axy-shell {
   position: relative;

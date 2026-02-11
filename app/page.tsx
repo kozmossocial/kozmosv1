@@ -211,6 +211,13 @@ export default function Home() {
     setAxyLoading(false);
   }
 
+  function resetAxy() {
+    setAxyReply(null);
+    setLastUserMessage(null);
+    setAxyInput("");
+    setAxyLoading(false);
+  }
+
   const principles: Record<string, string> = {
     noise:
       "Reduced noise does not mean less expression. It means removing artificial amplification, constant alerts, and forced visibility. Meaning is allowed to surface on its own. Silence is treated as space.",
@@ -483,7 +490,14 @@ export default function Home() {
           <div className="axy-shell-chat" onClick={(e) => e.stopPropagation()}>
             <div className="axy-shell-card">
               <div style={{ marginBottom: 8, opacity: 0.8, fontSize: 12 }}>
-                {axyReply || "I exist inside Kozmos."}
+                {axyReply ? (
+                  axyReply
+                ) : (
+                  <>
+                    I&apos;m <span className="axy-name-glow">Axy</span>. I exist
+                    inside Kozmos·
+                  </>
+                )}
               </div>
               {lastUserMessage ? (
                 <div
@@ -514,16 +528,29 @@ export default function Home() {
               />
 
               <div
-                className="kozmos-tap"
-                onClick={askAxy}
                 style={{
                   marginTop: 8,
+                  display: "flex",
+                  gap: 12,
+                  justifyContent: "center",
                   fontSize: 11,
                   opacity: 0.6,
-                  cursor: "pointer",
                 }}
               >
-                {axyLoading ? "..." : "ask"}
+                <span
+                  className="kozmos-tap"
+                  onClick={askAxy}
+                  style={{ cursor: "pointer" }}
+                >
+                  {axyLoading ? "..." : "ask"}
+                </span>
+                <span
+                  className="kozmos-tap"
+                  onClick={resetAxy}
+                  style={{ cursor: "pointer" }}
+                >
+                  reset
+                </span>
               </div>
             </div>
           </div>
