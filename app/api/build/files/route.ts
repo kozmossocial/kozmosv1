@@ -242,3 +242,47 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const user = await authenticateUser(req);
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const spaceId = typeof body?.spaceId === "string" ? body.spaceId : "";
+    const rawPath = typeof body?.path === "string" ? body.path : "";
+    const path = rawPath.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+
+    if (!spaceId || !path) {
+      return NextResponse.json({ error: "spaceId and path required" }, { status: 400 });
+    }
+
+    const access = await getSpaceAccess(spaceId, user.id);
+    if (access.error) {
+      return NextResponse.json(mapError(access.error, "access check failed"), {
+        status: 500,
+      });
+    }
+    if (!access.space || !access.canEdit) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+
+    const { error } = await supabaseAdmin
+      .from("user_build_files")
+      .delete()
+      .eq("space_id", spaceId)
+      .eq("path", path);
+
+    if (error) {
+      return NextResponse.json(mapError(error, "delete file failed"), {
+        status: 500,
+      });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "request failed" }, { status: 500 });
+  }
+}

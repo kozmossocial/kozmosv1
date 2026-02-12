@@ -1048,6 +1048,13 @@ export default function Main() {
         /{" "}
         <span
           style={{ cursor: "pointer" }}
+          onClick={() => router.push("/main/matrix")}
+        >
+          matrix
+        </span>
+        {" / "}
+        <span
+          style={{ cursor: "pointer" }}
           onClick={() => router.push("/my-home")}
         >
           my home

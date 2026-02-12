@@ -15,6 +15,10 @@ type SpaceRow = {
   updated_at: string;
 };
 
+type SpaceResponseRow = SpaceRow & {
+  can_edit: boolean;
+};
+
 function extractBearerToken(req: Request) {
   const header =
     req.headers.get("authorization") || req.headers.get("Authorization");
@@ -70,9 +74,15 @@ async function listAccessibleSpaces(userId: string) {
 
   const { data: sharedAccess, error: sharedErr } = await supabaseAdmin
     .from("user_build_space_access")
-    .select("space_id")
+    .select("space_id, can_edit")
     .eq("user_id", userId);
   if (sharedErr) return { spaces: [] as SpaceRow[], error: sharedErr };
+
+  const sharedEditMap = new Map<string, boolean>();
+  (sharedAccess || []).forEach((row) => {
+    if (!row.space_id) return;
+    sharedEditMap.set(row.space_id, row.can_edit === true);
+  });
 
   const sharedIds = Array.from(
     new Set((sharedAccess || []).map((row) => row.space_id).filter(Boolean))
@@ -92,7 +102,11 @@ async function listAccessibleSpaces(userId: string) {
     ...((own || []) as SpaceRow[]),
     ...((publicRows || []) as SpaceRow[]),
     ...sharedSpaces,
-  ]);
+  ]).map((space) => ({
+    ...space,
+    can_edit: space.owner_id === userId || sharedEditMap.get(space.id) === true,
+  })) as SpaceResponseRow[];
+
   return { spaces, error: null };
 }
 
@@ -163,7 +177,7 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ space: data });
+    return NextResponse.json({ space: { ...data, can_edit: true } });
   } catch {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
@@ -219,7 +233,47 @@ export async function PATCH(req: Request) {
       });
     }
 
-    return NextResponse.json({ space: data });
+    return NextResponse.json({ space: { ...data, can_edit: true } });
+  } catch {
+    return NextResponse.json({ error: "request failed" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const user = await authenticateUser(req);
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const spaceId = typeof body?.spaceId === "string" ? body.spaceId : "";
+    if (!spaceId) {
+      return NextResponse.json({ error: "spaceId required" }, { status: 400 });
+    }
+
+    const ownerCheck = await assertOwner(spaceId, user.id);
+    if (ownerCheck.error) {
+      return NextResponse.json(mapError(ownerCheck.error, "owner check failed"), {
+        status: 500,
+      });
+    }
+    if (!ownerCheck.ok) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+
+    const { error } = await supabaseAdmin
+      .from("user_build_spaces")
+      .delete()
+      .eq("id", spaceId);
+
+    if (error) {
+      return NextResponse.json(mapError(error, "delete space failed"), {
+        status: 500,
+      });
+    }
+
+    return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -23,6 +24,21 @@ type BuildFileRow = {
   updated_at: string;
 };
 
+type HistoryTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+type SpaceAccess = {
+  space: {
+    id: string;
+    owner_id: string;
+    is_public: boolean;
+  } | null;
+  canRead: boolean;
+  error: { code?: string; message?: string } | null;
+};
+
 function extractBearerToken(req: Request) {
   const header =
     req.headers.get("authorization") || req.headers.get("Authorization");
@@ -41,6 +57,50 @@ function summarizeFiles(files: BuildFileRow[]) {
     .slice(0, 10)
     .map((f, idx) => `${idx + 1}. ${f.path} (${f.language})`)
     .join("\n");
+}
+
+function normalizeHistory(input: unknown): HistoryTurn[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      const role = item?.role === "assistant" ? "assistant" : item?.role === "user" ? "user" : null;
+      const content = typeof item?.content === "string" ? item.content.trim() : "";
+      if (!role || !content) return null;
+      return { role, content: compact(content, 1400) } as HistoryTurn;
+    })
+    .filter((item): item is HistoryTurn => Boolean(item))
+    .slice(-10);
+}
+
+async function getSpaceAccess(spaceId: string, userId: string): Promise<SpaceAccess> {
+  const { data: space, error: spaceErr } = await supabaseAdmin
+    .from("user_build_spaces")
+    .select("id, owner_id, is_public")
+    .eq("id", spaceId)
+    .maybeSingle();
+
+  if (spaceErr) {
+    return { space: null, canRead: false, error: spaceErr };
+  }
+  if (!space) {
+    return { space: null, canRead: false, error: null };
+  }
+  if (space.owner_id === userId) {
+    return { space, canRead: true, error: null };
+  }
+
+  const { data: accessRow, error: accessErr } = await supabaseAdmin
+    .from("user_build_space_access")
+    .select("id")
+    .eq("space_id", spaceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (accessErr) {
+    return { space, canRead: false, error: accessErr };
+  }
+
+  return { space, canRead: space.is_public || Boolean(accessRow?.id), error: null };
 }
 
 const BUILDER_SYSTEM_PROMPT = `
@@ -84,6 +144,7 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const message = typeof body?.message === "string" ? body.message.trim() : "";
+    const history = normalizeHistory(body?.history);
     const spaceId = typeof body?.spaceId === "string" ? body.spaceId : "";
     const activeFilePath =
       typeof body?.activeFilePath === "string" ? body.activeFilePath : "";
@@ -96,37 +157,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "message required" }, { status: 400 });
     }
 
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-
     let space: BuildSpaceRow | null = null;
     let files: BuildFileRow[] = [];
 
     if (spaceId) {
-      const { data: spaceData, error: spaceErr } = await userClient
+      const access = await getSpaceAccess(spaceId, user.id);
+      if (access.error) {
+        return NextResponse.json({ error: "space access check failed" }, { status: 500 });
+      }
+      if (!access.space || !access.canRead) {
+        // Graceful fallback: still allow Axy usage without space context.
+        space = null;
+        files = [];
+      } else {
+        const { data: spaceData, error: spaceErr } = await supabaseAdmin
         .from("user_build_spaces")
         .select("id, title, language_pref, description")
         .eq("id", spaceId)
         .maybeSingle();
 
-      if (spaceErr || !spaceData) {
-        return NextResponse.json({ error: "space not accessible" }, { status: 403 });
+        if (!spaceErr && spaceData) {
+          space = spaceData as BuildSpaceRow;
+          const { data: fileData } = await supabaseAdmin
+            .from("user_build_files")
+            .select("path, language, content, updated_at")
+            .eq("space_id", spaceId)
+            .order("updated_at", { ascending: false })
+            .limit(12);
+          files = (fileData || []) as BuildFileRow[];
+        }
       }
-      space = spaceData as BuildSpaceRow;
-
-      const { data: fileData } = await userClient
-        .from("user_build_files")
-        .select("path, language, content, updated_at")
-        .eq("space_id", spaceId)
-        .order("updated_at", { ascending: false })
-        .limit(12);
-
-      files = (fileData || []) as BuildFileRow[];
     }
 
     const context = `
@@ -148,6 +208,7 @@ ${activeFileContent ? compact(activeFileContent, 2200) : "none"}
       messages: [
         { role: "system", content: BUILDER_SYSTEM_PROMPT },
         { role: "system", content: context },
+        ...history,
         { role: "user", content: message },
       ],
       temperature: 0.5,
