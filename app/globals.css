@@ -684,6 +684,14 @@ body {
 
 /* Main layout responsive */
 @media (max-width: 900px) {
+  .home-screen-1 {
+    z-index: 4 !important;
+  }
+
+  .home-screen-2 {
+    z-index: 2 !important;
+  }
+
   .runtime-page-ambient {
     display: block !important;
     opacity: 0.16 !important;

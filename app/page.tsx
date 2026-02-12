@@ -291,7 +291,11 @@ export default function Home() {
     setRuntimeInviteLoading(false);
   }
 
-  function handleCreateInviteTap(event?: { stopPropagation?: () => void }) {
+  function handleCreateInviteTap(event?: {
+    preventDefault?: () => void;
+    stopPropagation?: () => void;
+  }) {
+    event?.preventDefault?.();
     event?.stopPropagation?.();
     void createRuntimeInvite();
   }
@@ -438,6 +442,8 @@ export default function Home() {
         type="button"
         className="kozmos-tap runtime-invite-button"
         onClick={handleCreateInviteTap}
+        onTouchEnd={handleCreateInviteTap}
+        onPointerUp={handleCreateInviteTap}
         disabled={runtimeInviteLoading}
         style={{
           marginTop: 10,
@@ -555,6 +561,7 @@ export default function Home() {
 
       {/* SCREEN 1 */}
       <section
+        className="home-screen-1"
         style={{
           height: "100vh",
           scrollSnapAlign: "start",
@@ -741,6 +748,7 @@ export default function Home() {
 
       {/* SCREEN 2 */}
       <section
+        className="home-screen-2"
         style={{
           height: "100vh",
           scrollSnapAlign: "start",
