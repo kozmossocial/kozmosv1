@@ -136,6 +136,11 @@ body {
   will-change: transform, opacity, filter;
 }
 
+.principle-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
 .principle-fade:hover {
   opacity: 0.92;
   filter: brightness(1.2);

@@ -400,6 +400,49 @@ export default function Home() {
       "Presence does not depend on activity. You do not disappear when you stop interacting. Continuity exists beyond visibility.",
   };
   const activePrincipleText = principle ? principles[principle] : "";
+
+  function renderPrincipleText(text: string) {
+    let charIndex = 0;
+
+    return text.split(/(\s+)/).map((token, tokenIndex) => {
+      if (!token) return null;
+
+      if (/^\s+$/.test(token)) {
+        return <span key={`p-space-${tokenIndex}`}>{token}</span>;
+      }
+
+      return (
+        <span key={`p-word-${tokenIndex}`} className="principle-word">
+          {token.split("").map((char, localIndex) => {
+            const idx = charIndex;
+            charIndex += 1;
+
+            const dx = ((idx * 17) % 11) - 5;
+            const dy = ((idx * 23) % 9) - 4;
+            const rot = ((idx * 29) % 16) - 8;
+            const delay = ((idx * 13) % 19) / 100;
+
+            return (
+              <span
+                key={`p-char-${tokenIndex}-${localIndex}-${char}`}
+                className="principle-char"
+                style={
+                  {
+                    "--char-dx": `${dx * 1.6}px`,
+                    "--char-dy": `${dy * 1.2}px`,
+                    "--char-rot": `${rot}deg`,
+                    "--char-delay": `${delay}s`,
+                  } as React.CSSProperties
+                }
+              >
+                {char}
+              </span>
+            );
+          })}
+        </span>
+      );
+    });
+  }
   const runtimeConnectContent = (
     <>
       {!runtimeConnectClosed && runtimeInviteUrl ? (
@@ -868,30 +911,7 @@ export default function Home() {
               pointerEvents: principle ? "auto" : "none",
             }}
           >
-            {activePrincipleText
-              ? activePrincipleText.split("").map((char, idx) => {
-                  const dx = ((idx * 17) % 11) - 5;
-                  const dy = ((idx * 23) % 9) - 4;
-                  const rot = ((idx * 29) % 16) - 8;
-                  const delay = ((idx * 13) % 19) / 100;
-                  return (
-                    <span
-                      key={`p-char-${idx}-${char}`}
-                      className="principle-char"
-                      style={
-                        {
-                          "--char-dx": `${dx * 1.6}px`,
-                          "--char-dy": `${dy * 1.2}px`,
-                          "--char-rot": `${rot}deg`,
-                          "--char-delay": `${delay}s`,
-                        } as React.CSSProperties
-                      }
-                    >
-                      {char}
-                    </span>
-                  );
-                })
-              : ""}
+            {activePrincipleText ? renderPrincipleText(activePrincipleText) : ""}
           </div>
         </div>
 
