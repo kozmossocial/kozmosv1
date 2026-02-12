@@ -291,6 +291,16 @@ export default function Home() {
     setRuntimeInviteLoading(false);
   }
 
+  function handleCreateInviteTap(event?: { stopPropagation?: () => void }) {
+    event?.stopPropagation?.();
+    void createRuntimeInvite();
+  }
+
+  function handleMobileRuntimePanelTap() {
+    if (runtimeInviteLoading || runtimeInviteUrl) return;
+    void createRuntimeInvite();
+  }
+
   function closeRuntimeConnect() {
     if (runtimeInviteLoading) return;
     setRuntimeConnectClosed(true);
@@ -427,10 +437,11 @@ export default function Home() {
       <button
         type="button"
         className="kozmos-tap runtime-invite-button"
-        onClick={createRuntimeInvite}
+        onClick={handleCreateInviteTap}
         disabled={runtimeInviteLoading}
         style={{
           marginTop: 10,
+          minHeight: 28,
           fontSize: 11,
           letterSpacing: "0.1em",
           opacity: runtimeInviteLoading ? 0.5 : 0.84,
@@ -714,6 +725,7 @@ export default function Home() {
 
           <div
             className="runtime-connect-panel runtime-connect-mobile home-hero-runtime-mobile"
+            onClick={handleMobileRuntimePanelTap}
             style={{
               width: "min(260px, 92vw)",
               marginTop: 24,
