@@ -314,7 +314,16 @@ export default function MainMatrixPage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#0b0b0b", color: "#eaeaea", padding: "18px 18px 28px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, opacity: 0.74 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: 14,
+          opacity: 0.74,
+          cursor: "default",
+          userSelect: "none",
+        }}
+      >
         <div>
           <span style={{ cursor: "pointer" }} onClick={() => router.push("/main")}>
             main

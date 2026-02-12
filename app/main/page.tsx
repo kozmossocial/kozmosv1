@@ -96,7 +96,7 @@ function createPuzzle() {
 export default function Main() {
   const router = useRouter();
 
-  const [username, setUsername] = useState("user");
+  const [username, setUsername] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
   const [input, setInput] = useState("");
@@ -167,6 +167,8 @@ export default function Main() {
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
+  const currentUsername = username?.trim() ? username.trim() : "user";
+  const displayUsername = username?.trim() ? username.trim() : "\u00A0";
   const presentUsers = useMemo(
     () =>
       Array.from(new Set([...realtimePresentUsers, ...runtimePresentUsers])).sort(
@@ -195,7 +197,7 @@ export default function Main() {
         .eq("id", user.id)
         .maybeSingle();
 
-      setUsername(profile?.username ?? "user");
+      setUsername(profile?.username?.trim() || "user");
 
       const { data } = await supabase
         .from("main_messages")
@@ -560,7 +562,7 @@ export default function Main() {
         if (status !== "SUBSCRIBED") return;
         await channel.track({
           user_id: userId,
-          username: username || "user",
+          username: currentUsername,
           online_at: new Date().toISOString(),
         });
       });
@@ -569,7 +571,7 @@ export default function Main() {
       channel.untrack();
       supabase.removeChannel(channel);
     };
-  }, [userId, username]);
+  }, [currentUsername, userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -595,7 +597,7 @@ export default function Main() {
 
     await supabase.from("main_messages").insert({
       user_id: userId,
-      username,
+      username: currentUsername,
       content: input,
     });
 
@@ -762,7 +764,7 @@ export default function Main() {
           user_id: userId,
           role: "owner",
           status: "accepted",
-          display_name: username,
+          display_name: currentUsername,
         },
         {
           chat_id: chat.id,
@@ -815,7 +817,7 @@ export default function Main() {
           user_id: userId,
           role: "member",
           status: "requested",
-          display_name: username,
+          display_name: currentUsername,
         },
         { onConflict: "chat_id,user_id" }
       );
@@ -1040,6 +1042,8 @@ export default function Main() {
           fontSize: 12,
           letterSpacing: "0.12em",
           opacity: 0.6,
+          cursor: "default",
+          userSelect: "none",
         }}
       >
         <span style={{ cursor: "pointer" }} onClick={() => router.push("/main")}>
@@ -1070,13 +1074,15 @@ export default function Main() {
           fontSize: 12,
           letterSpacing: "0.12em",
           opacity: 0.6,
+          cursor: "default",
+          userSelect: "none",
         }}
       >
         <span
           style={{ marginRight: 8, cursor: "pointer", opacity: 0.8 }}
           onClick={() => router.push("/account")}
-        >
-          {username}
+          >
+          {displayUsername}
         </span>
         /{" "}
         <span style={{ cursor: "pointer" }} onClick={handleLogout}>

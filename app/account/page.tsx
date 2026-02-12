@@ -1,15 +1,40 @@
 ﻿"use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+
+const CROP_PREVIEW_SIZE = 220;
+const AVATAR_OUTPUT_SIZE = 1024;
 
 export default function AccountPage() {
   const router = useRouter();
 
+  const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
+  const [username, setUsername] = useState("user");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
+  const [avatarInputKey, setAvatarInputKey] = useState(0);
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
+  const [cropNaturalSize, setCropNaturalSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [cropScale, setCropScale] = useState(1);
+  const [cropX, setCropX] = useState(0);
+  const [cropY, setCropY] = useState(0);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,24 +48,325 @@ export default function AccountPage() {
         return;
       }
 
+      setUserId(user.id);
       setEmail(user.email ?? null);
 
       const { data } = await supabase
         .from("profileskozmos")
-        .select("username")
+        .select("*")
         .eq("id", user.id)
         .maybeSingle();
 
-      setUsername(data?.username ?? null);
+      const dbUsername =
+        typeof data?.username === "string" ? data.username.trim() : "";
+      setUsername(dbUsername || "user");
+      setAvatarUrl(
+        typeof data?.avatar_url === "string" ? data.avatar_url : null
+      );
       setLoading(false);
     };
 
     loadAccount();
   }, [router]);
 
+  useEffect(() => {
+    return () => {
+      if (cropSourceUrl) {
+        URL.revokeObjectURL(cropSourceUrl);
+      }
+    };
+  }, [cropSourceUrl]);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace("/");
+  }
+
+  async function handleAvatarUpload(file: File | null) {
+    if (!file || !userId || avatarBusy) return false;
+    setAvatarBusy(true);
+    setAvatarMessage(null);
+
+    if (!file.type.startsWith("image/")) {
+      setAvatarMessage("please choose an image file");
+      setAvatarBusy(false);
+      setAvatarInputKey((prev) => prev + 1);
+      return false;
+    }
+
+    const normalizedAvatar = await normalizeAvatarFile(file, {
+      scale: cropScale,
+      x: cropX,
+      y: cropY,
+      naturalSize: cropNaturalSize,
+    });
+
+    const uploadFile = normalizedAvatar ?? file;
+    const uploadContentType = normalizedAvatar
+      ? "image/jpeg"
+      : file.type || "application/octet-stream";
+    const uploadExtension = normalizedAvatar
+      ? "jpg"
+      : inferUploadExtension(file.name, uploadContentType);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setAvatarMessage("session missing, please login again");
+      setAvatarBusy(false);
+      setAvatarInputKey((prev) => prev + 1);
+      return false;
+    }
+
+    const formData = new FormData();
+    formData.append(
+      "file",
+      uploadFile,
+      `avatar.${uploadExtension}`
+    );
+    formData.append("contentType", uploadContentType);
+
+    const res = await fetch("/api/account/avatar", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: formData,
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      avatarUrl?: string;
+    };
+
+    if (!res.ok || !body.avatarUrl) {
+      setAvatarMessage(`upload failed: ${body.error ?? "request failed"}`);
+      setAvatarBusy(false);
+      setAvatarInputKey((prev) => prev + 1);
+      return false;
+    }
+
+    setAvatarUrl(body.avatarUrl);
+    setAvatarMessage(
+      normalizedAvatar ? "avatar updated" : "avatar updated (original format)"
+    );
+    setAvatarBusy(false);
+    setAvatarInputKey((prev) => prev + 1);
+    return true;
+  }
+
+  async function handleAvatarPick(file: File | null) {
+    if (!file || avatarBusy) return;
+    setAvatarMessage(null);
+
+    if (!file.type.startsWith("image/")) {
+      setAvatarMessage("please choose an image file");
+      setAvatarInputKey((prev) => prev + 1);
+      return;
+    }
+
+    if (cropSourceUrl) {
+      URL.revokeObjectURL(cropSourceUrl);
+    }
+
+    const sourceUrl = URL.createObjectURL(file);
+    setCropFile(file);
+    setCropSourceUrl(sourceUrl);
+    setCropScale(1);
+    setCropX(0);
+    setCropY(0);
+    setCropNaturalSize(null);
+    setCropOpen(true);
+    setAvatarInputKey((prev) => prev + 1);
+
+    const natural = await readImageSize(sourceUrl);
+    if (natural) {
+      setCropNaturalSize(natural);
+    }
+  }
+
+  function closeCropper() {
+    if (cropSourceUrl) {
+      URL.revokeObjectURL(cropSourceUrl);
+    }
+    setCropOpen(false);
+    setCropFile(null);
+    setCropSourceUrl(null);
+    setCropNaturalSize(null);
+    setCropScale(1);
+    setCropX(0);
+    setCropY(0);
+    dragRef.current = null;
+  }
+
+  async function applyCropAndUpload() {
+    if (!cropFile) {
+      setAvatarMessage("no photo selected");
+      return;
+    }
+    const uploaded = await handleAvatarUpload(cropFile);
+    if (uploaded) {
+      closeCropper();
+    }
+  }
+
+  function updateCropPosition(nextX: number, nextY: number, scale = cropScale) {
+    const clamped = clampCropPosition({
+      x: nextX,
+      y: nextY,
+      scale,
+      naturalSize: cropNaturalSize,
+      frameSize: CROP_PREVIEW_SIZE,
+    });
+    setCropX(clamped.x);
+    setCropY(clamped.y);
+  }
+
+  function onCropPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (!cropSourceUrl || avatarBusy) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: cropX,
+      originY: cropY,
+    };
+  }
+
+  function onCropPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    updateCropPosition(drag.originX + deltaX, drag.originY + deltaY);
+  }
+
+  function onCropPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current = null;
+  }
+
+  async function handleRemoveAvatar() {
+    if (!userId || avatarBusy) return;
+    setAvatarBusy(true);
+    setAvatarMessage(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setAvatarMessage("session missing, please login again");
+      setAvatarBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/account/avatar", {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      ok?: boolean;
+    };
+
+    if (!res.ok || !body.ok) {
+      setAvatarMessage(`could not remove avatar: ${body.error ?? "failed"}`);
+      setAvatarBusy(false);
+      return;
+    }
+
+    setAvatarUrl(null);
+    setAvatarMessage("avatar removed");
+    setAvatarBusy(false);
+  }
+
+  async function normalizeAvatarFile(
+    file: File,
+    crop: {
+      scale: number;
+      x: number;
+      y: number;
+      naturalSize: { width: number; height: number } | null;
+    }
+  ) {
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new window.Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("image decode failed"));
+        img.src = objectUrl;
+      });
+
+      const naturalSize = crop.naturalSize ?? {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      };
+      const previewClamped = clampCropPosition({
+        x: crop.x,
+        y: crop.y,
+        scale: crop.scale,
+        naturalSize,
+        frameSize: CROP_PREVIEW_SIZE,
+      });
+      const outputX = previewClamped.x * (AVATAR_OUTPUT_SIZE / CROP_PREVIEW_SIZE);
+      const outputY = previewClamped.y * (AVATAR_OUTPUT_SIZE / CROP_PREVIEW_SIZE);
+
+      const targetSizes = [AVATAR_OUTPUT_SIZE, 768, 640, 512];
+      const qualitySteps = [0.92, 0.84, 0.76, 0.68];
+      const maxBytes = 1_600_000;
+      let bestBlob: Blob | null = null;
+
+      for (const size of targetSizes) {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+
+        const cover = getCoverSize(naturalSize.width, naturalSize.height, size);
+        const scaledWidth = cover.width * crop.scale;
+        const scaledHeight = cover.height * crop.scale;
+        const relativeFactor = size / AVATAR_OUTPUT_SIZE;
+        const dx = (size - scaledWidth) / 2 + outputX * relativeFactor;
+        const dy = (size - scaledHeight) / 2 + outputY * relativeFactor;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.fillStyle = "#0b0b0b";
+        ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(image, dx, dy, scaledWidth, scaledHeight);
+
+        for (const quality of qualitySteps) {
+          const blob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, "image/jpeg", quality)
+          );
+          if (!blob) continue;
+          if (!bestBlob || blob.size < bestBlob.size) {
+            bestBlob = blob;
+          }
+          if (blob.size <= maxBytes) {
+            return new File([blob], "avatar.jpg", { type: "image/jpeg" });
+          }
+        }
+      }
+
+      if (bestBlob) {
+        return new File([bestBlob], "avatar.jpg", { type: "image/jpeg" });
+      }
+
+      return null;
+    } catch {
+      return null;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   }
 
   if (loading) {
@@ -94,6 +420,8 @@ export default function AccountPage() {
           fontSize: 12,
           opacity: 0.6,
           letterSpacing: "0.12em",
+          cursor: "default",
+          userSelect: "none",
         }}
       >
         <span
@@ -113,9 +441,57 @@ export default function AccountPage() {
 
       {/* CONTENT */}
       <div style={{ maxWidth: 420 }}>
+        <div style={{ marginBottom: 36 }}>
+          <div style={label}>profile picture</div>
+          <div style={avatarRow}>
+            <div style={avatarCircle}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="profile" style={avatarImage} />
+              ) : (
+                <span style={avatarFallback}>
+                  {(username[0] ?? "?").toUpperCase()}
+                </span>
+              )}
+            </div>
+
+            <div style={avatarActionsWrap}>
+              <label style={avatarActionButton}>
+                {avatarBusy ? "uploading..." : "upload photo"}
+                <input
+                  key={avatarInputKey}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    handleAvatarPick(event.target.files?.[0] ?? null)
+                  }
+                  style={{ display: "none" }}
+                  disabled={avatarBusy}
+                />
+              </label>
+
+              <button
+                type="button"
+                style={{
+                  ...avatarActionButton,
+                  opacity: avatarUrl && !avatarBusy ? 1 : 0.45,
+                  cursor: avatarUrl && !avatarBusy ? "pointer" : "default",
+                }}
+                onClick={handleRemoveAvatar}
+                disabled={!avatarUrl || avatarBusy}
+              >
+                remove
+              </button>
+            </div>
+          </div>
+
+          {avatarMessage ? (
+            <div style={avatarMessageStyle}>{avatarMessage}</div>
+          ) : null}
+        </div>
+
         <div style={{ marginBottom: 32 }}>
           <div style={label}>username</div>
-          <div>{username ?? "..."}</div>
+          <div>{username}</div>
         </div>
 
         <div style={{ marginBottom: 32 }}>
@@ -140,8 +516,157 @@ export default function AccountPage() {
           logout
         </div>
       </div>
+
+      {cropOpen && cropSourceUrl ? (
+        <div style={cropOverlay}>
+          <div style={cropDialog}>
+            <div style={label}>adjust photo</div>
+
+            <div
+              style={cropPreview}
+              onPointerDown={onCropPointerDown}
+              onPointerMove={onCropPointerMove}
+              onPointerUp={onCropPointerUp}
+              onPointerCancel={onCropPointerUp}
+            >
+              <img
+                src={cropSourceUrl}
+                alt="crop preview"
+                draggable={false}
+                style={getCropImageStyle({
+                  x: cropX,
+                  y: cropY,
+                  scale: cropScale,
+                })}
+              />
+            </div>
+
+            <div style={cropHint}>
+              drag to move, zoom to fit the circular frame
+            </div>
+
+            {avatarMessage ? (
+              <div style={{ ...cropHint, marginTop: 8 }}>{avatarMessage}</div>
+            ) : null}
+
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.01}
+              value={cropScale}
+              onChange={(event) => {
+                const nextScale = Number(event.target.value);
+                setCropScale(nextScale);
+                updateCropPosition(cropX, cropY, nextScale);
+              }}
+              style={cropRange}
+            />
+
+            <div style={cropActions}>
+              <button
+                type="button"
+                style={cropButton}
+                onClick={closeCropper}
+                disabled={avatarBusy}
+              >
+                cancel
+              </button>
+              <button
+                type="button"
+                style={cropButton}
+                onClick={applyCropAndUpload}
+                disabled={avatarBusy}
+              >
+                {avatarBusy ? "saving..." : "save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
+}
+
+async function readImageSize(url: string) {
+  return new Promise<{ width: number; height: number } | null>((resolve) => {
+    const image = new window.Image();
+    image.onload = () =>
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
+function inferUploadExtension(fileName: string, contentType: string) {
+  const nameExt = fileName.split(".").pop()?.toLowerCase() ?? "";
+  const cleanNameExt = nameExt.replace(/[^a-z0-9]/g, "");
+  if (cleanNameExt) return cleanNameExt;
+
+  const fromMime = contentType.split("/")[1]?.toLowerCase() ?? "";
+  const cleanMimeExt = fromMime.replace(/[^a-z0-9]/g, "");
+  return cleanMimeExt || "bin";
+}
+
+function getCoverSize(imageWidth: number, imageHeight: number, frameSize: number) {
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    return { width: frameSize, height: frameSize };
+  }
+  const imageRatio = imageWidth / imageHeight;
+  if (imageRatio >= 1) {
+    return { width: frameSize * imageRatio, height: frameSize };
+  }
+  return { width: frameSize, height: frameSize / imageRatio };
+}
+
+function clampCropPosition({
+  x,
+  y,
+  scale,
+  naturalSize,
+  frameSize,
+}: {
+  x: number;
+  y: number;
+  scale: number;
+  naturalSize: { width: number; height: number } | null;
+  frameSize: number;
+}) {
+  if (!naturalSize) return { x, y };
+
+  const cover = getCoverSize(naturalSize.width, naturalSize.height, frameSize);
+  const scaledWidth = cover.width * scale;
+  const scaledHeight = cover.height * scale;
+  const maxX = Math.max(0, (scaledWidth - frameSize) / 2);
+  const maxY = Math.max(0, (scaledHeight - frameSize) / 2);
+
+  return {
+    x: Math.min(maxX, Math.max(-maxX, x)),
+    y: Math.min(maxY, Math.max(-maxY, y)),
+  };
+}
+
+function getCropImageStyle({
+  x,
+  y,
+  scale,
+}: {
+  x: number;
+  y: number;
+  scale: number;
+}) {
+  return {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${scale})`,
+    transformOrigin: "center center",
+    userSelect: "none",
+    pointerEvents: "none",
+  } as React.CSSProperties;
 }
 
 const label: React.CSSProperties = {
@@ -154,6 +679,122 @@ const label: React.CSSProperties = {
 const action: React.CSSProperties = {
   fontSize: 13,
   opacity: 0.7,
+  cursor: "pointer",
+};
+
+const avatarRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+};
+
+const avatarCircle: React.CSSProperties = {
+  width: 88,
+  height: 88,
+  borderRadius: "50%",
+  border: "1px solid rgba(255,255,255,0.28)",
+  overflow: "hidden",
+  background: "rgba(255,255,255,0.05)",
+  display: "grid",
+  placeItems: "center",
+};
+
+const avatarImage: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+};
+
+const avatarFallback: React.CSSProperties = {
+  fontSize: 24,
+  opacity: 0.72,
+};
+
+const avatarActionsWrap: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const avatarActionButton: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.2)",
+  background: "transparent",
+  color: "#eaeaea",
+  padding: "7px 10px",
+  borderRadius: 999,
+  fontSize: 12,
+  letterSpacing: "0.07em",
+  opacity: 0.9,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minWidth: 112,
+};
+
+const avatarMessageStyle: React.CSSProperties = {
+  marginTop: 8,
+  fontSize: 12,
+  opacity: 0.68,
+};
+
+const cropOverlay: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.72)",
+  display: "grid",
+  placeItems: "center",
+  zIndex: 60,
+  padding: 20,
+};
+
+const cropDialog: React.CSSProperties = {
+  width: "min(420px, 100%)",
+  border: "1px solid rgba(255,255,255,0.18)",
+  borderRadius: 16,
+  background: "rgba(11,11,11,0.96)",
+  padding: 18,
+};
+
+const cropPreview: React.CSSProperties = {
+  width: CROP_PREVIEW_SIZE,
+  height: CROP_PREVIEW_SIZE,
+  borderRadius: "50%",
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,0.3)",
+  position: "relative",
+  margin: "8px auto 0",
+  background: "rgba(255,255,255,0.06)",
+  touchAction: "none",
+  cursor: "grab",
+};
+
+const cropHint: React.CSSProperties = {
+  marginTop: 10,
+  textAlign: "center",
+  fontSize: 12,
+  opacity: 0.68,
+};
+
+const cropRange: React.CSSProperties = {
+  width: "100%",
+  marginTop: 14,
+};
+
+const cropActions: React.CSSProperties = {
+  marginTop: 14,
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 8,
+};
+
+const cropButton: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.26)",
+  background: "transparent",
+  color: "#eaeaea",
+  borderRadius: 999,
+  padding: "7px 12px",
+  fontSize: 12,
   cursor: "pointer",
 };
 

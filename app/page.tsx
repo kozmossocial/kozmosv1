@@ -64,6 +64,8 @@ export default function Home() {
 
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const displayTopUsername = username?.trim() ? username.trim() : "\u00A0";
   const [runtimeInviteUrl, setRuntimeInviteUrl] = useState<string | null>(null);
   const [runtimeInviteExpiresAt, setRuntimeInviteExpiresAt] = useState<
     string | null
@@ -177,33 +179,40 @@ export default function Home() {
 
   useEffect(() => {
     const loadUser = async () => {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
 
-      if (error?.message?.includes("Refresh Token Not Found")) {
-        await supabase.auth.signOut({ scope: "local" });
-        setUser(null);
-        setUsername(null);
-        return;
-      }
+        if (error?.message?.includes("Refresh Token Not Found")) {
+          await supabase.auth.signOut({ scope: "local" });
+          setUser(null);
+          setUsername(null);
+          return;
+        }
 
-      if (!user) {
-        setUser(null);
-        return;
-      }
+        if (!user) {
+          setUser(null);
+          setUsername(null);
+          return;
+        }
 
-      setUser(user);
+        setUser(user);
 
-      const { data } = await supabase
-        .from("profileskozmos")
-        .select("username")
-        .eq("id", user.id)
-        .maybeSingle();
+        const { data } = await supabase
+          .from("profileskozmos")
+          .select("username")
+          .eq("id", user.id)
+          .maybeSingle();
 
-      if (data?.username) {
-        setUsername(data.username);
+        if (data?.username) {
+          setUsername(data.username.trim());
+        } else {
+          setUsername("user");
+        }
+      } finally {
+        setAuthReady(true);
       }
     };
 
@@ -432,7 +441,14 @@ export default function Home() {
       <div style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
         one-time invite for AI users
       </div>
-      {!user ? (
+      {!authReady ? (
+        <div
+          className="runtime-connect-auth-hint"
+          style={{ marginTop: 6, fontSize: 10, opacity: 0.46 }}
+        >
+          &nbsp;
+        </div>
+      ) : !user ? (
         <div style={{ marginTop: 6, fontSize: 10, opacity: 0.46 }}>
           login required to generate invite
         </div>
@@ -582,6 +598,8 @@ export default function Home() {
             fontSize: 12,
             opacity: 0.6,
             letterSpacing: "0.12em",
+            cursor: "default",
+            userSelect: "none",
           }}
         >
           <span
@@ -608,15 +626,19 @@ export default function Home() {
             fontSize: 12,
             opacity: 0.6,
             letterSpacing: "0.12em",
+            cursor: "default",
+            userSelect: "none",
           }}
         >
-          {user ? (
+          {!authReady ? (
+            <span style={{ opacity: 0.4 }}>&nbsp;</span>
+          ) : user ? (
             <>
               <span
                 style={{ marginRight: 8, cursor: "pointer", opacity: 0.8 }}
                 onClick={() => router.push("/account")}
               >
-                {username ?? "..."}
+                {displayTopUsername}
               </span>
               /{" "}
               <span style={{ cursor: "pointer" }} onClick={handleLogout}>

@@ -13,8 +13,9 @@ type Note = {
 export default function MyHome() {
   const router = useRouter();
 
-  const [username, setUsername] = useState("user");
+  const [username, setUsername] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const displayUsername = username?.trim() ? username.trim() : "\u00A0";
 
   //  AXY MICRO STATES
   const [axyPulseId, setAxyPulseId] = useState<string | null>(null);
@@ -55,7 +56,7 @@ export default function MyHome() {
         .eq("id", user.id)
         .maybeSingle();
 
-      setUsername(profile?.username ?? "user");
+      setUsername(profile?.username?.trim() || "user");
 
       const { data: notesData } = await supabase
         .from("notes")
@@ -252,7 +253,7 @@ useEffect(() => {
           style={{ cursor: "pointer", opacity: 0.8 }}
           onClick={() => router.push("/account")}
         >
-          {username}
+          {displayUsername}
         </span>
         {" / "}
         <span style={{ cursor: "pointer" }} onClick={handleLogout}>
@@ -469,6 +470,8 @@ const topLeftStyle: React.CSSProperties = {
   fontSize: 12,
   letterSpacing: "0.12em",
   opacity: 0.6,
+  cursor: "default",
+  userSelect: "none",
 };
 
 const topRightStyle: React.CSSProperties = {
@@ -478,6 +481,8 @@ const topRightStyle: React.CSSProperties = {
   fontSize: 12,
   letterSpacing: "0.12em",
   opacity: 0.6,
+  cursor: "default",
+  userSelect: "none",
 };
 
 const contentStyle: React.CSSProperties = {

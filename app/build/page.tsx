@@ -528,6 +528,8 @@ export default function BuildPage() {
           fontSize: 14,
           opacity: 0.72,
           marginTop: 2,
+          cursor: "default",
+          userSelect: "none",
         }}
       >
         <div>
