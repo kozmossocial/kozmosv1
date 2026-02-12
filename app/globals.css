@@ -625,7 +625,7 @@ body {
   }
 
   .home-hero-content {
-    margin-top: 172px !important;
+    margin-top: 198px !important;
     line-height: 1.95 !important;
   }
 
@@ -723,7 +723,7 @@ body {
 
 @media (max-width: 360px) {
   .home-hero-content {
-    margin-top: 186px !important;
+    margin-top: 212px !important;
     line-height: 1.82 !important;
   }
 
