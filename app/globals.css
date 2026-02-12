@@ -454,6 +454,11 @@ body {
   display: none;
 }
 
+.runtime-invite-button {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 .home-hero-logo-image {
   max-width: 60%;
 }
@@ -720,7 +725,9 @@ body {
   }
 
   .home-hero-runtime-mobile {
-    position: static !important;
+    position: relative !important;
+    z-index: 65 !important;
+    pointer-events: auto !important;
     top: auto !important;
     margin-top: 26px !important;
   }

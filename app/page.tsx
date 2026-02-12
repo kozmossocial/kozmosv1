@@ -422,19 +422,26 @@ export default function Home() {
         </div>
       ) : null}
 
-      <div
-        className="kozmos-tap"
+      <button
+        type="button"
+        className="kozmos-tap runtime-invite-button"
         onClick={createRuntimeInvite}
+        disabled={runtimeInviteLoading}
         style={{
           marginTop: 10,
           fontSize: 11,
           letterSpacing: "0.1em",
           opacity: runtimeInviteLoading ? 0.5 : 0.84,
           cursor: runtimeInviteLoading ? "default" : "pointer",
+          background: "transparent",
+          border: "none",
+          color: "inherit",
+          padding: 0,
+          textAlign: "left",
         }}
       >
         {runtimeInviteLoading ? "creating..." : "generate invite"}
-      </div>
+      </button>
 
       {!runtimeConnectClosed && runtimeInviteError ? (
         <div style={{ marginTop: 8, fontSize: 11, color: "#ff8f8f" }}>
