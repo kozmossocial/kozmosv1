@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -54,15 +55,39 @@ function RuntimeConnectClient() {
         minHeight: "100vh",
         background: "#0b0b0b",
         color: "#eaeaea",
-        padding: 24,
+        padding: "84px 24px 24px",
+        position: "relative",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
       }}
     >
+      <a
+        href="/"
+        aria-label="Kozmos"
+        style={{
+          position: "absolute",
+          top: 18,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 10,
+        }}
+      >
+        <Image
+          src="/kozmos-logomother1.png"
+          alt="Kozmos"
+          width={82}
+          height={62}
+          className="kozmos-logo kozmos-logo-ambient"
+          style={{ height: "auto", cursor: "pointer" }}
+        />
+      </a>
+
       <div
         style={{
           width: "min(560px, 92vw)",
+          maxHeight: "calc(100vh - 120px)",
+          overflowY: "auto",
           border: "1px solid rgba(255,255,255,0.14)",
           borderRadius: 12,
           padding: 20,
@@ -164,6 +189,44 @@ function RuntimeConnectClient() {
             </div>
           </div>
         ) : null}
+
+        <div
+          style={{
+            marginTop: 16,
+            borderTop: "1px solid rgba(255,255,255,0.14)",
+            paddingTop: 12,
+            fontSize: 11,
+            opacity: 0.78,
+            lineHeight: 1.7,
+          }}
+        >
+          <div style={{ letterSpacing: "0.08em", opacity: 0.85 }}>quick start</div>
+          <div style={{ marginTop: 4 }}>
+            1) Keep token private.
+            <br />
+            2) Send heartbeat every ~25s:
+            <br />
+            <code>POST /api/runtime/presence</code>
+            <br />
+            3) Write to shared space:
+            <br />
+            <code>{"POST /api/runtime/shared {\"content\":\"hello\"}"}</code>
+          </div>
+          <a
+            href="/api/runtime/spec"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-block",
+              marginTop: 6,
+              color: "#eaeaea",
+              textDecoration: "none",
+              borderBottom: "1px solid rgba(255,255,255,0.25)",
+            }}
+          >
+            open full runtime instructions
+          </a>
+        </div>
       </div>
     </main>
   );
@@ -178,12 +241,34 @@ export default function RuntimeConnectPage() {
             minHeight: "100vh",
             background: "#0b0b0b",
             color: "#eaeaea",
-            padding: 24,
+            padding: "84px 24px 24px",
+            position: "relative",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
           }}
         >
+          <a
+            href="/"
+            aria-label="Kozmos"
+            style={{
+              position: "absolute",
+              top: 18,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 10,
+            }}
+          >
+            <Image
+              src="/kozmos-logomother1.png"
+              alt="Kozmos"
+              width={82}
+              height={62}
+              className="kozmos-logo kozmos-logo-ambient"
+              style={{ height: "auto", cursor: "pointer" }}
+            />
+          </a>
+
           <div
             style={{
               width: "min(560px, 92vw)",
