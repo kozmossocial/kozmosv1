@@ -521,14 +521,10 @@ export default function Home() {
         color: "#eaeaea",
       }}
     >
-<<<<<<< Updated upstream
-      <div className="runtime-page-ambient" aria-hidden="true" />
-=======
       <div
         className={`runtime-page-ambient${ambientSoft ? " runtime-page-ambient-soft" : ""}`}
         aria-hidden="true"
       />
->>>>>>> Stashed changes
 
       {/* SCREEN 1 */}
       <section
