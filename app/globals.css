@@ -680,6 +680,8 @@ body {
   }
 
   .home-hero-content {
+    position: relative !important;
+    z-index: 20 !important;
     margin-top: 198px !important;
     line-height: 1.95 !important;
   }
@@ -720,7 +722,9 @@ body {
   }
 
   .home-hero-runtime-mobile {
-    position: static !important;
+    position: relative !important;
+    z-index: 80 !important;
+    pointer-events: auto !important;
     top: auto !important;
     margin-top: 26px !important;
   }
