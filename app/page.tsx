@@ -503,6 +503,8 @@ export default function Home() {
         color: "#eaeaea",
       }}
     >
+      <div className="runtime-page-ambient" aria-hidden="true" />
+
       {/* SCREEN 1 */}
       <section
         style={{
@@ -510,6 +512,7 @@ export default function Home() {
           scrollSnapAlign: "start",
           padding: "40px",
           position: "relative",
+          zIndex: 2,
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
@@ -692,6 +695,8 @@ export default function Home() {
         style={{
           height: "100vh",
           scrollSnapAlign: "start",
+          position: "relative",
+          zIndex: 2,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -721,6 +726,7 @@ export default function Home() {
           alignItems: "center",
           padding: 40,
           position: "relative",
+          zIndex: 2,
         }}
       >
         <div

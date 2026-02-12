@@ -569,6 +569,46 @@ body {
   animation: runtimePanelScan 3.8s ease-in-out infinite;
 }
 
+.runtime-page-ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.3;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(circle at 18% 28%, rgba(255, 90, 170, 0.22), transparent 52%),
+    radial-gradient(circle at 78% 34%, rgba(70, 160, 255, 0.24), transparent 56%),
+    radial-gradient(circle at 52% 74%, rgba(68, 240, 190, 0.22), transparent 54%),
+    linear-gradient(
+      125deg,
+      rgba(255, 90, 170, 0.11) 0%,
+      rgba(70, 160, 255, 0.11) 33%,
+      rgba(68, 240, 190, 0.11) 66%,
+      rgba(170, 116, 255, 0.11) 100%
+    );
+  background-size: 200% 200%;
+  filter: blur(18px);
+  animation: runtimePanelBgFlow 16s ease-in-out infinite;
+}
+
+.runtime-page-ambient::before {
+  content: "";
+  position: absolute;
+  inset: -26%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 90, 170, 0.1),
+    rgba(70, 160, 255, 0.12),
+    rgba(68, 240, 190, 0.1),
+    rgba(170, 116, 255, 0.12),
+    rgba(255, 90, 170, 0.1)
+  );
+  filter: blur(44px);
+  opacity: 0.5;
+  animation: runtimePanelShimmer 18s linear infinite;
+}
+
 .build-shell {
   display: grid;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
@@ -620,6 +660,10 @@ body {
 
 /* Main layout responsive */
 @media (max-width: 900px) {
+  .runtime-page-ambient {
+    display: none !important;
+  }
+
   .build-shell {
     grid-template-columns: 1fr !important;
   }
