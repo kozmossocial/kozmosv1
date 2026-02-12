@@ -75,59 +75,74 @@ export default function BuildPage() {
     userId && selectedSpace && selectedSpace.owner_id === userId
   );
 
+  const fetchAuthedJson = useCallback(
+    async (url: string, init?: RequestInit) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const headers = new Headers(init?.headers ?? {});
+      if (session?.access_token) {
+        headers.set("Authorization", `Bearer ${session.access_token}`);
+      }
+      if (init?.body && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+
+      const res = await fetch(url, { ...init, headers });
+      const data = await res.json().catch(() => ({}));
+      return { res, data } as const;
+    },
+    []
+  );
+
   const loadSpaces = useCallback(async () => {
     if (!userId) return;
-    const { data, error } = await supabase
-      .from("user_build_spaces")
-      .select("id, owner_id, title, is_public, language_pref, description, updated_at")
-      .order("updated_at", { ascending: false });
-
-    if (error) {
-      setErrorText("failed to load subspaces");
+    const { res, data } = await fetchAuthedJson("/api/build/spaces");
+    if (!res.ok) {
+      if (res.status === 401) router.push("/login");
+      setErrorText(data?.error || "failed to load subspaces");
       return;
     }
     setErrorText((prev) =>
-      prev === "failed to load subspaces" ? null : prev
+      prev && /(subspace|load spaces|load subspaces)/i.test(prev) ? null : prev
     );
 
-    const nextSpaces = (data || []) as BuildSpace[];
+    const nextSpaces = (Array.isArray(data?.spaces) ? data.spaces : []) as BuildSpace[];
     setSpaces(nextSpaces);
-
-    if (!selectedSpaceId && nextSpaces.length > 0) {
-      setSelectedSpaceId(nextSpaces[0].id);
-    } else if (
-      selectedSpaceId &&
-      !nextSpaces.some((space) => space.id === selectedSpaceId)
-    ) {
-      setSelectedSpaceId(nextSpaces[0]?.id ?? null);
-    }
-  }, [selectedSpaceId, userId]);
+    setSelectedSpaceId((prev) => {
+      if (!prev && nextSpaces.length > 0) return nextSpaces[0].id;
+      if (prev && !nextSpaces.some((space) => space.id === prev)) {
+        return nextSpaces[0]?.id ?? null;
+      }
+      return prev;
+    });
+  }, [fetchAuthedJson, router, userId]);
 
   const loadFiles = useCallback(async (spaceId: string) => {
-    const { data, error } = await supabase
-      .from("user_build_files")
-      .select("id, path, content, language, updated_at")
-      .eq("space_id", spaceId)
-      .order("updated_at", { ascending: false });
-
-    if (error) {
-      setErrorText("failed to load files");
+    const { res, data } = await fetchAuthedJson(
+      `/api/build/files?spaceId=${encodeURIComponent(spaceId)}`
+    );
+    if (!res.ok) {
+      if (res.status === 401) router.push("/login");
+      setErrorText(data?.error || "failed to load files");
       return;
     }
-    setErrorText((prev) => (prev === "failed to load files" ? null : prev));
+    setErrorText((prev) =>
+      prev && /(load files|save file|create file)/i.test(prev) ? null : prev
+    );
 
-    const nextFiles = (data || []) as BuildFile[];
+    const nextFiles = (Array.isArray(data?.files) ? data.files : []) as BuildFile[];
     setFiles(nextFiles);
-
-    if (!selectedFilePath && nextFiles.length > 0) {
-      setSelectedFilePath(nextFiles[0].path);
-    } else if (
-      selectedFilePath &&
-      !nextFiles.some((file) => file.path === selectedFilePath)
-    ) {
-      setSelectedFilePath(nextFiles[0]?.path ?? null);
-    }
-  }, [selectedFilePath]);
+    setCanEditSelectedSpace(Boolean(data?.canEdit || data?.isOwner));
+    setSelectedFilePath((prev) => {
+      if (!prev && nextFiles.length > 0) return nextFiles[0].path;
+      if (prev && !nextFiles.some((file) => file.path === prev)) {
+        return nextFiles[0]?.path ?? null;
+      }
+      return prev;
+    });
+  }, [fetchAuthedJson, router]);
 
   const loadAccessEntries = useCallback(async (spaceId: string) => {
     setAccessLoading(true);
@@ -153,24 +168,15 @@ export default function BuildPage() {
     setAccessEntries(Array.isArray(data?.entries) ? data.entries : []);
   }, []);
 
-  const loadMyAccessForSpace = useCallback(async (spaceId: string) => {
-    if (!userId) return false;
-    const { data } = await supabase
-      .from("user_build_space_access")
-      .select("can_edit")
-      .eq("space_id", spaceId)
-      .eq("user_id", userId)
-      .maybeSingle();
-    return data?.can_edit === true;
-  }, [userId]);
-
   useEffect(() => {
     async function boot() {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
 
       if (!user) {
+        setBootLoading(false);
         router.push("/login");
         return;
       }
@@ -214,9 +220,6 @@ export default function BuildPage() {
           await loadAccessEntries(selectedSpaceId);
           return;
         }
-
-        const canEdit = await loadMyAccessForSpace(selectedSpaceId);
-        setCanEditSelectedSpace(canEdit);
         setAccessEntries([]);
       })();
     }, 0);
@@ -224,7 +227,6 @@ export default function BuildPage() {
     return () => window.clearTimeout(timer);
   }, [
     loadAccessEntries,
-    loadMyAccessForSpace,
     selectedSpace,
     selectedSpaceId,
     userId,
@@ -273,45 +275,53 @@ export default function BuildPage() {
     const title = newSpaceTitle.trim() || `subspace ${spaces.length + 1}`;
     setCreatingSpace(true);
     setErrorText(null);
+    try {
+      const { res, data } = await fetchAuthedJson("/api/build/spaces", {
+        method: "POST",
+        body: JSON.stringify({ title }),
+      });
 
-    const { data, error } = await supabase
-      .from("user_build_spaces")
-      .insert({
-        owner_id: userId,
-        title,
-      })
-      .select("id")
-      .single();
+      if (!res.ok || !data?.space?.id) {
+        if (res.status === 401) router.push("/login");
+        setErrorText(data?.error || "could not create subspace");
+        return;
+      }
 
-    setCreatingSpace(false);
-
-    if (error || !data?.id) {
+      setNewSpaceTitle("");
+      await loadSpaces();
+      setSelectedSpaceId(data.space.id as string);
+    } catch {
       setErrorText("could not create subspace");
-      return;
+    } finally {
+      setCreatingSpace(false);
     }
-
-    setNewSpaceTitle("");
-    await loadSpaces();
-    setSelectedSpaceId(data.id);
   }
 
   async function togglePublicShare() {
     if (!selectedSpaceId || !isOwnerSelectedSpace || !selectedSpace) return;
     setShareSaving(true);
     setErrorText(null);
+    try {
+      const { res, data } = await fetchAuthedJson("/api/build/spaces", {
+        method: "PATCH",
+        body: JSON.stringify({
+          spaceId: selectedSpaceId,
+          isPublic: !selectedSpace.is_public,
+        }),
+      });
 
-    const { error } = await supabase
-      .from("user_build_spaces")
-      .update({ is_public: !selectedSpace.is_public })
-      .eq("id", selectedSpaceId);
+      if (!res.ok) {
+        if (res.status === 401) router.push("/login");
+        setErrorText(data?.error || "share update failed");
+        return;
+      }
 
-    setShareSaving(false);
-    if (error) {
+      await loadSpaces();
+    } catch {
       setErrorText("share update failed");
-      return;
+    } finally {
+      setShareSaving(false);
     }
-
-    await loadSpaces();
   }
 
   async function grantAccess() {
@@ -393,54 +403,59 @@ export default function BuildPage() {
 
     setCreatingFile(true);
     setErrorText(null);
+    try {
+      const { res, data } = await fetchAuthedJson("/api/build/files", {
+        method: "POST",
+        body: JSON.stringify({
+          spaceId: selectedSpaceId,
+          path: normalized,
+          language: "text",
+        }),
+      });
 
-    const { error } = await supabase.from("user_build_files").upsert(
-      {
-        space_id: selectedSpaceId,
-        path: normalized,
-        content: "",
-        language: "text",
-        updated_by: userId,
-      },
-      { onConflict: "space_id,path" }
-    );
+      if (!res.ok) {
+        if (res.status === 401) router.push("/login");
+        setErrorText(data?.error || "could not create file");
+        return;
+      }
 
-    setCreatingFile(false);
-
-    if (error) {
+      setNewFilePath("");
+      await loadFiles(selectedSpaceId);
+      setSelectedFilePath(normalized);
+    } catch {
       setErrorText("could not create file");
-      return;
+    } finally {
+      setCreatingFile(false);
     }
-
-    setNewFilePath("");
-    await loadFiles(selectedSpaceId);
-    setSelectedFilePath(normalized);
   }
 
   async function saveActiveFile() {
     if (!selectedSpaceId || !selectedFilePath || !userId) return;
     setSavingFile(true);
     setErrorText(null);
+    try {
+      const { res, data } = await fetchAuthedJson("/api/build/files", {
+        method: "PUT",
+        body: JSON.stringify({
+          spaceId: selectedSpaceId,
+          path: selectedFilePath,
+          content: editorContent,
+          language: editorLanguage || "text",
+        }),
+      });
 
-    const { error } = await supabase.from("user_build_files").upsert(
-      {
-        space_id: selectedSpaceId,
-        path: selectedFilePath,
-        content: editorContent,
-        language: editorLanguage || "text",
-        updated_by: userId,
-      },
-      { onConflict: "space_id,path" }
-    );
+      if (!res.ok) {
+        if (res.status === 401) router.push("/login");
+        setErrorText(data?.error || "save failed");
+        return;
+      }
 
-    setSavingFile(false);
-
-    if (error) {
+      await loadFiles(selectedSpaceId);
+    } catch {
       setErrorText("save failed");
-      return;
+    } finally {
+      setSavingFile(false);
     }
-
-    await loadFiles(selectedSpaceId);
   }
 
   async function askBuilderAxy() {
