@@ -569,6 +569,13 @@ body {
   animation: runtimePanelScan 3.8s ease-in-out infinite;
 }
 
+.build-shell {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
 @keyframes runtimePanelShimmer {
   0% {
     transform: rotate(0deg) scale(1);
@@ -613,6 +620,10 @@ body {
 
 /* Main layout responsive */
 @media (max-width: 900px) {
+  .build-shell {
+    grid-template-columns: 1fr !important;
+  }
+
   .home-hero-content {
     margin-top: 172px !important;
     line-height: 1.95 !important;

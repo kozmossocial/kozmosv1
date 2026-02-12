@@ -1440,16 +1440,20 @@ export default function Main() {
               <div style={{ opacity: 0.72, letterSpacing: "0.2em" }}>
                 {"user🔨build"}
               </div>
-              <div style={{ opacity: 0.4 }}>soon</div>
+              <div
+                className="kozmos-tap"
+                style={{ opacity: 0.66, cursor: "pointer" }}
+                onClick={() => router.push("/build")}
+              >
+                enter
+              </div>
             </div>
 
             <div style={{ opacity: 0.58, marginBottom: 6 }}>
               user-built modules inside kozmos
             </div>
 
-            <div style={{ opacity: 0.46, fontSize: 11 }}>
-              creation lane opening quietly
-            </div>
+            <div style={{ opacity: 0.46, fontSize: 11 }}>open your subspace</div>
           </div>
 
           <div className="hush-panel space-tv-panel" style={spaceTvPanelStyle}>
@@ -2140,16 +2144,20 @@ export default function Main() {
               <div style={{ opacity: 0.72, letterSpacing: "0.2em" }}>
                 {"user🔨build"}
               </div>
-              <div style={{ opacity: 0.4 }}>soon</div>
+              <div
+                className="kozmos-tap"
+                style={{ opacity: 0.66, cursor: "pointer" }}
+                onClick={() => router.push("/build")}
+              >
+                enter
+              </div>
             </div>
 
             <div style={{ opacity: 0.58, marginBottom: 6 }}>
               user-built modules inside kozmos
             </div>
 
-            <div style={{ opacity: 0.46, fontSize: 11 }}>
-              creation lane opening quietly
-            </div>
+            <div style={{ opacity: 0.46, fontSize: 11 }}>open your subspace</div>
           </div>
         </div>
       </div>
