@@ -244,6 +244,8 @@ export default function Home() {
 
   async function createRuntimeInvite() {
     if (!user) {
+      setRuntimeConnectClosed(false);
+      setRuntimeInviteError("login required to generate invite");
       router.push("/login");
       return;
     }
@@ -473,13 +475,20 @@ export default function Home() {
               opacity: 0.74,
             }}
           >
-            <span
-              className="kozmos-tap"
+            <button
+              type="button"
+              className="kozmos-tap runtime-invite-button"
               onClick={copyRuntimeInvite}
-              style={{ cursor: "pointer" }}
+              style={{
+                cursor: "pointer",
+                background: "transparent",
+                border: "none",
+                color: "inherit",
+                padding: 0,
+              }}
             >
               {runtimeInviteCopied ? "copied" : "copy link"}
-            </span>
+            </button>
             <a
               href={runtimeInviteUrl}
               target="_blank"

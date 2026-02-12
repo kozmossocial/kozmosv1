@@ -426,6 +426,7 @@ body {
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  touch-action: manipulation;
   background: linear-gradient(
     125deg,
     rgba(255, 64, 160, 0.36) 0%,
@@ -457,6 +458,13 @@ body {
 .runtime-invite-button {
   appearance: none;
   -webkit-appearance: none;
+}
+
+.runtime-connect-panel .kozmos-tap,
+.runtime-connect-panel button,
+.runtime-connect-panel a {
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .home-hero-logo-image {
@@ -677,7 +685,13 @@ body {
 /* Main layout responsive */
 @media (max-width: 900px) {
   .runtime-page-ambient {
-    display: none !important;
+    display: block !important;
+    opacity: 0.16 !important;
+    filter: blur(22px) !important;
+  }
+
+  .runtime-page-ambient::before {
+    opacity: 0.22 !important;
   }
 
   .build-shell {
@@ -726,8 +740,9 @@ body {
 
   .home-hero-runtime-mobile {
     position: relative !important;
-    z-index: 65 !important;
+    z-index: 90 !important;
     pointer-events: auto !important;
+    touch-action: manipulation !important;
     top: auto !important;
     margin-top: 26px !important;
   }
