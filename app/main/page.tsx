@@ -1644,6 +1644,14 @@ export default function Main() {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              if (!loading) {
+                void sendMessage();
+              }
+            }
+          }}
           placeholder="write something..."
           style={{
             width: "100%",
