@@ -731,7 +731,9 @@ export default function Home() {
           </div>
 
           <div
-            className="runtime-connect-panel runtime-connect-mobile home-hero-runtime-mobile"
+            className={`runtime-connect-panel runtime-connect-mobile home-hero-runtime-mobile${
+              !runtimeConnectClosed && runtimeInviteUrl ? " runtime-mobile-expanded" : ""
+            }`}
             onClick={handleMobileRuntimePanelTap}
             style={{
               width: "min(260px, 92vw)",
