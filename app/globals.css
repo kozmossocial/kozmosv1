@@ -590,6 +590,10 @@ body {
   background-size: 200% 200%;
   filter: blur(18px);
   animation: runtimePanelBgFlow 16s ease-in-out infinite;
+<<<<<<< Updated upstream
+=======
+  transition: opacity 420ms ease, filter 420ms ease;
+>>>>>>> Stashed changes
 }
 
 .runtime-page-ambient::before {
@@ -607,6 +611,19 @@ body {
   filter: blur(44px);
   opacity: 0.5;
   animation: runtimePanelShimmer 18s linear infinite;
+<<<<<<< Updated upstream
+=======
+  transition: opacity 420ms ease;
+}
+
+.runtime-page-ambient.runtime-page-ambient-soft {
+  opacity: 0.09;
+  filter: blur(22px);
+}
+
+.runtime-page-ambient.runtime-page-ambient-soft::before {
+  opacity: 0.16;
+>>>>>>> Stashed changes
 }
 
 .build-shell {

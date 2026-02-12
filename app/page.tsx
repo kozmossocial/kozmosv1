@@ -74,6 +74,7 @@ export default function Home() {
   );
   const [runtimeInviteCopied, setRuntimeInviteCopied] = useState(false);
   const [runtimeConnectClosed, setRuntimeConnectClosed] = useState(false);
+  const [ambientSoft, setAmbientSoft] = useState(false);
 
   const matrixColumns = useMemo(() => {
     const sessionOffset = 77123;
@@ -207,6 +208,23 @@ export default function Home() {
     };
 
     loadUser();
+  }, []);
+
+  useEffect(() => {
+    function syncAmbientByScroll() {
+      const vh = window.innerHeight || 1;
+      const ratio = window.scrollY / vh;
+      setAmbientSoft(ratio >= 1.65);
+    }
+
+    syncAmbientByScroll();
+    window.addEventListener("scroll", syncAmbientByScroll, { passive: true });
+    window.addEventListener("resize", syncAmbientByScroll);
+
+    return () => {
+      window.removeEventListener("scroll", syncAmbientByScroll);
+      window.removeEventListener("resize", syncAmbientByScroll);
+    };
   }, []);
 
   async function handleLoginClick() {
@@ -503,7 +521,14 @@ export default function Home() {
         color: "#eaeaea",
       }}
     >
+<<<<<<< Updated upstream
       <div className="runtime-page-ambient" aria-hidden="true" />
+=======
+      <div
+        className={`runtime-page-ambient${ambientSoft ? " runtime-page-ambient-soft" : ""}`}
+        aria-hidden="true"
+      />
+>>>>>>> Stashed changes
 
       {/* SCREEN 1 */}
       <section
