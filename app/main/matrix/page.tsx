@@ -320,10 +320,18 @@ export default function MainMatrixPage() {
             main
           </span>
           {" / "}
-          <span style={{ opacity: 0.92 }}>matrix</span>
+          <span style={{ opacity: 0.92, cursor: "default", userSelect: "none" }}>
+            matrix
+          </span>
         </div>
         <div>
-          {username} /{" "}
+          <span
+            style={{ cursor: "pointer", userSelect: "none" }}
+            onClick={() => router.push("/account")}
+          >
+            {username}
+          </span>
+          {" / "}
           <span style={{ cursor: "pointer" }} onClick={handleLogout}>
             logout
           </span>
@@ -414,8 +422,8 @@ export default function MainMatrixPage() {
         {allOrbs.map((orb) => {
           const { xPercent, yPercent, size, depth } = projectOrb(orb.x, orb.z);
           const phase = seedPhase(orb.id);
-          const bob = Math.sin(pulseTick / 420 + phase) * 6;
-          const labelY = yPercent - size * 0.52 + bob;
+          const bob = Math.sin(pulseTick / 1400 + phase) * 2.2;
+          const labelLift = size * 0.86;
           const shadowY = yPercent + size * 0.45;
           const zIndex = 1000 - Math.floor(depth * 500) + (orb.isSelf ? 80 : 0);
           const glow = orb.isSelf ? 0.85 : 0.6;
@@ -461,7 +469,7 @@ export default function MainMatrixPage() {
                 style={{
                   position: "absolute",
                   left: `${xPercent}%`,
-                  top: `${labelY}%`,
+                  top: `calc(${yPercent}% + ${bob}px - ${labelLift}px)`,
                   transform: "translate(-50%, -100%)",
                   fontSize: orb.isSelf ? 12 : 11,
                   opacity: orb.isSelf ? 0.92 : 0.75,

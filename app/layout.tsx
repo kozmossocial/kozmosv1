@@ -1,6 +1,7 @@
 // app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
+import AuthSyncGuard from "./auth-sync-guard";
 
 export const metadata: Metadata = {
   title: "KOZMOS.",
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthSyncGuard />
+        {children}
+      </body>
     </html>
   );
 }

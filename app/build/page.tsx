@@ -538,7 +538,13 @@ export default function BuildPage() {
           <span style={{ cursor: "default" }}>user build</span>
         </div>
         <div>
-          {username} /{" "}
+          <span
+            style={{ cursor: "pointer", userSelect: "none" }}
+            onClick={() => router.push("/account")}
+          >
+            {username}
+          </span>
+          {" / "}
           <span style={{ cursor: "pointer" }} onClick={handleLogout}>
             logout
           </span>
