@@ -107,6 +107,10 @@ export default function Main() {
   );
   const [runtimePresentUsers, setRuntimePresentUsers] = useState<string[]>([]);
   const [presentUserGlow, setPresentUserGlow] = useState<string | null>(null);
+  const [presentUserOpen, setPresentUserOpen] = useState<string | null>(null);
+  const [presentUserAvatars, setPresentUserAvatars] = useState<
+    Record<string, string | null>
+  >({});
 
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
@@ -176,6 +180,58 @@ export default function Main() {
       ),
     [realtimePresentUsers, runtimePresentUsers]
   );
+
+  useEffect(() => {
+    if (!presentUserOpen) return;
+    if (!presentUsers.includes(presentUserOpen)) {
+      setPresentUserOpen(null);
+    }
+  }, [presentUserOpen, presentUsers]);
+
+  useEffect(() => {
+    const names = Array.from(
+      new Set(
+        presentUsers
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0)
+      )
+    );
+
+    if (names.length === 0) {
+      setPresentUserAvatars({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadPresentUserAvatars() {
+      const { data, error } = await supabase
+        .from("profileskozmos")
+        .select("username, avatar_url")
+        .in("username", names);
+
+      if (cancelled || error) return;
+
+      const nextMap: Record<string, string | null> = {};
+      names.forEach((name) => {
+        nextMap[name.toLowerCase()] = null;
+      });
+
+      (data || []).forEach((row) => {
+        if (!row?.username) return;
+        nextMap[String(row.username).toLowerCase()] =
+          typeof row.avatar_url === "string" ? row.avatar_url : null;
+      });
+
+      setPresentUserAvatars(nextMap);
+    }
+
+    void loadPresentUserAvatars();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [presentUsers]);
 
   /*  load user + messages */
   useEffect(() => {
@@ -1738,33 +1794,86 @@ export default function Main() {
             {presentUsers.length === 0 ? (
               <span style={{ fontSize: 11, opacity: 0.4 }}>nobody visible</span>
             ) : (
-              presentUsers.map((name) => (
-                <span
-                  key={`present-${name}`}
-                  className="present-user-chip"
-                  onClick={() => {
-                    setPresentUserGlow(name);
-                    setTimeout(() => {
-                      setPresentUserGlow((prev) => (prev === name ? null : prev));
-                    }, 220);
-                  }}
-                  style={{
-                    fontSize: 11,
-                    opacity: 0.72,
-                    border: "1px solid rgba(255,255,255,0.14)",
-                    borderRadius: 999,
-                    padding: "2px 8px",
-                    cursor: "pointer",
-                    userSelect: "none",
-                    textShadow:
-                      presentUserGlow === name
-                        ? "0 0 6px rgba(255,255,255,0.95), 0 0 14px rgba(255,255,255,0.45)"
-                        : "none",
-                  }}
-                >
-                  {name}
-                </span>
-              ))
+              presentUsers.map((name) => {
+                const avatarUrl = presentUserAvatars[name.toLowerCase()] ?? null;
+                const isOpen = presentUserOpen === name;
+                return (
+                  <div
+                    key={`present-${name}`}
+                    style={{ position: "relative" }}
+                    onMouseLeave={() => {
+                      if (presentUserOpen === name) {
+                        setPresentUserOpen(null);
+                      }
+                    }}
+                  >
+                    <span
+                      className="present-user-chip"
+                      onClick={() => {
+                        setPresentUserGlow(name);
+                        setPresentUserOpen((prev) => (prev === name ? null : name));
+                        setTimeout(() => {
+                          setPresentUserGlow((prev) => (prev === name ? null : prev));
+                        }, 220);
+                      }}
+                      style={{
+                        fontSize: 11,
+                        opacity: 0.72,
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        borderRadius: 999,
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        textShadow:
+                          presentUserGlow === name
+                            ? "0 0 6px rgba(255,255,255,0.95), 0 0 14px rgba(255,255,255,0.45)"
+                            : "none",
+                      }}
+                    >
+                      {name}
+                    </span>
+
+                    {isOpen ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "50%",
+                          bottom: "calc(100% + 8px)",
+                          transform: "translateX(-50%)",
+                          width: 78,
+                          height: 78,
+                          borderRadius: "50%",
+                          border: "1px solid rgba(255,255,255,0.28)",
+                          background: "rgba(11,11,11,0.95)",
+                          overflow: "hidden",
+                          boxShadow:
+                            "0 0 12px rgba(255,255,255,0.28), 0 0 24px rgba(255,255,255,0.14)",
+                          zIndex: 24,
+                          display: "grid",
+                          placeItems: "center",
+                        }}
+                      >
+                        {avatarUrl ? (
+                          <img
+                            src={avatarUrl}
+                            alt={`${name} avatar`}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                            }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 20, opacity: 0.72 }}>
+                            {(name[0] ?? "?").toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
