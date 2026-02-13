@@ -704,12 +704,22 @@ body {
 
   .runtime-page-ambient {
     display: block !important;
-    opacity: 0.16 !important;
-    filter: blur(22px) !important;
+    opacity: 0.24 !important;
+    filter: blur(20px) saturate(1.08) !important;
+    mix-blend-mode: normal !important;
   }
 
   .runtime-page-ambient::before {
-    opacity: 0.22 !important;
+    opacity: 0.34 !important;
+  }
+
+  .runtime-page-ambient.runtime-page-ambient-soft {
+    opacity: 0.14 !important;
+    filter: blur(22px) saturate(1.04) !important;
+  }
+
+  .runtime-page-ambient.runtime-page-ambient-soft::before {
+    opacity: 0.2 !important;
   }
 
   .build-shell {
