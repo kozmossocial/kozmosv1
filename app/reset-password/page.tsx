@@ -7,35 +7,93 @@ import { supabase } from "@/lib/supabaseClient";
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [hasSession, setHasSession] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Supabase reset link ile gelinmiş mi?
+    let active = true;
+
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) {
-        router.replace("/");
-      }
+      if (!active) return;
+      setHasSession(Boolean(data.session));
+      setSessionReady(true);
     });
-  }, [router]);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setHasSession(Boolean(session));
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   async function handleReset(e: React.FormEvent) {
     e.preventDefault();
-    if (!password) return;
+
+    const nextPassword = password.trim();
+    const nextConfirm = confirmPassword.trim();
+
+    if (!nextPassword) {
+      setMessage("enter new password");
+      return;
+    }
+    if (nextPassword.length < 8) {
+      setMessage("password must be at least 8 characters");
+      return;
+    }
+    if (nextPassword !== nextConfirm) {
+      setMessage("passwords do not match");
+      return;
+    }
+    if (!hasSession) {
+      setMessage("open this page from reset mail link");
+      return;
+    }
 
     setLoading(true);
+    setMessage(null);
 
     const { error } = await supabase.auth.updateUser({
-      password,
+      password: nextPassword,
     });
 
     setLoading(false);
 
     if (error) {
-      alert(error.message);
+      setMessage(error.message);
       return;
     }
 
-    router.replace("/login");
+    setMessage("password updated, redirecting...");
+    setTimeout(() => {
+      router.replace("/login");
+    }, 700);
+  }
+
+  if (!sessionReady) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "#0b0b0b",
+          color: "#eaeaea",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 40,
+        }}
+      >
+        loading...
+      </main>
+    );
   }
 
   return (
@@ -67,35 +125,75 @@ export default function ResetPasswordPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="new password"
-          style={{
-            width: "100%",
-            background: "transparent",
-            border: "none",
-            borderBottom: "1px solid rgba(255,255,255,0.2)",
-            color: "#eaeaea",
-            padding: "10px 0",
-            marginBottom: 24,
-            outline: "none",
-            fontSize: 14,
-          }}
+          style={inputStyle}
         />
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: "100%",
-            background: "none",
-            border: "1px solid rgba(255,255,255,0.3)",
-            color: "#eaeaea",
-            padding: "12px",
-            cursor: "pointer",
-            letterSpacing: "0.15em",
-          }}
-        >
+        <input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder="confirm new password"
+          style={inputStyle}
+        />
+
+        {!hasSession ? (
+          <div style={{ marginBottom: 12, fontSize: 12, opacity: 0.64 }}>
+            open this page from the reset mail link.
+          </div>
+        ) : null}
+
+        {message ? (
+          <div
+            style={{
+              marginBottom: 12,
+              fontSize: 12,
+              opacity: 0.72,
+              color: message.includes("updated") ? "#b8ffd1" : "#ff9d9d",
+            }}
+          >
+            {message}
+          </div>
+        ) : null}
+
+        <button type="submit" disabled={loading} style={buttonStyle}>
           {loading ? "..." : "save"}
         </button>
+
+        <div
+          style={{
+            marginTop: 20,
+            fontSize: 12,
+            opacity: 0.62,
+            textAlign: "center",
+            cursor: "pointer",
+          }}
+          onClick={() => router.replace("/login")}
+        >
+          back to login
+        </div>
       </form>
     </main>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "transparent",
+  border: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.2)",
+  color: "#eaeaea",
+  padding: "10px 0",
+  marginBottom: 20,
+  outline: "none",
+  fontSize: 14,
+};
+
+const buttonStyle: React.CSSProperties = {
+  width: "100%",
+  background: "none",
+  border: "1px solid rgba(255,255,255,0.3)",
+  color: "#eaeaea",
+  padding: "12px",
+  cursor: "pointer",
+  letterSpacing: "0.15em",
+};

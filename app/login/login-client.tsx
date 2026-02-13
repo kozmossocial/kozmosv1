@@ -14,6 +14,8 @@ export default function LoginClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
 
   /* LOGIN GUARD */
@@ -53,6 +55,35 @@ export default function LoginClient() {
     }
 
     router.replace(redirectTo);
+  }
+
+  async function handleForgotPassword() {
+    const targetEmail = email.trim();
+    if (!targetEmail) {
+      setResetMessage("enter your email first");
+      return;
+    }
+
+    setResetLoading(true);
+    setResetMessage(null);
+
+    const redirectToUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/reset-password`
+        : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+      redirectTo: redirectToUrl,
+    });
+
+    if (error) {
+      setResetMessage(error.message);
+      setResetLoading(false);
+      return;
+    }
+
+    setResetMessage("reset mail sent");
+    setResetLoading(false);
   }
 
   if (checkingSession) return null;
@@ -137,6 +168,34 @@ export default function LoginClient() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
+
+        <div
+          className="kozmos-soft-glow"
+          style={{
+            marginTop: -8,
+            marginBottom: 14,
+            fontSize: 11,
+            opacity: 0.62,
+            cursor: resetLoading ? "default" : "pointer",
+            userSelect: "none",
+          }}
+          onClick={resetLoading ? undefined : handleForgotPassword}
+        >
+          {resetLoading ? "sending..." : "forgot password?"}
+        </div>
+
+        {resetMessage ? (
+          <div
+            style={{
+              marginBottom: 12,
+              fontSize: 11,
+              opacity: 0.72,
+              color: resetMessage.includes("sent") ? "#b8ffd1" : "#ff9d9d",
+            }}
+          >
+            {resetMessage}
+          </div>
+        ) : null}
 
         <button
           className="kozmos-glow"

@@ -18,6 +18,10 @@ export default function AccountPage() {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
   const [avatarInputKey, setAvatarInputKey] = useState(0);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
@@ -285,6 +289,44 @@ export default function AccountPage() {
     setAvatarBusy(false);
   }
 
+  async function handleChangePassword() {
+    const nextPassword = newPassword.trim();
+    if (passwordBusy) return;
+
+    if (!nextPassword) {
+      setPasswordMessage("enter new password");
+      return;
+    }
+
+    if (nextPassword.length < 8) {
+      setPasswordMessage("password must be at least 8 characters");
+      return;
+    }
+
+    if (nextPassword !== confirmPassword.trim()) {
+      setPasswordMessage("passwords do not match");
+      return;
+    }
+
+    setPasswordBusy(true);
+    setPasswordMessage(null);
+
+    const { error } = await supabase.auth.updateUser({
+      password: nextPassword,
+    });
+
+    if (error) {
+      setPasswordMessage(error.message);
+      setPasswordBusy(false);
+      return;
+    }
+
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordMessage("password updated");
+    setPasswordBusy(false);
+  }
+
   async function normalizeAvatarFile(
     file: File,
     crop: {
@@ -499,14 +541,50 @@ export default function AccountPage() {
           <div>{email}</div>
         </div>
 
-        <div
-          style={{
-            ...action,
-            opacity: 0.4,
-            cursor: "default",
-          }}
-        >
-          change password - coming soon
+        <div style={{ marginBottom: 28 }}>
+          <div style={label}>change password</div>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            placeholder="new password"
+            style={passwordInput}
+          />
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="confirm new password"
+            style={{ ...passwordInput, marginTop: 10 }}
+          />
+          <button
+            type="button"
+            onClick={handleChangePassword}
+            disabled={passwordBusy}
+            style={{
+              ...avatarActionButton,
+              marginTop: 10,
+              opacity: passwordBusy ? 0.5 : 0.9,
+              cursor: passwordBusy ? "default" : "pointer",
+              minWidth: 140,
+            }}
+          >
+            {passwordBusy ? "saving..." : "save password"}
+          </button>
+          {passwordMessage ? (
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 12,
+                opacity: 0.72,
+                color: passwordMessage.includes("updated")
+                  ? "#b8ffd1"
+                  : "#ff9d9d",
+              }}
+            >
+              {passwordMessage}
+            </div>
+          ) : null}
         </div>
 
         <div
@@ -736,6 +814,17 @@ const avatarMessageStyle: React.CSSProperties = {
   marginTop: 8,
   fontSize: 12,
   opacity: 0.68,
+};
+
+const passwordInput: React.CSSProperties = {
+  width: "100%",
+  border: "1px solid rgba(255,255,255,0.2)",
+  background: "transparent",
+  color: "#eaeaea",
+  borderRadius: 8,
+  padding: "9px 11px",
+  fontSize: 12,
+  outline: "none",
 };
 
 const cropOverlay: React.CSSProperties = {
