@@ -375,6 +375,10 @@ body {
   animation-delay: var(--delay);
 }
 
+.matrix-rain-paused .matrix-stream {
+  animation-play-state: paused;
+}
+
 .matrix-tail-glow {
   position: absolute;
   left: 50%;

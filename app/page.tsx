@@ -77,6 +77,7 @@ export default function Home() {
   const [runtimeInviteCopied, setRuntimeInviteCopied] = useState(false);
   const [runtimeConnectClosed, setRuntimeConnectClosed] = useState(false);
   const [ambientSoft, setAmbientSoft] = useState(false);
+  const [matrixMotionActive, setMatrixMotionActive] = useState(false);
 
   const matrixColumns = useMemo(() => {
     const sessionOffset = 77123;
@@ -234,6 +235,30 @@ export default function Home() {
       window.removeEventListener("scroll", syncAmbientByScroll);
       window.removeEventListener("resize", syncAmbientByScroll);
     };
+  }, []);
+
+  useEffect(() => {
+    const target = screen3Ref.current;
+    if (!target || typeof IntersectionObserver === "undefined") {
+      setMatrixMotionActive(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        setMatrixMotionActive(entry.isIntersecting);
+      },
+      {
+        root: null,
+        rootMargin: "240px 0px 240px 0px",
+        threshold: 0.01,
+      }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
   }, []);
 
   async function handleLoginClick() {
@@ -854,7 +879,7 @@ export default function Home() {
         }}
       >
         <div
-          className="matrix-rain"
+          className={`matrix-rain${matrixMotionActive ? "" : " matrix-rain-paused"}`}
           aria-hidden="true"
           style={
             {

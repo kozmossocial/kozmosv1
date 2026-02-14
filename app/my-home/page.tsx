@@ -272,6 +272,12 @@ useEffect(() => {
         <textarea
           value={noteInput}
           onChange={(e) => setNoteInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              void saveNote();
+            }
+          }}
           placeholder="write something..."
           style={textareaStyle}
         />
