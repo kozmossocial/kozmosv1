@@ -30,6 +30,14 @@ type DirectChat = {
   updated_at: string;
 };
 
+type DirectMessage = {
+  id: number;
+  chat_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+};
+
 export default function MyHome() {
   const router = useRouter();
 
@@ -57,6 +65,11 @@ export default function MyHome() {
   const [touchHoverUserId, setTouchHoverUserId] = useState<string | null>(null);
   const [chatStartBusyUserId, setChatStartBusyUserId] = useState<string | null>(null);
   const [activeChats, setActiveChats] = useState<DirectChat[]>([]);
+  const [selectedDirectChatId, setSelectedDirectChatId] = useState<string | null>(null);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
+  const [directInput, setDirectInput] = useState("");
+  const [directLoading, setDirectLoading] = useState(false);
+  const [directSending, setDirectSending] = useState(false);
   const [directChatEditMode, setDirectChatEditMode] = useState(false);
   const [directChatSavingOrder, setDirectChatSavingOrder] = useState(false);
   const [directChatRemovingId, setDirectChatRemovingId] = useState<string | null>(null);
@@ -133,9 +146,49 @@ export default function MyHome() {
       };
 
       if (!res.ok) return;
-      setActiveChats(Array.isArray(body.chats) ? body.chats : []);
+      const nextChats = Array.isArray(body.chats) ? body.chats : [];
+      setActiveChats(nextChats);
+      setSelectedDirectChatId((prev) => {
+        if (prev && nextChats.some((chat) => chat.chat_id === prev)) {
+          return prev;
+        }
+        return nextChats[0]?.chat_id ?? null;
+      });
     } catch {
       // ignore transient fetch failures
+    }
+  }
+
+  async function loadDirectMessages(chatId: string) {
+    if (!chatId) return;
+    setDirectLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setDirectMessages([]);
+        return;
+      }
+
+      const res = await fetch(
+        `/api/direct-chats/messages?chatId=${encodeURIComponent(chatId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const body = (await res.json().catch(() => ({}))) as {
+        messages?: DirectMessage[];
+      };
+
+      if (!res.ok) return;
+      setDirectMessages(Array.isArray(body.messages) ? body.messages : []);
+    } finally {
+      setDirectLoading(false);
     }
   }
 
@@ -158,8 +211,13 @@ export default function MyHome() {
         body: JSON.stringify({ targetUserId }),
       });
 
-      if (!res.ok) return;
+      const body = (await res.json().catch(() => ({}))) as {
+        chat?: DirectChat;
+      };
+      if (!res.ok || !body.chat?.chat_id) return;
       await loadDirectChats();
+      setSelectedDirectChatId(body.chat.chat_id);
+      await loadDirectMessages(body.chat.chat_id);
     } finally {
       setChatStartBusyUserId(null);
     }
@@ -222,8 +280,46 @@ export default function MyHome() {
 
       if (!res.ok) return;
       setActiveChats((prev) => prev.filter((chat) => chat.chat_id !== chatId));
+      setSelectedDirectChatId((prev) => (prev === chatId ? null : prev));
+      setDirectMessages((prev) => prev.filter((msg) => msg.chat_id !== chatId));
     } finally {
       setDirectChatRemovingId(null);
+    }
+  }
+
+  async function sendDirectMessage() {
+    const content = directInput.trim();
+    if (!selectedDirectChatId || !content || directSending) return;
+
+    setDirectSending(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      const res = await fetch("/api/direct-chats/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          chatId: selectedDirectChatId,
+          content,
+        }),
+      });
+
+      if (!res.ok) return;
+
+      setDirectInput("");
+      await Promise.all([
+        loadDirectMessages(selectedDirectChatId),
+        loadDirectChats(),
+      ]);
+    } finally {
+      setDirectSending(false);
     }
   }
 
@@ -378,6 +474,25 @@ useEffect(() => {
   }, [userId]);
 
   useEffect(() => {
+    if (!selectedDirectChatId) {
+      setDirectMessages([]);
+      return;
+    }
+
+    const run = () => {
+      void loadDirectMessages(selectedDirectChatId);
+    };
+
+    const first = window.setTimeout(run, 0);
+    const poll = window.setInterval(run, 4500);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(poll);
+    };
+  }, [selectedDirectChatId]);
+
+  useEffect(() => {
     const sync = () => setIsMobileLayout(window.innerWidth <= 900);
     sync();
     window.addEventListener("resize", sync);
@@ -391,6 +506,11 @@ useEffect(() => {
       setTouchHoverUserId(null);
     }
   }, [touchEditMode]);
+
+  useEffect(() => {
+    if (!directChatEditMode) return;
+    setTouchHoverUserId(null);
+  }, [directChatEditMode]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -668,7 +788,26 @@ useEffect(() => {
         ) : (
           <div style={touchListStyle}>
             {activeChats.map((chat, idx) => (
-              <div key={chat.chat_id} style={touchUserRowStyle}>
+              <div
+                key={chat.chat_id}
+                style={{
+                  ...touchUserRowStyle,
+                  border:
+                    selectedDirectChatId === chat.chat_id
+                      ? "1px solid rgba(255,255,255,0.2)"
+                      : "1px solid transparent",
+                  borderRadius: 8,
+                  padding: "3px 4px",
+                  cursor: directChatEditMode ? "default" : "pointer",
+                }}
+                onClick={() => {
+                  if (!directChatEditMode) {
+                    setSelectedDirectChatId((prev) =>
+                      prev === chat.chat_id ? null : chat.chat_id
+                    );
+                  }
+                }}
+              >
                 <div style={touchAvatarStyle}>
                   {chat.avatar_url ? (
                     <img
@@ -717,9 +856,93 @@ useEffect(() => {
             ))}
           </div>
         )}
+
+        {selectedDirectChat ? (
+          <div style={{ ...directThreadWrapStyle, marginTop: 10 }}>
+            <div style={directThreadHeadStyle}>
+              <div style={{ opacity: 0.8 }}>
+                chat with {selectedDirectChat.username}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDirectChatId(null)}
+                style={{ ...touchMiniButtonStyle, opacity: 0.6 }}
+              >
+                minimize
+              </button>
+            </div>
+
+            <div style={directThreadMessagesStyle}>
+              {directLoading && directMessages.length === 0 ? (
+                <div style={touchMutedStyle}>loading chat...</div>
+              ) : directMessages.length === 0 ? (
+                <div style={touchMutedStyle}>no messages yet</div>
+              ) : (
+                directMessages.map((msg) => {
+                  const mine = msg.sender_id === userId;
+                  return (
+                    <div
+                      key={`dm-${msg.id}`}
+                      style={{
+                        ...directMessageRowStyle,
+                        justifyContent: mine ? "flex-end" : "flex-start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...directMessageBubbleStyle,
+                          borderColor: mine
+                            ? "rgba(255,255,255,0.22)"
+                            : "rgba(255,255,255,0.12)",
+                          background: mine
+                            ? "rgba(255,255,255,0.06)"
+                            : "rgba(255,255,255,0.03)",
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div style={directComposerStyle}>
+              <textarea
+                value={directInput}
+                onChange={(e) => setDirectInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    void sendDirectMessage();
+                  }
+                }}
+                placeholder={`message ${selectedDirectChat.username}...`}
+                style={directComposerInputStyle}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  void sendDirectMessage();
+                }}
+                disabled={directSending || !directInput.trim()}
+                style={{
+                  ...touchActionButtonStyle,
+                  opacity: directSending || !directInput.trim() ? 0.4 : 0.82,
+                }}
+              >
+                {directSending ? "..." : "send"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
+
+  const selectedDirectChat = selectedDirectChatId
+    ? activeChats.find((chat) => chat.chat_id === selectedDirectChatId) || null
+    : null;
 
   return (
     <main style={pageStyle}>
@@ -1107,6 +1330,73 @@ const directChatDockStyle: React.CSSProperties = {
   right: 44,
   top: 214,
   width: "min(360px, calc(100vw - 88px))",
+};
+
+const directThreadWrapStyle: React.CSSProperties = {
+  marginTop: 16,
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 12,
+  padding: "10px 12px",
+  background: "rgba(255,255,255,0.02)",
+};
+
+const directThreadHeadStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  fontSize: 12,
+  letterSpacing: "0.08em",
+  marginBottom: 8,
+};
+
+const directThreadMessagesStyle: React.CSSProperties = {
+  minHeight: 84,
+  maxHeight: 220,
+  overflowY: "auto",
+  overflowX: "hidden",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 10,
+  padding: "8px 8px",
+  background: "rgba(0,0,0,0.18)",
+};
+
+const directMessageRowStyle: React.CSSProperties = {
+  display: "flex",
+  width: "100%",
+  marginBottom: 6,
+};
+
+const directMessageBubbleStyle: React.CSSProperties = {
+  maxWidth: "85%",
+  fontSize: 12,
+  lineHeight: 1.4,
+  padding: "6px 8px",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 8,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+};
+
+const directComposerStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  marginTop: 8,
+  alignItems: "flex-end",
+};
+
+const directComposerInputStyle: React.CSSProperties = {
+  flex: 1,
+  minHeight: 52,
+  maxHeight: 120,
+  resize: "none",
+  outline: "none",
+  border: "1px solid rgba(255,255,255,0.15)",
+  borderRadius: 8,
+  background: "rgba(255,255,255,0.03)",
+  color: "#eaeaea",
+  padding: "8px 10px",
+  fontSize: 12,
+  lineHeight: 1.4,
 };
 
 const touchMobileWrapStyle: React.CSSProperties = {
