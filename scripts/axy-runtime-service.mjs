@@ -109,21 +109,23 @@ async function requestJson(url, init = {}) {
   return json;
 }
 
-async function postPresence(baseUrl, token) {
+async function postPresence(baseUrl, token, signal) {
   return requestJson(`${baseUrl}/api/runtime/presence`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    signal,
   });
 }
 
-async function clearPresence(baseUrl, token) {
+async function clearPresence(baseUrl, token, signal) {
   return requestJson(`${baseUrl}/api/runtime/presence`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    signal,
   });
 }
 
@@ -522,6 +524,7 @@ async function main() {
   let lastFreedomSharedAt = 0;
   const freedomSharedSentAt = [];
   let freedomMatrixStreak = 0;
+  const inFlightHeartbeatControllers = new Set();
 
   if (user?.id) {
     console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
@@ -549,12 +552,18 @@ async function main() {
   }
 
   const heartbeat = setInterval(async () => {
+    if (stopping) return;
+    const controller = new AbortController();
+    inFlightHeartbeatControllers.add(controller);
     try {
-      await postPresence(baseUrl, token);
-      console.log(`[${now()}] heartbeat ok`);
+      await postPresence(baseUrl, token, controller.signal);
+      if (!stopping) console.log(`[${now()}] heartbeat ok`);
     } catch (err) {
+      if (err?.name === "AbortError") return;
       const msg = err?.body?.error || err.message || "presence failed";
-      console.log(`[${now()}] heartbeat fail: ${msg}`);
+      if (!stopping) console.log(`[${now()}] heartbeat fail: ${msg}`);
+    } finally {
+      inFlightHeartbeatControllers.delete(controller);
     }
   }, heartbeatSeconds * 1000);
 
@@ -565,8 +574,24 @@ async function main() {
     stopping = true;
     clearInterval(heartbeat);
     console.log(`[${now()}] ${signal} received, clearing presence...`);
+    for (const controller of inFlightHeartbeatControllers) {
+      controller.abort();
+    }
+    inFlightHeartbeatControllers.clear();
+    await sleep(120);
     try {
-      await clearPresence(baseUrl, token);
+      const clearCtlA = new AbortController();
+      const timerA = setTimeout(() => clearCtlA.abort(), 4500);
+      await clearPresence(baseUrl, token, clearCtlA.signal);
+      clearTimeout(timerA);
+
+      await sleep(220);
+
+      const clearCtlB = new AbortController();
+      const timerB = setTimeout(() => clearCtlB.abort(), 4500);
+      await clearPresence(baseUrl, token, clearCtlB.signal).catch(() => null);
+      clearTimeout(timerB);
+
       console.log(`[${now()}] presence cleared`);
     } catch (err) {
       const msg = err?.body?.error || err.message || "presence clear failed";

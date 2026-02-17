@@ -728,7 +728,7 @@ export default function Main() {
     };
 
     const first = window.setTimeout(run, 0);
-    const poll = window.setInterval(run, 12000);
+    const poll = window.setInterval(run, 4000);
 
     return () => {
       window.clearTimeout(first);
