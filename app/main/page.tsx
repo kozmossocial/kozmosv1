@@ -175,6 +175,7 @@ export default function Main() {
   const [puzzleSolved, setPuzzleSolved] = useState(false);
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
+  const sharedStickToBottomRef = useRef(true);
   const presentUsersPanelRef = useRef<HTMLDivElement | null>(null);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
   const currentUsername = username?.trim() ? username.trim() : "user";
@@ -612,17 +613,19 @@ export default function Main() {
     };
   }, [playOpen, activePlay, orbitRunning]);
 
-  useEffect(() => {
+  const syncSharedStickToBottom = useCallback(() => {
     const el = sharedMessagesRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    const distanceToBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    sharedStickToBottomRef.current = distanceToBottom <= 28;
+  }, []);
 
   useEffect(() => {
     const el = sharedMessagesRef.current;
     if (!el) return;
+    if (!sharedStickToBottomRef.current) return;
     el.scrollTop = el.scrollHeight;
-  }, [axyMsgReflection]);
+  }, [messages]);
 
   /*  REALTIME (insert + delete) */
   useEffect(() => {
@@ -1760,7 +1763,11 @@ export default function Main() {
           />
         </div>
 
-        <div ref={sharedMessagesRef} style={sharedMessagesScrollStyle}>
+        <div
+          ref={sharedMessagesRef}
+          style={sharedMessagesScrollStyle}
+          onScroll={syncSharedStickToBottom}
+        >
           {messages.map((m) => (
             <div
               key={m.id}
