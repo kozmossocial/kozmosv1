@@ -626,19 +626,24 @@ async function main() {
       controller.abort();
     }
     runtimeRequestState.controllers.clear();
-    await sleep(120);
+    await sleep(900);
     try {
-      const clearCtlA = new AbortController();
-      const timerA = setTimeout(() => clearCtlA.abort(), 4500);
-      await clearPresence(baseUrl, token, clearCtlA.signal);
-      clearTimeout(timerA);
+      const clearWithTimeout = async (timeoutMs) => {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), timeoutMs);
+        try {
+          await clearPresence(baseUrl, token, ctl.signal);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
 
-      await sleep(220);
+      await clearWithTimeout(1800);
 
-      const clearCtlB = new AbortController();
-      const timerB = setTimeout(() => clearCtlB.abort(), 4500);
-      await clearPresence(baseUrl, token, clearCtlB.signal).catch(() => null);
-      clearTimeout(timerB);
+      // A small delayed second clear removes any late server-side upsert
+      // that could finish just after the first delete.
+      await sleep(2500);
+      await clearWithTimeout(1800).catch(() => null);
 
       console.log(`[${now()}] presence cleared`);
     } catch (err) {

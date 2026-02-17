@@ -100,7 +100,38 @@ const child = spawn(process.execPath, childArgv, {
   env: process.env,
 });
 
+let forwardingSignal = false;
+function forwardSignal(signal) {
+  if (forwardingSignal) return;
+  forwardingSignal = true;
+  console.log(`[start-axy-runtime] forwarding ${signal} to Axy service...`);
+  try {
+    child.kill(signal);
+  } catch {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // ignore
+    }
+  }
+}
+
+process.on("SIGINT", () => {
+  forwardSignal("SIGINT");
+});
+
+process.on("SIGTERM", () => {
+  forwardSignal("SIGTERM");
+});
+
 child.on("exit", (code, signal) => {
-  if (signal) process.kill(process.pid, signal);
+  if (signal === "SIGINT") {
+    process.exit(130);
+    return;
+  }
+  if (signal === "SIGTERM") {
+    process.exit(143);
+    return;
+  }
   process.exit(code ?? 0);
 });

@@ -18,11 +18,14 @@ export async function POST(req: Request) {
       .eq("id", resolved.userId)
       .maybeSingle();
 
-    await supabaseAdmin.from("runtime_presence").upsert({
+    const { error: presenceErr } = await supabaseAdmin.from("runtime_presence").upsert({
       user_id: resolved.userId,
       username: profile?.username || "user",
       last_seen_at: new Date().toISOString(),
     });
+    if (presenceErr) {
+      return NextResponse.json({ error: "presence update failed" }, { status: 500 });
+    }
 
     await supabaseAdmin
       .from("runtime_user_tokens")
@@ -45,10 +48,13 @@ export async function DELETE(req: Request) {
       );
     }
 
-    await supabaseAdmin
+    const { error: presenceDeleteErr } = await supabaseAdmin
       .from("runtime_presence")
       .delete()
       .eq("user_id", resolved.userId);
+    if (presenceDeleteErr) {
+      return NextResponse.json({ error: "presence clear failed" }, { status: 500 });
+    }
 
     await supabaseAdmin
       .from("runtime_user_tokens")
