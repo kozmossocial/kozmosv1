@@ -7,7 +7,7 @@
  * - shared feed poll loop
  * - Axy reply generation
  * - post back to shared
- * - Axy ops loop (snapshot, keep-in-touch, hush chat, direct chats)
+ * - Axy ops loop (snapshot, keep-in-touch, hush chat, direct chats, build helper)
  */
 
 function parseArgs(argv) {
@@ -57,6 +57,10 @@ function buildTriggerRegex(trigger, botUsername) {
   }
   const escaped = botUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|\\s)(@?${escaped}|axy)(\\s|$)`, "i");
+}
+
+function normalizeBuildPath(input) {
+  return String(input || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
 }
 
 async function requestJson(url, init = {}) {
@@ -159,6 +163,12 @@ function formatReply(input) {
     .slice(0, 420);
 }
 
+function formatBuildReply(input) {
+  return String(input || "...")
+    .trim()
+    .slice(0, 6000);
+}
+
 function toBool(value, fallback) {
   if (value === undefined || value === null || value === "") return fallback;
   const normalized = String(value).trim().toLowerCase();
@@ -230,6 +240,16 @@ async function main() {
   );
   const dmTriggerRegexRaw =
     args["dm-trigger-regex"] || process.env.KOZMOS_DM_TRIGGER_REGEX || "";
+  const autoBuild = toBool(args["auto-build"] ?? process.env.KOZMOS_AUTO_BUILD, false);
+  const buildSpaceId = String(
+    args["build-space-id"] || process.env.KOZMOS_BUILD_SPACE_ID || ""
+  ).trim();
+  const buildRequestPath = normalizeBuildPath(
+    args["build-request-path"] || process.env.KOZMOS_BUILD_REQUEST_PATH || "axy.request.md"
+  );
+  const buildOutputPath = normalizeBuildPath(
+    args["build-output-path"] || process.env.KOZMOS_BUILD_OUTPUT_PATH || "axy.reply.md"
+  );
 
   let token = typeof runtimeTokenInput === "string" ? runtimeTokenInput.trim() : "";
   let user = null;
@@ -252,6 +272,7 @@ async function main() {
   const handledHushRequest = new Set();
   const handledHushMessage = new Set();
   const handledDmMessage = new Set();
+  const handledBuildRequest = new Map();
   let stopping = false;
   let opsEnabled = true;
   let lastOpsAt = 0;
@@ -265,8 +286,13 @@ async function main() {
     `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
   );
   console.log(
-    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll}`
+    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild}`
   );
+  if (autoBuild) {
+    console.log(
+      `[${now()}] build helper request=${buildRequestPath} output=${buildOutputPath}${buildSpaceId ? ` space=${buildSpaceId}` : ""}`
+    );
+  }
 
   const heartbeat = setInterval(async () => {
     try {
@@ -504,6 +530,98 @@ async function main() {
               content: reply,
             });
             console.log(`[${now()}] dm replied to ${senderLabel}`);
+          }
+        }
+
+        if (autoBuild) {
+          let targetSpaces = [];
+
+          if (buildSpaceId) {
+            targetSpaces = [buildSpaceId];
+          } else {
+            const spacesRes = await callAxyOps(baseUrl, token, "build.spaces.list");
+            targetSpaces = (Array.isArray(spacesRes?.data) ? spacesRes.data : [])
+              .filter((space) => space?.can_edit === true && space?.id)
+              .map((space) => String(space.id));
+          }
+
+          for (const spaceId of targetSpaces) {
+            try {
+              const snapshotRes = await callAxyOps(baseUrl, token, "build.space.snapshot", {
+                spaceId,
+              });
+              const snapshot = snapshotRes?.data || {};
+              const space = snapshot?.space || null;
+              const files = Array.isArray(snapshot?.files) ? snapshot.files : [];
+              if (!space?.id) continue;
+
+              const requestFile = files.find(
+                (file) => normalizeBuildPath(file?.path) === buildRequestPath
+              );
+              if (!requestFile) continue;
+
+              const requestContent = String(requestFile?.content || "").trim();
+              if (!requestContent) continue;
+
+              const signature = `${String(requestFile?.updated_at || "")}:${requestContent}`;
+              const previous = handledBuildRequest.get(space.id);
+              if (previous === signature) continue;
+              handledBuildRequest.set(space.id, signature);
+              if (handledBuildRequest.size > 160) {
+                const firstKey = handledBuildRequest.keys().next().value;
+                if (firstKey) handledBuildRequest.delete(firstKey);
+              }
+
+              const fileList = files
+                .slice(0, 20)
+                .map((file) => `- ${String(file?.path || "unknown")} (${String(file?.language || "text")})`)
+                .join("\n");
+
+              const prompt = [
+                `You are helping in user-build space "${String(space.title || "subspace")}".`,
+                `Space language preference: ${String(space.language_pref || "auto")}.`,
+                `Space description: ${String(space.description || "-")}.`,
+                `Available files:\n${fileList || "- no files"}`,
+                `Request from ${buildRequestPath}:`,
+                requestContent,
+                "Return concise practical guidance with concrete code when needed.",
+              ].join("\n\n");
+
+              const raw = await askAxy(baseUrl, prompt);
+              const reply = formatBuildReply(raw);
+              if (!reply) continue;
+
+              const content = [
+                `# Axy Build Reply`,
+                ``,
+                `Generated: ${new Date().toISOString()}`,
+                `Source: \`${buildRequestPath}\``,
+                ``,
+                `## Request`,
+                requestContent.slice(0, 4000),
+                ``,
+                `## Reply`,
+                reply,
+                ``,
+              ].join("\n");
+
+              await callAxyOps(baseUrl, token, "build.files.save", {
+                spaceId: String(space.id),
+                path: buildOutputPath,
+                language: "markdown",
+                content,
+              });
+              console.log(
+                `[${now()}] build helper replied space=${String(space.id)} file=${buildOutputPath}`
+              );
+            } catch (buildErr) {
+              const buildMsg =
+                buildErr?.body?.error || buildErr.message || "build helper failed";
+              if (buildErr?.status === 403 || buildErr?.status === 404) {
+                continue;
+              }
+              console.log(`[${now()}] build helper fail: ${buildMsg}`);
+            }
           }
         }
       } catch (err) {

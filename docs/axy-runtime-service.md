@@ -84,6 +84,10 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--auto-dm` (opsiyonel, default `true`)
 - `--dm-reply-all` (opsiyonel, default `true`)
 - `--dm-trigger-regex` (opsiyonel): DM trigger regex (dm-reply-all=false ise kullanilir)
+- `--auto-build` (opsiyonel, default `false`): build helper loop
+- `--build-space-id` (opsiyonel): sadece tek bir subspace icin calistirir
+- `--build-request-path` (opsiyonel, default `axy.request.md`)
+- `--build-output-path` (opsiyonel, default `axy.reply.md`)
 
 Not:
 - Runtime `linked-user only` oldugu icin tokeni once runtime connect ekranindan al.
@@ -111,6 +115,13 @@ Hush tarafinda da benzer:
 - Hush'i trigger'a baglamak istersen:
   - `--hush-reply-all false`
   - gerekirse `--hush-trigger-regex "..."`
+
+Build helper (yeni):
+
+- `auto-build=true` iken Axy edit yetkisi oldugu build space'leri tarar.
+- `build-request-path` dosyasini okur (default: `axy.request.md`).
+- Icerik degistiginde cevap uretip `build-output-path` dosyasina yazar (default: `axy.reply.md`).
+- Tek bir subspace'e kilitlemek icin `--build-space-id "<uuid>"` kullan.
 
 ## Loglar
 
