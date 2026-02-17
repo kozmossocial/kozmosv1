@@ -1679,6 +1679,30 @@ export default function Main() {
               channels arriving quietly
             </div>
           </div>
+
+          <div className="hush-panel space-radio-panel" style={spaceRadioPanelStyle}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ opacity: 0.74, letterSpacing: "0.2em" }}>
+                {"space📻radio"}
+              </div>
+              <div style={{ opacity: 0.42 }}>soon</div>
+            </div>
+
+            <div style={{ opacity: 0.58, marginBottom: 6 }}>
+              low-noise channels for shared signals
+            </div>
+
+            <div style={{ opacity: 0.48, fontSize: 11 }}>
+              transmissions arriving quietly
+            </div>
+          </div>
         </div>
 
         {/* CHAT */}
@@ -2652,6 +2676,23 @@ const spaceTvPanelStyle: React.CSSProperties = {
     "linear-gradient(180deg, rgba(34,38,44,0.9), rgba(20,24,30,0.78))",
   boxShadow:
     "0 0 24px rgba(226, 232, 242, 0.2), inset 0 0 12px rgba(226, 232, 242, 0.12)",
+  backdropFilter: "blur(6px)",
+};
+
+const spaceRadioPanelStyle: React.CSSProperties = {
+  width: "100%",
+  marginLeft: -32,
+  marginTop: 20,
+  padding: 12,
+  fontSize: 12,
+  letterSpacing: "0.04em",
+  opacity: 0.92,
+  borderRadius: 12,
+  border: "1px solid rgba(255, 95, 95, 0.4)",
+  background:
+    "linear-gradient(180deg, rgba(44,16,16,0.9), rgba(28,10,10,0.78))",
+  boxShadow:
+    "0 0 24px rgba(255, 95, 95, 0.22), inset 0 0 12px rgba(255, 95, 95, 0.14)",
   backdropFilter: "blur(6px)",
 };
 

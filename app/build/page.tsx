@@ -514,13 +514,20 @@ export default function BuildPage() {
 
   return (
     <main
+      className="build-page-root"
       style={{
         minHeight: "100vh",
-        background: "#0b0b0b",
+        background: "#060a07",
         color: "#eaeaea",
         padding: "18px 18px 28px",
       }}
     >
+      <div className="build-page-ambient" aria-hidden="true">
+        <div className="build-page-grid" />
+        <div className="build-page-beam" />
+        <div className="build-page-scanline" />
+      </div>
+      <div style={{ position: "relative", zIndex: 2 }}>
       <div
         style={{
           display: "flex",
@@ -571,9 +578,9 @@ export default function BuildPage() {
               opacity: 0.84,
               padding: "10px 14px",
               borderRadius: 10,
-              background: "rgba(8,8,8,0.72)",
-              boxShadow: "0 0 14px rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.18)",
+              background: "rgba(7,17,11,0.8)",
+              boxShadow: "0 0 22px rgba(99,255,148,0.14)",
+              border: "1px solid rgba(116,255,160,0.3)",
             }}
           >
             not available for mobile device use.
@@ -583,19 +590,20 @@ export default function BuildPage() {
         <section
           style={{
             marginTop: 100,
-            border: "1px solid rgba(255,255,255,0.16)",
+            border: "1px solid rgba(108,255,150,0.24)",
             borderRadius: 12,
-            background: "rgba(255,255,255,0.02)",
+            background: "rgba(5,14,9,0.72)",
             padding: 14,
+            boxShadow: "0 0 40px rgba(70,255,130,0.08)",
           }}
         >
           <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 12 }}>
             <aside
               style={{
-                border: "1px solid rgba(255,230,170,0.22)",
+                border: "1px solid rgba(107,255,142,0.26)",
                 borderRadius: 10,
                 padding: 10,
-                background: "linear-gradient(180deg, rgba(28,22,12,0.9), rgba(16,12,8,0.8))",
+                background: "linear-gradient(180deg, rgba(8,24,15,0.92), rgba(6,15,10,0.82))",
               }}
             >
               <div style={{ fontSize: 12, opacity: 0.74, letterSpacing: "0.1em" }}>
@@ -608,8 +616,8 @@ export default function BuildPage() {
                   placeholder="new subspace title"
                   style={{
                     flex: 1,
-                    border: "1px solid rgba(255,255,255,0.22)",
-                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(125,255,160,0.24)",
+                    background: "rgba(10,28,16,0.56)",
                     color: "#eaeaea",
                     borderRadius: 8,
                     padding: "8px 10px",
@@ -620,10 +628,10 @@ export default function BuildPage() {
                   onClick={createSubspace}
                   disabled={creatingSpace}
                   style={{
-                    border: "1px solid rgba(255,230,170,0.45)",
+                    border: "1px solid rgba(107,255,142,0.45)",
                     borderRadius: 8,
-                    background: "rgba(255,230,170,0.12)",
-                    color: "#f5e4b8",
+                    background: "rgba(107,255,142,0.14)",
+                    color: "#b8ffd1",
                     padding: "8px 10px",
                     cursor: creatingSpace ? "default" : "pointer",
                     fontSize: 12,
@@ -666,8 +674,8 @@ export default function BuildPage() {
                         borderRadius: 8,
                         background:
                           selectedSpaceId === space.id
-                            ? "rgba(255,230,170,0.2)"
-                            : "rgba(255,255,255,0.04)",
+                            ? "rgba(107,255,142,0.2)"
+                            : "rgba(10,28,16,0.5)",
                         color: "#eaeaea",
                         padding: "8px 10px",
                         cursor: "pointer",
@@ -706,8 +714,8 @@ export default function BuildPage() {
                   placeholder="src/main.ts"
                   style={{
                     flex: 1,
-                    border: "1px solid rgba(255,255,255,0.22)",
-                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(125,255,160,0.24)",
+                    background: "rgba(10,28,16,0.56)",
                     color: "#eaeaea",
                     borderRadius: 8,
                     padding: "8px 10px",
@@ -718,10 +726,10 @@ export default function BuildPage() {
                   onClick={createFile}
                   disabled={creatingFile}
                   style={{
-                    border: "1px solid rgba(255,230,170,0.45)",
+                    border: "1px solid rgba(107,255,142,0.45)",
                     borderRadius: 8,
-                    background: "rgba(255,230,170,0.12)",
-                    color: "#f5e4b8",
+                    background: "rgba(107,255,142,0.14)",
+                    color: "#b8ffd1",
                     padding: "8px 10px",
                     cursor: creatingFile ? "default" : "pointer",
                     fontSize: 12,
@@ -764,8 +772,8 @@ export default function BuildPage() {
                         borderRadius: 8,
                         background:
                           selectedFilePath === file.path
-                            ? "rgba(255,230,170,0.2)"
-                            : "rgba(255,255,255,0.04)",
+                            ? "rgba(107,255,142,0.2)"
+                            : "rgba(10,28,16,0.5)",
                         color: "#eaeaea",
                         padding: "7px 9px",
                         cursor: "pointer",
@@ -781,10 +789,10 @@ export default function BuildPage() {
 
             <section
               style={{
-                border: "1px solid rgba(255,255,255,0.16)",
+                border: "1px solid rgba(107,255,142,0.24)",
                 borderRadius: 10,
                 padding: 12,
-                background: "rgba(255,255,255,0.02)",
+                background: "rgba(5,12,8,0.62)",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
@@ -796,8 +804,8 @@ export default function BuildPage() {
                     value={editorLanguage}
                     onChange={(e) => setEditorLanguage(e.target.value)}
                     style={{
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(125,255,160,0.22)",
+                      background: "rgba(10,28,16,0.48)",
                       color: "#eaeaea",
                       borderRadius: 8,
                       padding: "6px 8px",
@@ -814,10 +822,10 @@ export default function BuildPage() {
                     onClick={saveFile}
                     disabled={savingFile}
                     style={{
-                      border: "1px solid rgba(255,230,170,0.45)",
+                      border: "1px solid rgba(107,255,142,0.45)",
                       borderRadius: 8,
-                      background: "rgba(255,230,170,0.12)",
-                      color: "#f5e4b8",
+                      background: "rgba(107,255,142,0.14)",
+                      color: "#b8ffd1",
                       padding: "7px 10px",
                       cursor: savingFile ? "default" : "pointer",
                       fontSize: 12,
@@ -838,9 +846,9 @@ export default function BuildPage() {
                   minHeight: 460,
                   marginTop: 10,
                   borderRadius: 10,
-                  border: "1px solid rgba(255,255,255,0.18)",
-                  background: "rgba(0,0,0,0.28)",
-                  color: "#eaeaea",
+                  border: "1px solid rgba(107,255,142,0.24)",
+                  background: "rgba(2,9,6,0.84)",
+                  color: "#d8ffe4",
                   padding: 12,
                   fontSize: 13,
                   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -863,10 +871,10 @@ export default function BuildPage() {
               <div
                 style={{
                   marginTop: 14,
-                  border: "1px solid rgba(255,255,255,0.16)",
+                  border: "1px solid rgba(107,255,142,0.24)",
                   borderRadius: 10,
                   overflow: "hidden",
-                  background: "rgba(0,0,0,0.26)",
+                  background: "rgba(4,12,8,0.65)",
                 }}
               >
                 <div
@@ -887,10 +895,10 @@ export default function BuildPage() {
                     <button
                       onClick={() => setPreviewReloadKey((prev) => prev + 1)}
                       style={{
-                        border: "1px solid rgba(255,255,255,0.24)",
+                        border: "1px solid rgba(107,255,142,0.32)",
                         borderRadius: 8,
                         background: "transparent",
-                        color: "#eaeaea",
+                        color: "#d8ffe4",
                         padding: "4px 7px",
                         fontSize: 10,
                         cursor: "pointer",
@@ -901,10 +909,10 @@ export default function BuildPage() {
                     <button
                       onClick={() => setPreviewAutoRefresh((prev) => !prev)}
                       style={{
-                        border: "1px solid rgba(255,255,255,0.24)",
+                        border: "1px solid rgba(107,255,142,0.32)",
                         borderRadius: 8,
                         background: "transparent",
-                        color: "#eaeaea",
+                        color: "#d8ffe4",
                         padding: "4px 7px",
                         fontSize: 10,
                         cursor: "pointer",
@@ -915,10 +923,10 @@ export default function BuildPage() {
                     <button
                       onClick={openPreviewInNewTab}
                       style={{
-                        border: "1px solid rgba(255,255,255,0.24)",
+                        border: "1px solid rgba(107,255,142,0.32)",
                         borderRadius: 8,
                         background: "transparent",
-                        color: "#eaeaea",
+                        color: "#d8ffe4",
                         padding: "4px 7px",
                         fontSize: 10,
                         cursor: "pointer",
@@ -950,7 +958,7 @@ export default function BuildPage() {
                 style={{
                   marginTop: 8,
                   border: "1px solid rgba(107,255,142,0.2)",
-                  background: "rgba(8,20,12,0.5)",
+                  background: "rgba(4,16,9,0.68)",
                   borderRadius: 10,
                   padding: "10px 12px",
                   maxHeight: 190,
@@ -988,8 +996,8 @@ export default function BuildPage() {
                   placeholder="ask Axy to build with you..."
                   style={{
                     flex: 1,
-                    border: "1px solid rgba(255,255,255,0.2)",
-                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(125,255,160,0.22)",
+                    background: "rgba(10,28,16,0.48)",
                     color: "#eaeaea",
                     padding: "9px 10px",
                     borderRadius: 8,
@@ -1001,7 +1009,7 @@ export default function BuildPage() {
                   disabled={axyLoading}
                   style={{
                     border: "1px solid rgba(107,255,142,0.42)",
-                    background: "rgba(107,255,142,0.12)",
+                    background: "rgba(107,255,142,0.18)",
                     color: "#b8ffd1",
                     borderRadius: 8,
                     padding: "9px 12px",
@@ -1016,6 +1024,7 @@ export default function BuildPage() {
           </div>
         </section>
       )}
+      </div>
     </main>
   );
 }

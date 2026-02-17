@@ -654,6 +654,60 @@ body {
   align-items: start;
 }
 
+.build-page-root {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.build-page-ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.44;
+  mix-blend-mode: screen;
+}
+
+.build-page-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(78, 255, 133, 0.04) 0,
+      rgba(78, 255, 133, 0.04) 1px,
+      transparent 1px,
+      transparent 62px
+    ),
+    linear-gradient(180deg, rgba(11, 43, 24, 0.22) 0%, rgba(3, 12, 7, 0.04) 100%);
+  transform: translateZ(0);
+  animation: buildMatrixGridDrift 18s linear infinite;
+}
+
+.build-page-beam {
+  position: absolute;
+  inset: -18%;
+  background:
+    radial-gradient(circle at 17% 26%, rgba(102, 255, 146, 0.2), transparent 42%),
+    radial-gradient(circle at 84% 30%, rgba(68, 220, 120, 0.16), transparent 45%),
+    radial-gradient(circle at 54% 82%, rgba(94, 255, 165, 0.15), transparent 46%);
+  filter: blur(22px);
+  animation: buildMatrixBeamShift 13s ease-in-out infinite;
+}
+
+.build-page-scanline {
+  position: absolute;
+  inset: -30% 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(102, 255, 146, 0.12) 46%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  animation: buildMatrixScanline 7.6s linear infinite;
+}
+
 @keyframes runtimePanelShimmer {
   0% {
     transform: rotate(0deg) scale(1);
@@ -696,6 +750,44 @@ body {
   }
 }
 
+@keyframes buildMatrixGridDrift {
+  0% {
+    background-position: 0 0, 0 0;
+  }
+  100% {
+    background-position: 62px 0, 0 0;
+  }
+}
+
+@keyframes buildMatrixBeamShift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.52;
+  }
+  50% {
+    transform: translate3d(0, -1.8%, 0) scale(1.04);
+    opacity: 0.68;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.52;
+  }
+}
+
+@keyframes buildMatrixScanline {
+  0% {
+    transform: translateY(-58%);
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.16;
+  }
+  100% {
+    transform: translateY(58%);
+    opacity: 0.05;
+  }
+}
+
 /* Main layout responsive */
 @media (max-width: 900px) {
   .home-screen-1 {
@@ -712,6 +804,10 @@ body {
 
   .build-shell {
     grid-template-columns: 1fr !important;
+  }
+
+  .build-page-ambient {
+    opacity: 0.36;
   }
 
   .home-hero-content {
@@ -805,11 +901,13 @@ body {
   }
 
   .hush-panel,
-  .space-tv-panel {
+  .space-tv-panel,
+  .space-radio-panel {
     margin-left: 0 !important;
   }
 
-  .space-tv-panel {
+  .space-tv-panel,
+  .space-radio-panel {
     margin-top: 20px !important;
   }
 
