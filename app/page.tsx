@@ -52,6 +52,24 @@ function buildMatrixStreamSingle(seed: number, length = 42) {
   return lines.join("\n");
 }
 
+function pickMatrixBaseChar(seed: number) {
+  return MATRIX_BASE_CHARS[seed % MATRIX_BASE_CHARS.length];
+}
+
+function buildMatrixStreamQuad(seed: number, length = 42) {
+  let s = seed;
+  const lines: string[] = [];
+  for (let i = 0; i < length; i += 1) {
+    let line = "";
+    for (let c = 0; c < 4; c += 1) {
+      s = (s * 9301 + 49297) % 233280;
+      line += pickMatrixBaseChar(s);
+    }
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
 export default function Home() {
   const router = useRouter();
   const screen3Ref = useRef<HTMLDivElement | null>(null);
@@ -90,54 +108,84 @@ export default function Home() {
     const sessionOffset = lowPerfMotion ? 77157 : 77123;
     const doubleCount = lowPerfMotion ? 34 : 62;
     const singleCount = lowPerfMotion ? 26 : 58;
+    const quadCount = lowPerfMotion ? 0 : 20;
+    const globalFlowSlowdown = lowPerfMotion ? 1.14 : 1.22;
     const rand = (rng: () => number, min: number, max: number) =>
       min + rng() * (max - min);
     const randInt = (rng: () => number, min: number, max: number) =>
       Math.floor(rand(rng, min, max + 1));
 
-    const makeColumn = (i: number, kind: "double" | "single") => {
+    const makeColumn = (i: number, kind: "double" | "single" | "quad") => {
       const rng = createSeededRng(
-        4200 + sessionOffset + i * 97 + (kind === "single" ? 31 : 0)
+        4200 +
+          sessionOffset +
+          i * 97 +
+          (kind === "single" ? 31 : kind === "quad" ? 53 : 0)
       );
       const slowColumn = rng() > (lowPerfMotion ? 0.54 : 0.68);
-      const extraStreams = rng() > (lowPerfMotion ? 0.92 : 0.72) ? 1 : 0;
+      const extraStreams = rng() > (lowPerfMotion ? 0.95 : kind === "quad" ? 0.9 : 0.72) ? 1 : 0;
       const baseCount =
         kind === "double"
           ? lowPerfMotion
             ? 2
             : 3
-          : lowPerfMotion
+          : kind === "single"
+            ? lowPerfMotion
+              ? 1
+              : 2
+            : lowPerfMotion
             ? 1
             : 2;
       const streamCount = baseCount + extraStreams;
-      const opacityBoost = kind === "single" ? 0.72 : 1;
+      const opacityBoost = kind === "single" ? 0.72 : kind === "quad" ? 0.64 : 1;
       const streams = Array.from({ length: streamCount }, (_, idx) => {
-        const isLong = rng() > (kind === "double" ? 0.72 : 0.62);
+        const isLong = rng() > (kind === "double" ? 0.72 : kind === "quad" ? 0.7 : 0.62);
         const length = isLong
           ? randInt(
               rng,
-              kind === "double" ? (lowPerfMotion ? 86 : 120) : lowPerfMotion ? 116 : 170,
-              lowPerfMotion ? 168 : 230
+              kind === "double"
+                ? lowPerfMotion
+                  ? 86
+                  : 120
+                : kind === "single"
+                  ? lowPerfMotion
+                    ? 116
+                    : 170
+                  : 96,
+              kind === "quad" ? 156 : lowPerfMotion ? 168 : 230
             )
           : randInt(
               rng,
-              kind === "double" ? (lowPerfMotion ? 54 : 72) : lowPerfMotion ? 72 : 108,
-              lowPerfMotion ? 118 : 160
+              kind === "double"
+                ? lowPerfMotion
+                  ? 54
+                  : 72
+                : kind === "single"
+                  ? lowPerfMotion
+                    ? 72
+                    : 108
+                  : 62,
+              kind === "quad" ? 118 : lowPerfMotion ? 118 : 160
             );
         const baseDuration = lowPerfMotion
           ? rand(rng, 8.2, 14.4) + (isLong ? rand(rng, 1.1, 2.1) : 0)
-          : rand(rng, 6.6, 12.2) + (isLong ? rand(rng, 1.2, 2.8) : 0);
+          : kind === "quad"
+            ? rand(rng, 7.8, 13.8) + (isLong ? rand(rng, 1.0, 2.2) : 0)
+            : rand(rng, 6.6, 12.2) + (isLong ? rand(rng, 1.2, 2.8) : 0);
         const slowFactor = slowColumn ? rand(rng, 1.08, 1.22) : 1;
         return {
           key: `col-${kind}-${i}-s-${idx}`,
           text:
             kind === "double"
               ? buildMatrixStream(i * 13 + idx * 77 + 5, length)
-              : buildMatrixStreamSingle(i * 19 + idx * 61 + 11, length),
-          duration: baseDuration * slowFactor,
+              : kind === "single"
+                ? buildMatrixStreamSingle(i * 19 + idx * 61 + 11, length)
+                : buildMatrixStreamQuad(i * 23 + idx * 71 + 17, length),
+          duration: baseDuration * slowFactor * globalFlowSlowdown,
           delay: -rand(rng, 0.1, 6.8),
           opacity: Math.max(0.38, (0.96 - idx * 0.11) * opacityBoost),
           blur: idx * 0.04 + rand(rng, 0, 0.08),
+          compact: kind === "quad",
         };
       });
       return { key: `col-${kind}-${i}`, streams };
@@ -149,8 +197,11 @@ export default function Home() {
     const singles = Array.from({ length: singleCount }, (_, i) =>
       makeColumn(i, "single")
     );
+    const quads = Array.from({ length: quadCount }, (_, i) =>
+      makeColumn(i, "quad")
+    );
 
-    const total = doubleCount + singleCount;
+    const total = doubleCount + singleCount + quadCount;
     const mixed: {
       key: string;
       streams: {
@@ -160,25 +211,36 @@ export default function Home() {
         delay: number;
         opacity: number;
         blur: number;
+        compact: boolean;
       }[];
       glowTail: string | null;
       glowColumn: boolean;
     }[] = [];
     let di = 0;
     let si = 0;
+    let qi = 0;
     const mixRng = createSeededRng(9100 + sessionOffset);
     for (let idx = 0; idx < total; idx += 1) {
       if (di >= doubleCount) {
-        mixed.push({ ...singles[si++], glowTail: null, glowColumn: false });
+        if (si < singleCount) {
+          mixed.push({ ...singles[si++], glowTail: null, glowColumn: false });
+        } else {
+          mixed.push({ ...quads[qi++], glowTail: null, glowColumn: false });
+        }
         continue;
       }
-      if (si >= singleCount) {
+      if (si >= singleCount && qi >= quadCount) {
         mixed.push({ ...doubles[di++], glowTail: null, glowColumn: false });
         continue;
       }
 
-      const useSingle = mixRng() > 0.5;
-      if (useSingle) {
+      const roll = mixRng();
+      const canSingle = si < singleCount;
+      const canQuad = qi < quadCount;
+
+      if (canQuad && roll < 0.18) {
+        mixed.push({ ...quads[qi++], glowTail: null, glowColumn: false });
+      } else if (canSingle && roll > 0.48) {
         mixed.push({ ...singles[si++], glowTail: null, glowColumn: false });
       } else {
         mixed.push({ ...doubles[di++], glowTail: null, glowColumn: false });
@@ -1098,6 +1160,8 @@ export default function Home() {
                       "--delay": `${stream.delay}s`,
                       opacity: stream.opacity,
                       filter: `blur(${stream.blur}px)`,
+                      fontSize: stream.compact ? "0.68em" : undefined,
+                      letterSpacing: stream.compact ? "-0.08em" : undefined,
                     } as React.CSSProperties
                   }
                 >
