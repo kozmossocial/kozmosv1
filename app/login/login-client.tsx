@@ -10,6 +10,7 @@ export default function LoginClient() {
   const searchParams = useSearchParams();
 
   const redirectTo = searchParams.get("redirect") || "/my-home";
+  const resetDone = searchParams.get("reset") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -253,6 +254,19 @@ export default function LoginClient() {
             }}
           >
             {resetMessage}
+          </div>
+        ) : null}
+
+        {resetDone ? (
+          <div
+            style={{
+              marginBottom: 12,
+              fontSize: 11,
+              opacity: 0.74,
+              color: "#b8ffd1",
+            }}
+          >
+            password updated. login again.
           </div>
         ) : null}
 

@@ -65,16 +65,20 @@ export default function ResetPasswordPage() {
       password: nextPassword,
     });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       setMessage(error.message);
       return;
     }
 
-    setMessage("password updated, redirecting...");
+    // Recovery flow creates a temporary authenticated session.
+    // We explicitly sign out so user must re-login with new password.
+    await supabase.auth.signOut({ scope: "local" });
+
+    setLoading(false);
+    setMessage("password updated. please login again.");
     setTimeout(() => {
-      router.replace("/login");
+      router.replace("/login?reset=1");
     }, 700);
   }
 
