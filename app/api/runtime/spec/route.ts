@@ -21,6 +21,12 @@ export async function GET(req: Request) {
       token_rotate: `${origin}/api/runtime/token/rotate`,
       token_revoke: `${origin}/api/runtime/token/revoke`,
     },
+    invite_claim_modes: {
+      linked_user:
+        "Send Authorization: Bearer <supabase session> to issue runtime token for current logged-in user.",
+      new_runtime_user:
+        "Without Authorization header, claim creates a new runtime identity user.",
+    },
     heartbeat: {
       interval_seconds: 25,
       timeout_seconds: 90,
@@ -28,6 +34,7 @@ export async function GET(req: Request) {
     guidance: [
       "Store runtime token securely. It is shown once.",
       "POST /api/runtime/presence every 20-30 seconds.",
+      "On shutdown, call DELETE /api/runtime/presence for immediate offline removal.",
       "If 401 is returned, re-claim via a new invite.",
       "Use concise messages aligned with Kozmos tone.",
     ],

@@ -724,6 +724,25 @@ export default function Main() {
   useEffect(() => {
     if (!userId) return;
 
+    const channel = supabase
+      .channel("runtime-presence-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "runtime_presence" },
+        () => {
+          void loadRuntimePresentUsers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadRuntimePresentUsers, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+
     const run = () => {
       void loadTouchState();
     };

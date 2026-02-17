@@ -111,6 +111,29 @@ async function postPresence(baseUrl, token) {
   });
 }
 
+async function clearPresence(baseUrl, token) {
+  return requestJson(`${baseUrl}/api/runtime/presence`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+async function revokeRuntimeUser(baseUrl, bootstrapKey, username) {
+  return requestJson(`${baseUrl}/api/runtime/token/revoke`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-kozmos-bootstrap-key": bootstrapKey,
+    },
+    body: JSON.stringify({
+      revokeAllForUser: true,
+      username,
+    }),
+  });
+}
+
 async function readFeed(baseUrl, token, cursor, limit) {
   const q = new URLSearchParams();
   if (cursor) q.set("after", cursor);
@@ -161,6 +184,7 @@ async function main() {
     throw new Error('this service is fixed to username "Axy"');
   }
   const label = String(args.label || process.env.KOZMOS_BOT_LABEL || "axy-managed");
+  const runtimeTokenInput = args.token || process.env.KOZMOS_RUNTIME_TOKEN;
   const bootstrapKey = args["bootstrap-key"] || process.env.RUNTIME_BOOTSTRAP_KEY;
   const inviteCode = args["invite-code"] || process.env.KOZMOS_INVITE_CODE;
   const heartbeatSeconds = Math.max(10, toInt(args["heartbeat-seconds"] || process.env.KOZMOS_HEARTBEAT_SECONDS, 25));
@@ -170,33 +194,47 @@ async function main() {
   const replyAll = String(args["reply-all"] || process.env.KOZMOS_REPLY_ALL || "false").toLowerCase() === "true";
   const triggerRegexRaw = args["trigger-regex"] || process.env.KOZMOS_TRIGGER_REGEX || "";
 
-  if (!inviteCode && !bootstrapKey) {
-    throw new Error("provide --invite-code or --bootstrap-key");
+  let token = typeof runtimeTokenInput === "string" ? runtimeTokenInput.trim() : "";
+  let user = null;
+  let botUsername = username;
+
+  if (!token) {
+    if (!inviteCode && !bootstrapKey) {
+      throw new Error("provide --token or (--invite-code / --bootstrap-key)");
+    }
+
+    console.log(`[${now()}] claiming runtime identity...`);
+    const claim = await claimIdentity(baseUrl, {
+      inviteCode,
+      bootstrapKey,
+      username,
+      label,
+    });
+
+    token = claim?.token;
+    user = claim?.user || null;
+    if (!token) {
+      throw new Error("claim returned invalid payload");
+    }
+
+    botUsername = String(user?.username || username);
+    if (botUsername !== "Axy") {
+      throw new Error(`claimed username is "${botUsername}", expected "Axy"`);
+    }
+  } else {
+    console.log(`[${now()}] using provided runtime token`);
   }
 
-  console.log(`[${now()}] claiming runtime identity...`);
-  const claim = await claimIdentity(baseUrl, {
-    inviteCode,
-    bootstrapKey,
-    username,
-    label,
-  });
-
-  const token = claim?.token;
-  const user = claim?.user;
-  if (!token || !user?.id) {
-    throw new Error("claim returned invalid payload");
-  }
-
-  const botUsername = String(user.username || username);
-  if (botUsername !== "Axy") {
-    throw new Error(`claimed username is "${botUsername}", expected "Axy"`);
-  }
   const triggerRegex = buildTriggerRegex(triggerRegexRaw, botUsername);
   let cursor = new Date(Date.now() - lookbackSeconds * 1000).toISOString();
   const seen = new Set();
+  let stopping = false;
 
-  console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
+  if (user?.id) {
+    console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
+  } else {
+    console.log(`[${now()}] running as ${botUsername}`);
+  }
   console.log(`[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`);
 
   const heartbeat = setInterval(async () => {
@@ -211,7 +249,39 @@ async function main() {
 
   await postPresence(baseUrl, token).catch(() => null);
 
-  while (true) {
+  const shutdown = async (signal) => {
+    if (stopping) return;
+    stopping = true;
+    clearInterval(heartbeat);
+    console.log(`[${now()}] ${signal} received, clearing presence...`);
+    try {
+      await clearPresence(baseUrl, token);
+      console.log(`[${now()}] presence cleared`);
+    } catch (err) {
+      const msg = err?.body?.error || err.message || "presence clear failed";
+      console.log(`[${now()}] presence clear fail: ${msg}`);
+      if (bootstrapKey) {
+        try {
+          await revokeRuntimeUser(baseUrl, bootstrapKey, botUsername);
+          console.log(`[${now()}] fallback revoke ok (presence should drop)`);
+        } catch (revokeErr) {
+          const revokeMsg =
+            revokeErr?.body?.error || revokeErr.message || "fallback revoke failed";
+          console.log(`[${now()}] fallback revoke fail: ${revokeMsg}`);
+        }
+      }
+    }
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
+
+  while (!stopping) {
     try {
       const feed = await readFeed(baseUrl, token, cursor, feedLimit);
       const rows = Array.isArray(feed?.messages) ? feed.messages : [];
@@ -227,7 +297,13 @@ async function main() {
           if (first) seen.delete(first);
         }
 
-        if (row.user_id === user.id) continue;
+        if (user?.id && row.user_id === user.id) continue;
+        if (
+          !user?.id &&
+          String(row.username || "").trim().toLowerCase() === botUsername.toLowerCase()
+        ) {
+          continue;
+        }
 
         const content = String(row.content || "").trim();
         if (!content) continue;
@@ -247,13 +323,14 @@ async function main() {
     } catch (err) {
       const msg = err?.body?.error || err.message || "feed loop error";
       console.log(`[${now()}] loop fail: ${msg}`);
-      if (err?.status === 401) {
-        console.log(`[${now()}] token unauthorized, exiting.`);
-        clearInterval(heartbeat);
-        process.exit(1);
-      }
+        if (err?.status === 401) {
+          console.log(`[${now()}] token unauthorized, exiting.`);
+          clearInterval(heartbeat);
+          process.exit(1);
+        }
     }
 
+    if (stopping) break;
     await sleep(pollSeconds * 1000);
   }
 }

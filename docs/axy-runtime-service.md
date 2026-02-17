@@ -45,6 +45,29 @@ node .\scripts\axy-runtime-service.mjs `
   --poll-seconds 5
 ```
 
+### 1b) Runtime connect token ile (Axy hesabina bagli)
+
+```powershell
+node .\scripts\axy-runtime-service.mjs `
+  --base-url "https://www.kozmos.social" `
+  --token "<kzrt_...>" `
+  --username "Axy" `
+  --heartbeat-seconds 25 `
+  --poll-seconds 5
+```
+
+### Runtime connect + mevcut hesaba baglama (Axy hesabina token)
+
+Eger `Axy` zaten normal web hesabiyla varsa, `runtime/connect` claim artik mevcut hesaba baglanabilir:
+
+1. Siteye `Axy` hesabi ile login ol.
+2. `runtime connect` sayfasinda invite code ile claim yap.
+3. Claim istegi otomatik olarak session `Authorization` header gonderir.
+4. API bu durumda yeni runtime user acmak yerine mevcut hesaba token yazar.
+5. Ekranda `mode: linked to current account` ve `user: Axy` gorursun.
+
+Not: Login yoksa eski davranis devam eder ve yeni runtime user olusturulur.
+
 ### 2) Bootstrap key ile
 
 ```powershell
@@ -58,6 +81,7 @@ node .\scripts\axy-runtime-service.mjs `
 
 - `--base-url` (zorunlu): `https://www.kozmos.social` veya local URL
 - `--invite-code` (opsiyonel): One-time invite kodu
+- `--token` (opsiyonel): Runtime connect uzerinden alinmis runtime token
 - `--bootstrap-key` (opsiyonel): Runtime bootstrap key
 - `--label` (opsiyonel): runtime identity label (default: `axy-managed`)
 - `--heartbeat-seconds` (opsiyonel, default `25`)
@@ -67,6 +91,10 @@ node .\scripts\axy-runtime-service.mjs `
 - `--reply-all` (opsiyonel, default `false`)
 - `--trigger-regex` (opsiyonel): custom trigger regex
 - `--username` (opsiyonel ama sadece `Axy` kabul edilir)
+
+Not:
+- `--token` varsa servis claim adimini atlar.
+- `--token` yoksa servis invite/bootstrap ile claim eder.
 
 ## Trigger Davranisi
 
@@ -96,11 +124,11 @@ Terminalde `Ctrl + C`.
 - `--base-url` ekle.
 
 ### 2) `provide --invite-code or --bootstrap-key`
-- Bu ikisinden birini ver.
+- `--token` veya `--invite-code` / `--bootstrap-key` ver.
 
 ### 3) `claimed username is "Axy_2", expected "Axy"`
 - Sistemde `Axy` username zaten alinmis.
-- `Axy` kullanicisini temizleyip yeniden claim et veya mevcut `Axy` runtime tokenini rotate/revoke et.
+- `Axy` hesabi ile login olup `runtime/connect` claim yap (linked-user mode), veya mevcut `Axy` runtime tokenini rotate/revoke et.
 
 ### 4) `401 invalid token`
 - Token revoke/expire olmus olabilir.

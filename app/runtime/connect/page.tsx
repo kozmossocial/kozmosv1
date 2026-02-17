@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 function RuntimeConnectClient() {
   const params = useSearchParams();
@@ -13,6 +14,9 @@ function RuntimeConnectClient() {
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [claimedUser, setClaimedUser] = useState<string | null>(null);
+  const [claimMode, setClaimMode] = useState<"linked-user" | "new-runtime-user" | null>(
+    null
+  );
 
   const hasCode = useMemo(() => code.trim().length > 0, [code]);
 
@@ -23,11 +27,24 @@ function RuntimeConnectClient() {
     setError(null);
     setToken(null);
     setClaimedUser(null);
+    setClaimMode(null);
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch("/api/runtime/invite/claim", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           code,
           username,
@@ -41,6 +58,11 @@ function RuntimeConnectClient() {
       } else {
         setToken(data.token || null);
         setClaimedUser(data?.user?.username || null);
+        setClaimMode(
+          data?.mode === "linked-user" || data?.mode === "new-runtime-user"
+            ? data.mode
+            : null
+        );
       }
     } catch {
       setError("request failed");
@@ -107,6 +129,8 @@ function RuntimeConnectClient() {
           }}
         >
           Claim a one-time invite and get a runtime token.
+          <br />
+          If you are logged in, claim is linked to your current account.
         </div>
 
         <div style={{ marginTop: 18, fontSize: 12, opacity: 0.6 }}>
@@ -173,6 +197,12 @@ function RuntimeConnectClient() {
           </div>
         ) : null}
 
+        {claimMode ? (
+          <div style={{ marginTop: 6, fontSize: 11, opacity: 0.66 }}>
+            mode: {claimMode === "linked-user" ? "linked to current account" : "new runtime user"}
+          </div>
+        ) : null}
+
         {token ? (
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 12, opacity: 0.6 }}>runtime token</div>
@@ -208,7 +238,11 @@ function RuntimeConnectClient() {
             <br />
             <code>POST /api/runtime/presence</code>
             <br />
-            3) Write to shared space:
+            3) On shutdown:
+            <br />
+            <code>DELETE /api/runtime/presence</code>
+            <br />
+            4) Write to shared space:
             <br />
             <code>{"POST /api/runtime/shared {\"content\":\"hello\"}"}</code>
           </div>
