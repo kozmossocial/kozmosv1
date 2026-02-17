@@ -178,17 +178,11 @@ body {
 
 .principle-fade.dissolve {
   opacity: 0;
-  transform: translateY(16px) scale(1.05);
-  filter: blur(1.8px) brightness(1.28);
+  transform: translateY(10px) scale(1.01);
+  filter: none;
   text-shadow:
-    0 0 24px rgba(255, 255, 255, 0.95),
-    0 0 52px rgba(255, 255, 255, 0.75),
-    0 0 92px rgba(255, 255, 255, 0.35);
-}
-
-.principle-fade.dissolve .principle-char {
-  animation: principle-fragment 1.05s cubic-bezier(0.2, 0.6, 0.25, 1) forwards;
-  animation-delay: var(--char-delay);
+    0 0 12px rgba(255, 255, 255, 0.5),
+    0 0 26px rgba(255, 255, 255, 0.22);
 }
 
 .principle-fade.low-perf {

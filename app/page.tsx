@@ -461,7 +461,7 @@ export default function Home() {
   function dissolvePrinciple() {
     if (!principle || principleDissolving) return;
     setPrincipleDissolving(true);
-    const dissolveMs = lowPerfMotion ? 420 : 1300;
+    const dissolveMs = lowPerfMotion ? 320 : 460;
     setTimeout(() => {
       setPrinciple(null);
       setPrincipleDissolving(false);
@@ -534,7 +534,7 @@ export default function Home() {
   const activePrincipleText = principle ? principles[principle] : "";
 
   function renderPrincipleText(text: string) {
-    if (lowPerfMotion) return text;
+    if (lowPerfMotion || principleDissolving) return text;
 
     let charIndex = 0;
 
@@ -1016,11 +1016,9 @@ export default function Home() {
         }}
       >
         <div
-          className={`matrix-rain${
-            matrixMotionActive && !(lowPerfMotion && principleDissolving)
-              ? ""
-              : " matrix-rain-paused"
-          }${lowPerfMotion ? " matrix-rain-low-perf" : ""}`}
+          className={`matrix-rain${matrixMotionActive ? "" : " matrix-rain-paused"}${
+            lowPerfMotion ? " matrix-rain-low-perf" : ""
+          }`}
           aria-hidden="true"
           style={
             {
