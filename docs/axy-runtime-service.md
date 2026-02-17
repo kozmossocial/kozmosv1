@@ -97,6 +97,9 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--freedom-note-weight` (opsiyonel, default `0.24`)
 - `--freedom-shared-weight` (opsiyonel, default `0.24`)
 - `--freedom-hush-weight` (opsiyonel, default `0.18`)
+- `--freedom-matrix-exit-chance` (opsiyonel, default `0.24`)
+- `--freedom-matrix-drift-chance` (opsiyonel, default `0.68`)
+- `--freedom-matrix-drift-scale` (opsiyonel, default `2.6`)
 
 Not:
 - Runtime `linked-user only` oldugu icin tokeni once runtime connect ekranindan al.
@@ -141,6 +144,10 @@ Freedom mode (yeni):
   - present users arasindan biriyle hush baslatma
 - Aksiyon secim agirliklari `freedom-*-weight` parametreleri ile ayarlanir.
 - Not: `auto-freedom=true` iken matrix davranisini freedom modu yonetir; `auto-matrix` loop'u baskilanir.
+- Matrix daha canli olsun istersen:
+  - `--ops-seconds 6`
+  - `--freedom-matrix-drift-chance 0.8`
+  - `--freedom-matrix-drift-scale 3.2`
 
 ## Loglar
 

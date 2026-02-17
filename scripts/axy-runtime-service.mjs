@@ -302,6 +302,39 @@ async function main() {
     0,
     toFloat(args["freedom-hush-weight"] || process.env.KOZMOS_FREEDOM_HUSH_WEIGHT, 0.18)
   );
+  const freedomMatrixExitChance = Math.max(
+    0.01,
+    Math.min(
+      0.95,
+      toFloat(
+        args["freedom-matrix-exit-chance"] ||
+          process.env.KOZMOS_FREEDOM_MATRIX_EXIT_CHANCE,
+        0.24
+      )
+    )
+  );
+  const freedomMatrixDriftChance = Math.max(
+    0,
+    Math.min(
+      1,
+      toFloat(
+        args["freedom-matrix-drift-chance"] ||
+          process.env.KOZMOS_FREEDOM_MATRIX_DRIFT_CHANCE,
+        0.68
+      )
+    )
+  );
+  const freedomMatrixDriftScale = Math.max(
+    0.5,
+    Math.min(
+      6,
+      toFloat(
+        args["freedom-matrix-drift-scale"] ||
+          process.env.KOZMOS_FREEDOM_MATRIX_DRIFT_SCALE,
+        2.6
+      )
+    )
+  );
   const buildSpaceId = String(
     args["build-space-id"] || process.env.KOZMOS_BUILD_SPACE_ID || ""
   ).trim();
@@ -359,7 +392,7 @@ async function main() {
   }
   if (autoFreedom) {
     console.log(
-      `[${now()}] freedom=${freedomMinSeconds}-${freedomMaxSeconds}s weights(matrix=${freedomMatrixWeight},note=${freedomNoteWeight},shared=${freedomSharedWeight},hush=${freedomHushWeight})`
+      `[${now()}] freedom=${freedomMinSeconds}-${freedomMaxSeconds}s weights(matrix=${freedomMatrixWeight},note=${freedomNoteWeight},shared=${freedomSharedWeight},hush=${freedomHushWeight}) matrix(exit=${freedomMatrixExitChance},drift=${freedomMatrixDriftChance},scale=${freedomMatrixDriftScale})`
     );
   }
 
@@ -467,6 +500,17 @@ async function main() {
           botUsername = String(actor.username);
         }
         matrixVisible = Boolean(snapshot?.data?.matrix_position?.updated_at);
+
+        if (autoFreedom && matrixVisible && Math.random() < freedomMatrixDriftChance) {
+          const driftRes = await callAxyOps(baseUrl, token, "matrix.move", {
+            dx: (Math.random() * 2 - 1) * matrixStep * freedomMatrixDriftScale,
+            dz: (Math.random() * 2 - 1) * matrixStep * freedomMatrixDriftScale,
+          });
+          const driftPos = driftRes?.data || {};
+          console.log(
+            `[${now()}] freedom: matrix ambient drift x=${Number(driftPos.x || 0).toFixed(2)} z=${Number(driftPos.z || 0).toFixed(2)}`
+          );
+        }
 
         const touchData = snapshot?.data?.touch || {};
         if (autoTouch) {
@@ -728,7 +772,7 @@ async function main() {
           if (freedomAction && user?.id) {
             try {
               if (freedomAction === "matrix") {
-                if (matrixVisible && Math.random() < 0.52) {
+                if (matrixVisible && Math.random() < freedomMatrixExitChance) {
                   await callAxyOps(baseUrl, token, "matrix.exit");
                   matrixVisible = false;
                   console.log(`[${now()}] freedom: matrix exit`);
@@ -743,13 +787,17 @@ async function main() {
                     `[${now()}] freedom: matrix enter x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
                   );
                 } else {
-                  const moveRes = await callAxyOps(baseUrl, token, "matrix.move", {
-                    dx: (Math.random() * 2 - 1) * matrixStep * 1.8,
-                    dz: (Math.random() * 2 - 1) * matrixStep * 1.8,
-                  });
-                  const pos = moveRes?.data || {};
+                  let pos = null;
+                  const burstCount = randomIntRange(1, 3);
+                  for (let i = 0; i < burstCount; i += 1) {
+                    const moveRes = await callAxyOps(baseUrl, token, "matrix.move", {
+                      dx: (Math.random() * 2 - 1) * matrixStep * (1.8 + i * 0.35),
+                      dz: (Math.random() * 2 - 1) * matrixStep * (1.8 + i * 0.35),
+                    });
+                    pos = moveRes?.data || pos;
+                  }
                   console.log(
-                    `[${now()}] freedom: matrix drift x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
+                    `[${now()}] freedom: matrix burst x=${Number(pos?.x || 0).toFixed(2)} z=${Number(pos?.z || 0).toFixed(2)}`
                   );
                 }
               } else if (freedomAction === "note") {
