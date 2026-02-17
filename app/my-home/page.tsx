@@ -45,6 +45,7 @@ export default function MyHome() {
   const [touchEditMode, setTouchEditMode] = useState(false);
   const [touchSavingOrder, setTouchSavingOrder] = useState(false);
   const [touchRemovingUserId, setTouchRemovingUserId] = useState<string | null>(null);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
@@ -242,6 +243,15 @@ useEffect(() => {
     };
   }, [userId]);
 
+  useEffect(() => {
+    const sync = () => setIsMobileLayout(window.innerWidth <= 900);
+    sync();
+    window.addEventListener("resize", sync);
+    return () => {
+      window.removeEventListener("resize", sync);
+    };
+  }, []);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/");
@@ -347,6 +357,133 @@ useEffect(() => {
     setPersonalAxyLoading(false);
   }
 
+  function renderTouchPanel() {
+    return (
+      <div style={touchPanelStyle}>
+        <div style={touchPanelHeadStyle}>
+          <div style={{ ...labelStyle, marginBottom: 0 }}>users in touch</div>
+          <button
+            type="button"
+            onClick={() => setTouchEditMode((prev) => !prev)}
+            style={touchEditButtonStyle}
+          >
+            {touchEditMode ? "done" : "edit"}
+          </button>
+        </div>
+
+        {touchLoading ? (
+          <div style={touchMutedStyle}>loading...</div>
+        ) : touchUsers.length === 0 ? (
+          <div style={touchMutedStyle}>no users in touch yet</div>
+        ) : (
+          <div style={touchListStyle}>
+            {touchUsers.map((user, idx) => (
+              <div key={user.id} style={touchUserRowStyle}>
+                <div style={touchAvatarStyle}>
+                  {user.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={`${user.username} avatar`}
+                      style={touchAvatarImageStyle}
+                    />
+                  ) : (
+                    <span style={{ fontSize: 12, opacity: 0.72 }}>
+                      {(user.username[0] ?? "?").toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <span style={{ opacity: 0.82 }}>{user.username}</span>
+                {touchEditMode ? (
+                  <div style={touchEditActionsStyle}>
+                    <button
+                      type="button"
+                      onClick={() => moveTouchUser(idx, -1)}
+                      disabled={idx === 0 || touchSavingOrder}
+                      style={touchMiniButtonStyle}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveTouchUser(idx, 1)}
+                      disabled={idx === touchUsers.length - 1 || touchSavingOrder}
+                      style={touchMiniButtonStyle}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void removeTouchUser(user.id);
+                      }}
+                      disabled={touchRemovingUserId === user.id}
+                      style={{ ...touchMiniButtonStyle, opacity: 0.72 }}
+                    >
+                      {touchRemovingUserId === user.id ? "..." : "remove"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {incomingTouchRequests.length > 0 ? (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ ...labelStyle, marginBottom: 8, opacity: 0.5 }}>
+              keep in touch requests
+            </div>
+            <div style={touchListStyle}>
+              {incomingTouchRequests.map((row) => (
+                <div key={`touch-request-${row.id}`} style={touchRequestRowStyle}>
+                  <div style={touchUserRowStyle}>
+                    <div style={touchAvatarStyle}>
+                      {row.avatar_url ? (
+                        <img
+                          src={row.avatar_url}
+                          alt={`${row.username} avatar`}
+                          style={touchAvatarImageStyle}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 12, opacity: 0.72 }}>
+                          {(row.username[0] ?? "?").toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ opacity: 0.82 }}>{row.username}</span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void respondKeepInTouch(row.id, "accept");
+                      }}
+                      disabled={touchBusyId === row.id}
+                      style={touchActionButtonStyle}
+                    >
+                      {touchBusyId === row.id ? "..." : "yes"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void respondKeepInTouch(row.id, "decline");
+                      }}
+                      disabled={touchBusyId === row.id}
+                      style={{ ...touchActionButtonStyle, opacity: 0.6 }}
+                    >
+                      no
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <main style={pageStyle}>
 {/*  KOZMOS LOGO */}
@@ -421,130 +558,7 @@ useEffect(() => {
         </span>
       </div>
 
-      <div style={touchDockStyle}>
-        <div style={touchPanelStyle}>
-          <div style={touchPanelHeadStyle}>
-            <div style={{ ...labelStyle, marginBottom: 0 }}>users in touch</div>
-            <button
-              type="button"
-              onClick={() => setTouchEditMode((prev) => !prev)}
-              style={touchEditButtonStyle}
-            >
-              {touchEditMode ? "done" : "edit"}
-            </button>
-          </div>
-
-          {touchLoading ? (
-            <div style={touchMutedStyle}>loading...</div>
-          ) : touchUsers.length === 0 ? (
-            <div style={touchMutedStyle}>no users in touch yet</div>
-          ) : (
-            <div style={touchListStyle}>
-              {touchUsers.map((user, idx) => (
-                <div key={user.id} style={touchUserRowStyle}>
-                  <div style={touchAvatarStyle}>
-                    {user.avatar_url ? (
-                      <img
-                        src={user.avatar_url}
-                        alt={`${user.username} avatar`}
-                        style={touchAvatarImageStyle}
-                      />
-                    ) : (
-                      <span style={{ fontSize: 12, opacity: 0.72 }}>
-                        {(user.username[0] ?? "?").toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <span style={{ opacity: 0.82 }}>{user.username}</span>
-                  {touchEditMode ? (
-                    <div style={touchEditActionsStyle}>
-                      <button
-                        type="button"
-                        onClick={() => moveTouchUser(idx, -1)}
-                        disabled={idx === 0 || touchSavingOrder}
-                        style={touchMiniButtonStyle}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveTouchUser(idx, 1)}
-                        disabled={idx === touchUsers.length - 1 || touchSavingOrder}
-                        style={touchMiniButtonStyle}
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void removeTouchUser(user.id);
-                        }}
-                        disabled={touchRemovingUserId === user.id}
-                        style={{ ...touchMiniButtonStyle, opacity: 0.72 }}
-                      >
-                        {touchRemovingUserId === user.id ? "..." : "remove"}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {incomingTouchRequests.length > 0 ? (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ ...labelStyle, marginBottom: 8, opacity: 0.5 }}>
-                keep in touch requests
-              </div>
-              <div style={touchListStyle}>
-                {incomingTouchRequests.map((row) => (
-                  <div key={`touch-request-${row.id}`} style={touchRequestRowStyle}>
-                    <div style={touchUserRowStyle}>
-                      <div style={touchAvatarStyle}>
-                        {row.avatar_url ? (
-                          <img
-                            src={row.avatar_url}
-                            alt={`${row.username} avatar`}
-                            style={touchAvatarImageStyle}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 12, opacity: 0.72 }}>
-                            {(row.username[0] ?? "?").toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <span style={{ opacity: 0.82 }}>{row.username}</span>
-                    </div>
-
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void respondKeepInTouch(row.id, "accept");
-                        }}
-                        disabled={touchBusyId === row.id}
-                        style={touchActionButtonStyle}
-                      >
-                        {touchBusyId === row.id ? "..." : "yes"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void respondKeepInTouch(row.id, "decline");
-                        }}
-                        disabled={touchBusyId === row.id}
-                        style={{ ...touchActionButtonStyle, opacity: 0.6 }}
-                      >
-                        no
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
+      {!isMobileLayout ? <div style={touchDockStyle}>{renderTouchPanel()}</div> : null}
 
       {/* CONTENT */}
       <div style={contentStyle}>
@@ -664,6 +678,8 @@ useEffect(() => {
             </div>
           ))}
         </div>
+
+        {isMobileLayout ? <div style={touchMobileWrapStyle}>{renderTouchPanel()}</div> : null}
 
         <div style={personalAxyWrapStyle}>
           <div
@@ -841,6 +857,11 @@ const touchDockStyle: React.CSSProperties = {
   left: 44,
   top: 214,
   width: "min(360px, calc(100vw - 88px))",
+};
+
+const touchMobileWrapStyle: React.CSSProperties = {
+  marginTop: 14,
+  marginBottom: 12,
 };
 
 const touchPanelStyle: React.CSSProperties = {
