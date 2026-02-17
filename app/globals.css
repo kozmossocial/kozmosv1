@@ -790,6 +790,12 @@ body {
 
 /* Main layout responsive */
 @media (max-width: 900px) {
+  .kozmos-logo {
+    width: 75% !important;
+    max-width: 75% !important;
+    height: auto !important;
+  }
+
   .home-screen-1 {
     z-index: 4 !important;
   }
@@ -827,7 +833,7 @@ body {
 
   .home-hero-logo-wrap .home-hero-logo-image {
     max-width: none !important;
-    width: min(20vw, 80px) !important;
+    width: min(15vw, 60px) !important;
     height: auto !important;
   }
 
