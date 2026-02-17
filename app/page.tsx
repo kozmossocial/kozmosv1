@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 const MATRIX_BASE_CHARS =
   'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾔﾖﾙﾚﾛﾝ:・."=*+-<>¦｜çöşğı:."=*+-¦|_kozmos';
 const MATRIX_DIGITS = "012345678";
+const HOME_AMBIENT_SRC = "/ambient-main.mp3";
 
 function createSeededRng(seed: number) {
   let s = seed;
@@ -53,6 +54,7 @@ function buildMatrixStreamSingle(seed: number, length = 42) {
 export default function Home() {
   const router = useRouter();
   const screen3Ref = useRef<HTMLDivElement | null>(null);
+  const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [principle, setPrinciple] = useState<string | null>(null);
   const [principleDissolving, setPrincipleDissolving] = useState(false);
@@ -78,6 +80,7 @@ export default function Home() {
   const [runtimeConnectClosed, setRuntimeConnectClosed] = useState(false);
   const [ambientSoft, setAmbientSoft] = useState(false);
   const [matrixMotionActive, setMatrixMotionActive] = useState(false);
+  const [ambientSoundOn, setAmbientSoundOn] = useState(true);
 
   const matrixColumns = useMemo(() => {
     const sessionOffset = 77123;
@@ -261,6 +264,35 @@ export default function Home() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const audio = ambientAudioRef.current;
+    if (!audio) return;
+
+    let cancelled = false;
+    audio.volume = 0.34;
+    audio.loop = true;
+
+    void audio.play().catch(() => {
+      if (!cancelled) setAmbientSoundOn(false);
+    });
+
+    return () => {
+      cancelled = true;
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, []);
+
+  useEffect(() => {
+    const audio = ambientAudioRef.current;
+    if (!audio) return;
+    if (ambientSoundOn) {
+      void audio.play().catch(() => setAmbientSoundOn(false));
+      return;
+    }
+    audio.pause();
+  }, [ambientSoundOn]);
+
   async function handleLoginClick() {
     if (user) {
       router.push("/my-home");
@@ -410,6 +442,21 @@ export default function Home() {
 
   function toggleAxyShell() {
     setAxyOpen((prev) => !prev);
+  }
+
+  function toggleAmbientSound() {
+    const audio = ambientAudioRef.current;
+    if (!audio) return;
+
+    if (ambientSoundOn) {
+      audio.pause();
+      setAmbientSoundOn(false);
+      return;
+    }
+
+    void audio.play().then(() => setAmbientSoundOn(true)).catch(() => {
+      setAmbientSoundOn(false);
+    });
   }
 
   const principles: Record<string, string> = {
@@ -638,6 +685,15 @@ export default function Home() {
         color: "#eaeaea",
       }}
     >
+      <audio
+        ref={ambientAudioRef}
+        src={HOME_AMBIENT_SRC}
+        preload="auto"
+        loop
+        playsInline
+        style={{ display: "none" }}
+      />
+
       <div
         className={`runtime-page-ambient${ambientSoft ? " runtime-page-ambient-soft" : ""}`}
         aria-hidden="true"
@@ -683,6 +739,25 @@ export default function Home() {
           >
             my home
           </span>
+          <button
+            type="button"
+            onClick={toggleAmbientSound}
+            style={{
+              marginLeft: 12,
+              background: "transparent",
+              border: "none",
+              color: "inherit",
+              fontSize: 13,
+              cursor: "pointer",
+              padding: 0,
+              opacity: 0.9,
+              lineHeight: 1,
+            }}
+            aria-label={ambientSoundOn ? "mute ambient" : "unmute ambient"}
+            title={ambientSoundOn ? "mute ambient" : "unmute ambient"}
+          >
+            {ambientSoundOn ? "🔉" : "🔇"}
+          </button>
         </div>
 
         {/* TOP RIGHT */}
