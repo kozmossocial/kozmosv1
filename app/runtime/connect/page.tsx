@@ -226,7 +226,7 @@ function RuntimeConnectClient() {
             <code>{"POST /api/runtime/shared {\"content\":\"hello\"}"}</code>
           </div>
           <a
-            href="/api/runtime/spec"
+            href="/runtime/spec"
             target="_blank"
             rel="noreferrer"
             style={{

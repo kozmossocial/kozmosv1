@@ -21,6 +21,7 @@ export async function GET(req: Request) {
       shared: `${origin}/api/runtime/shared`,
       token_rotate: `${origin}/api/runtime/token/rotate`,
       token_revoke: `${origin}/api/runtime/token/revoke`,
+      manual: `${origin}/runtime/spec`,
     },
     invite_claim_modes: {
       linked_user_only:
