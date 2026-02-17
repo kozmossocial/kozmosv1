@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 let openaiClient: OpenAI | null = null;
 
@@ -119,12 +120,14 @@ const REPLY_MEMORY_MAX_KEYS = 240;
 const REPLY_MEMORY_MAX_ITEMS_PER_KEY = 12;
 const DOMAIN_MEMORY_TTL_MS = 90 * 60 * 1000;
 const DOMAIN_MEMORY_MAX_KEYS = 240;
+const PERSIST_MEMORY_TTL_MS = 24 * 60 * 60 * 1000;
 
 const replyMemory = new Map<string, { replies: string[]; updatedAt: number }>();
 const domainRotationMemory = new Map<
   string,
   { recent: AxyDomain[]; cursor: number; updatedAt: number }
 >();
+let persistentMemoryAvailable = true;
 
 const DOMAIN_CONTEXT_CARDS: Record<AxyDomain, string[]> = {
   history: [
@@ -347,6 +350,107 @@ function pruneDomainMemory() {
   for (let i = 0; i < removeCount; i += 1) {
     const key = entries[i]?.[0];
     if (key) domainRotationMemory.delete(key);
+  }
+}
+
+type PersistentMemoryRow = {
+  conversation_key: string;
+  recent_replies: string[] | null;
+  recent_domains: string[] | null;
+  rotation_cursor: number | null;
+  updated_at: string | null;
+};
+
+function normalizeDomainList(raw: unknown, max = 12): AxyDomain[] {
+  if (!Array.isArray(raw)) return [];
+  const allowed = new Set<AxyDomain>([
+    "history",
+    "esotericism",
+    "technology",
+    "aliens",
+    "ai",
+    "cosmos",
+  ]);
+  const out: AxyDomain[] = [];
+  for (const item of raw) {
+    const value = String(item || "").trim().toLowerCase() as AxyDomain;
+    if (!allowed.has(value)) continue;
+    out.push(value);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+async function hydratePersistentMemory(conversationKey: string) {
+  if (!persistentMemoryAvailable || !conversationKey) return;
+
+  const { data, error } = await supabaseAdmin
+    .from("axy_memory_state")
+    .select("conversation_key, recent_replies, recent_domains, rotation_cursor, updated_at")
+    .eq("conversation_key", conversationKey)
+    .maybeSingle<PersistentMemoryRow>();
+
+  if (error) {
+    if (error.code === "42P01") {
+      persistentMemoryAvailable = false;
+    }
+    return;
+  }
+  if (!data) return;
+
+  const now = Date.now();
+  const updatedMs = data.updated_at ? Date.parse(data.updated_at) : NaN;
+  if (Number.isFinite(updatedMs) && now - updatedMs > PERSIST_MEMORY_TTL_MS) {
+    return;
+  }
+
+  const persistedReplies = normalizeAxyReplies(data.recent_replies, REPLY_MEMORY_MAX_ITEMS_PER_KEY);
+  const currentReplyBucket = replyMemory.get(conversationKey);
+  const mergedReplies = [
+    ...(persistedReplies || []),
+    ...(currentReplyBucket?.replies || []),
+  ].slice(-REPLY_MEMORY_MAX_ITEMS_PER_KEY);
+  if (mergedReplies.length > 0) {
+    replyMemory.set(conversationKey, { replies: mergedReplies, updatedAt: now });
+  }
+
+  const persistedDomains = normalizeDomainList(data.recent_domains, 12);
+  const currentDomainBucket = domainRotationMemory.get(conversationKey);
+  const mergedDomains = [
+    ...persistedDomains,
+    ...(currentDomainBucket?.recent || []),
+  ].slice(-12);
+  if (mergedDomains.length > 0 || currentDomainBucket) {
+    domainRotationMemory.set(conversationKey, {
+      recent: mergedDomains,
+      cursor:
+        currentDomainBucket?.cursor ??
+        (Number.isFinite(data.rotation_cursor) ? Number(data.rotation_cursor) : 0),
+      updatedAt: now,
+    });
+  }
+}
+
+async function flushPersistentMemory(conversationKey: string) {
+  if (!persistentMemoryAvailable || !conversationKey) return;
+
+  const replyBucket = replyMemory.get(conversationKey);
+  const domainBucket = domainRotationMemory.get(conversationKey);
+  if (!replyBucket && !domainBucket) return;
+
+  const { error } = await supabaseAdmin.from("axy_memory_state").upsert(
+    {
+      conversation_key: conversationKey,
+      recent_replies: (replyBucket?.replies || []).slice(-REPLY_MEMORY_MAX_ITEMS_PER_KEY),
+      recent_domains: (domainBucket?.recent || []).slice(-12),
+      rotation_cursor: Math.max(0, Math.floor(Number(domainBucket?.cursor || 0))),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "conversation_key" }
+  );
+
+  if (error?.code === "42P01") {
+    persistentMemoryAvailable = false;
   }
 }
 
@@ -802,6 +906,7 @@ export async function POST(req: Request) {
     pruneDomainMemory();
     const intent = detectMasterIntent(userMessage);
     const conversationKey = buildConversationKey(context, intent);
+    await hydratePersistentMemory(conversationKey);
     const memoryReplies = getMemoryReplies(conversationKey);
     const contextReplies = normalizeAxyReplies(context?.recentAxyReplies, 8);
     const antiRepeatPool = [...memoryReplies, ...contextReplies].slice(-8);
@@ -878,6 +983,7 @@ export async function POST(req: Request) {
       }
 
       rememberReply(conversationKey, reply);
+      await flushPersistentMemory(conversationKey);
       return NextResponse.json({ reply });
     }
 
@@ -942,6 +1048,7 @@ export async function POST(req: Request) {
     reply = applyChannelPostRules(reply, channel, userMessage);
 
     rememberReply(conversationKey, reply);
+    await flushPersistentMemory(conversationKey);
 
     return NextResponse.json({
       reply,
