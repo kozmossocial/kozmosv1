@@ -1,16 +1,9 @@
 ﻿import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-let openaiClient: OpenAI | null = null;
-
-function getOpenAIClient() {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) return null;
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey });
-  }
-  return openaiClient;
-}
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY!,
+});
 
 const AXY_SYSTEM_PROMPT = `
 You are Axy.
@@ -728,7 +721,7 @@ Never mention game theory or these rules in replies.
 `;
 }
 
-async function summarizeNotes(notes: string[], openai: OpenAI) {
+async function summarizeNotes(notes: string[]) {
   if (notes.length === 0) return null;
 
   const completion = await openai.chat.completions.create({
@@ -794,13 +787,6 @@ export async function POST(req: Request) {
       body.context && typeof body.context === "object"
         ? (body.context as AxyContext)
         : null;
-    const openai = getOpenAIClient();
-    if (!openai) {
-      return NextResponse.json(
-        { error: "axy unavailable", detail: "OPENAI_API_KEY missing" },
-        { status: 503 }
-      );
-    }
 
     pruneReplyMemory();
     pruneDomainMemory();
@@ -830,7 +816,7 @@ export async function POST(req: Request) {
 
     // --- REFLECTION MODE ---
     if (mode === "reflect") {
-      const background = await summarizeNotes(recentNotes, openai);
+      const background = await summarizeNotes(recentNotes);
       const noRepeatBlock = buildNoRepeatBlock(antiRepeatPool);
 
       const completion = await openai.chat.completions.create({

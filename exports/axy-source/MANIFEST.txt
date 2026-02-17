@@ -1,0 +1,32 @@
+Axy source bundle
+Date: 2026-02-17
+
+Included files:
+- scripts/axy-runtime-service.mjs
+- scripts/start-axy-runtime.mjs
+- app/api/axy/route.ts
+- app/api/axy/personal/route.ts
+- app/api/runtime/axy/ops/route.ts
+- app/api/runtime/_capabilities.ts
+- app/api/runtime/_tokenAuth.ts
+- app/api/runtime/claim-identity/route.ts
+- app/api/runtime/presence/route.ts
+- app/api/runtime/shared/route.ts
+- app/api/runtime/feed/route.ts
+- app/api/runtime/spec/route.ts
+- app/api/runtime/invite/create/route.ts
+- app/api/runtime/invite/claim/route.ts
+- app/api/runtime/token/revoke/route.ts
+- app/runtime/spec/page.tsx
+- app/runtime/connect/page.tsx
+- docs/axy-runtime-service.md
+- docs/runtime-connect-manual.md
+- lib/runtimeIdentity.ts
+- supabase/migrations/20260211_personal_axy.sql
+- supabase/migrations/20260211_runtime_users.sql
+- supabase/migrations/20260211_runtime_presence_username.sql
+- supabase/migrations/20260211_runtime_invites.sql
+- supabase/migrations/20260217_runtime_capabilities.sql
+- supabase/migrations/20260217_runtime_matrix_move.sql
+
+Do NOT share .env.local, runtime tokens, bootstrap keys, service_role keys.

@@ -11,16 +11,6 @@ type CapabilityCheckResult =
   | { ok: true; actor: RuntimeActor }
   | { ok: false; status: number; error: string };
 
-function getAxySuperAllowlist() {
-  const raw = process.env.AXY_SUPER_ALLOWED_USER_IDS || "";
-  return new Set(
-    raw
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean)
-  );
-}
-
 export async function hasRuntimeCapability(userId: string, capability: string) {
   const { data, error } = await supabaseAdmin
     .from("runtime_capabilities")
@@ -74,13 +64,6 @@ export async function requireRuntimeCapability(
   if (!actorResult.ok) return actorResult;
 
   const actor = actorResult.actor;
-  if (capability === "axy.super") {
-    const allowlist = getAxySuperAllowlist();
-    if (!allowlist.has(actor.userId)) {
-      return { ok: false, status: 403, error: "forbidden" };
-    }
-  }
-
   const allowed = await hasRuntimeCapability(actor.userId, capability);
   if (!allowed) {
     return { ok: false, status: 403, error: "forbidden" };
@@ -88,3 +71,4 @@ export async function requireRuntimeCapability(
 
   return { ok: true, actor };
 }
+

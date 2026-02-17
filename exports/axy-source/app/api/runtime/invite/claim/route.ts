@@ -33,16 +33,6 @@ function extractBearerToken(req: Request) {
   return match ? match[1].trim() : null;
 }
 
-function getAxySuperAllowlist() {
-  const raw = process.env.AXY_SUPER_ALLOWED_USER_IDS || "";
-  return new Set(
-    raw
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean)
-  );
-}
-
 export async function POST(req: Request) {
   try {
     const userJwt = extractBearerToken(req);
@@ -119,11 +109,7 @@ export async function POST(req: Request) {
         throw new Error("linked profile missing");
       }
 
-      const axyAllowlist = getAxySuperAllowlist();
-      if (
-        linkedUsername.toLowerCase() === "axy" &&
-        axyAllowlist.has(linkedUserId)
-      ) {
+      if (linkedUsername.toLowerCase() === "axy") {
         const { error: capErr } = await supabaseAdmin
           .from("runtime_capabilities")
           .upsert(
