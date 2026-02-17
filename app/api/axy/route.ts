@@ -737,13 +737,51 @@ ${channelRules || ""}
 `;
 }
 
+function looksLikeQuestionText(text: string) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return false;
+  if (t.includes("?")) return true;
+  if (
+    /^(who|what|when|where|why|how|which|can|could|would|should|do|does|did|is|are|am|will|may|shall)\b/.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  if (/^(kim|ne|neden|nasıl|nerede|ne zaman|hangi)\b/.test(t)) {
+    return true;
+  }
+  if (/\b(mi|mı|mu|mü)\b[.!]*$/.test(t)) {
+    return true;
+  }
+  return false;
+}
+
+function ensureQuestionMark(text: string) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.includes("?")) return trimmed;
+  return `${trimmed.replace(/[.!]+$/, "")}?`;
+}
+
 function applyChannelPostRules(reply: string, channel: string, userMessage: string) {
   if (!reply) return reply;
 
   if (channel === "dm") {
     const userAskedQuestion = /\?/.test(userMessage);
-    if (!userAskedQuestion && /\?/.test(reply)) {
-      return reply.replace(/\?/g, ".").replace(/\s+/g, " ").trim();
+    const replyLooksQuestion = looksLikeQuestionText(reply);
+
+    if (!userAskedQuestion && replyLooksQuestion) {
+      return reply
+        .replace(/\?/g, ".")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/[!?]+$/g, ".")
+        .replace(/\.\.+/g, ".");
+    }
+
+    if (userAskedQuestion && replyLooksQuestion && !/\?/.test(reply)) {
+      return ensureQuestionMark(reply);
     }
   }
 
