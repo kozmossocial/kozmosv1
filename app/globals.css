@@ -191,6 +191,18 @@ body {
   animation-delay: var(--char-delay);
 }
 
+.principle-fade.low-perf {
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
+}
+
+.principle-fade.low-perf.dissolve {
+  transform: translateY(8px);
+  filter: none;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+}
+
 @keyframes principle-fragment {
   0% {
     opacity: 1;
@@ -399,6 +411,14 @@ body {
 
 .matrix-rain-paused .matrix-stream {
   animation-play-state: paused;
+}
+
+.matrix-rain.matrix-rain-low-perf {
+  opacity: 0.72;
+}
+
+.matrix-rain.matrix-rain-low-perf .matrix-stream {
+  text-shadow: 0 0 8px rgba(255, 230, 170, 0.18);
 }
 
 .matrix-tail-glow {

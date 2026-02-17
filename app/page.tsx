@@ -81,11 +81,12 @@ export default function Home() {
   const [ambientSoft, setAmbientSoft] = useState(false);
   const [matrixMotionActive, setMatrixMotionActive] = useState(false);
   const [ambientSoundOn, setAmbientSoundOn] = useState(true);
+  const [lowPerfMotion, setLowPerfMotion] = useState(false);
 
   const matrixColumns = useMemo(() => {
-    const sessionOffset = 77123;
-    const doubleCount = 62;
-    const singleCount = 58;
+    const sessionOffset = lowPerfMotion ? 77157 : 77123;
+    const doubleCount = lowPerfMotion ? 34 : 62;
+    const singleCount = lowPerfMotion ? 26 : 58;
     const rand = (rng: () => number, min: number, max: number) =>
       min + rng() * (max - min);
     const randInt = (rng: () => number, min: number, max: number) =>
@@ -95,18 +96,34 @@ export default function Home() {
       const rng = createSeededRng(
         4200 + sessionOffset + i * 97 + (kind === "single" ? 31 : 0)
       );
-      const slowColumn = rng() > 0.68;
-      const extraStreams = rng() > 0.72 ? 1 : 0;
-      const baseCount = kind === "double" ? 3 : 2;
+      const slowColumn = rng() > (lowPerfMotion ? 0.54 : 0.68);
+      const extraStreams = rng() > (lowPerfMotion ? 0.92 : 0.72) ? 1 : 0;
+      const baseCount =
+        kind === "double"
+          ? lowPerfMotion
+            ? 2
+            : 3
+          : lowPerfMotion
+            ? 1
+            : 2;
       const streamCount = baseCount + extraStreams;
       const opacityBoost = kind === "single" ? 0.72 : 1;
       const streams = Array.from({ length: streamCount }, (_, idx) => {
         const isLong = rng() > (kind === "double" ? 0.72 : 0.62);
         const length = isLong
-          ? randInt(rng, kind === "double" ? 120 : 170, 230)
-          : randInt(rng, kind === "double" ? 72 : 108, 160);
-        const baseDuration =
-          rand(rng, 6.6, 12.2) + (isLong ? rand(rng, 1.2, 2.8) : 0);
+          ? randInt(
+              rng,
+              kind === "double" ? (lowPerfMotion ? 86 : 120) : lowPerfMotion ? 116 : 170,
+              lowPerfMotion ? 168 : 230
+            )
+          : randInt(
+              rng,
+              kind === "double" ? (lowPerfMotion ? 54 : 72) : lowPerfMotion ? 72 : 108,
+              lowPerfMotion ? 118 : 160
+            );
+        const baseDuration = lowPerfMotion
+          ? rand(rng, 8.2, 14.4) + (isLong ? rand(rng, 1.1, 2.1) : 0)
+          : rand(rng, 6.6, 12.2) + (isLong ? rand(rng, 1.2, 2.8) : 0);
         const slowFactor = slowColumn ? rand(rng, 1.08, 1.22) : 1;
         return {
           key: `col-${kind}-${i}-s-${idx}`,
@@ -179,7 +196,7 @@ export default function Home() {
     }
 
     return mixed;
-  }, []);
+  }, [lowPerfMotion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -238,6 +255,30 @@ export default function Home() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const media = window.matchMedia(
+      "(max-width: 900px), (pointer: coarse), (prefers-reduced-motion: reduce)"
+    );
+
+    const syncMotionMode = () => {
+      const cpuLow =
+        typeof navigator !== "undefined" &&
+        Number.isFinite(navigator.hardwareConcurrency) &&
+        navigator.hardwareConcurrency > 0 &&
+        navigator.hardwareConcurrency <= 4;
+      setLowPerfMotion(media.matches || cpuLow);
+    };
+
+    syncMotionMode();
+    media.addEventListener("change", syncMotionMode);
+
+    return () => {
+      media.removeEventListener("change", syncMotionMode);
     };
   }, []);
 
@@ -420,10 +461,11 @@ export default function Home() {
   function dissolvePrinciple() {
     if (!principle || principleDissolving) return;
     setPrincipleDissolving(true);
+    const dissolveMs = lowPerfMotion ? 420 : 1300;
     setTimeout(() => {
       setPrinciple(null);
       setPrincipleDissolving(false);
-    }, 1300);
+    }, dissolveMs);
   }
 
   async function askAxy() {
@@ -492,6 +534,8 @@ export default function Home() {
   const activePrincipleText = principle ? principles[principle] : "";
 
   function renderPrincipleText(text: string) {
+    if (lowPerfMotion) return text;
+
     let charIndex = 0;
 
     return text.split(/(\s+)/).map((token, tokenIndex) => {
@@ -972,7 +1016,11 @@ export default function Home() {
         }}
       >
         <div
-          className={`matrix-rain${matrixMotionActive ? "" : " matrix-rain-paused"}`}
+          className={`matrix-rain${
+            matrixMotionActive && !(lowPerfMotion && principleDissolving)
+              ? ""
+              : " matrix-rain-paused"
+          }${lowPerfMotion ? " matrix-rain-low-perf" : ""}`}
           aria-hidden="true"
           style={
             {
@@ -1019,7 +1067,9 @@ export default function Home() {
           }}
         >
           <div
-            className={`principle-fade${principleDissolving ? " dissolve" : ""}`}
+            className={`principle-fade${principleDissolving ? " dissolve" : ""}${
+              lowPerfMotion ? " low-perf" : ""
+            }`}
             onClick={dissolvePrinciple}
             style={{
               maxWidth: 520,
