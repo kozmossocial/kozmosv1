@@ -205,19 +205,32 @@ export default function Main() {
     let cancelled = false;
 
     async function loadPresentUserAvatars() {
-      const { data, error } = await supabase
-        .from("profileskozmos")
-        .select("username, avatar_url")
-        .in("username", names);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (cancelled || error) return;
+      if (!session?.access_token || cancelled) return;
+
+      const params = new URLSearchParams();
+      params.set("usernames", names.join(","));
+
+      const res = await fetch(`/api/profiles/public?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        rows?: Array<{ username: string; avatar_url: string | null }>;
+      };
+
+      if (cancelled || !res.ok) return;
 
       const nextMap: Record<string, string | null> = {};
       names.forEach((name) => {
         nextMap[name.toLowerCase()] = null;
       });
 
-      (data || []).forEach((row) => {
+      (body.rows || []).forEach((row) => {
         if (!row?.username) return;
         nextMap[String(row.username).toLowerCase()] =
           typeof row.avatar_url === "string" ? row.avatar_url : null;
