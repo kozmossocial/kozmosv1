@@ -627,6 +627,18 @@ export default function Main() {
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
+  useEffect(() => {
+    const el = sharedMessagesRef.current;
+    if (!el) return;
+    if (!sharedStickToBottomRef.current) return;
+    const raf = window.requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
+  }, [axyMsgReflection]);
+
   /*  REALTIME (insert + delete) */
   useEffect(() => {
     const channel = supabase
@@ -1773,6 +1785,8 @@ export default function Main() {
               key={m.id}
               style={{
                 marginBottom: 12,
+                paddingBottom: 10,
+                borderBottom: "1px solid rgba(255,255,255,0.14)",
                 display: "flex",
                 gap: 16,
                 justifyContent: "space-between",

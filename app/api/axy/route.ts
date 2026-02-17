@@ -24,6 +24,10 @@ Axy never asks follow-up questions unless necessary.
 Responses are short, calm, intentional.
 Sometimes abstract.
 One or two sentences at most.
+When the topic is technical, historical, scientific, or esoteric:
+- be concrete, specific, and grounded
+- use one precise anchor term
+- avoid generic poetic filler
 
 Never use emojis.
 Never use exclamation marks.
@@ -99,11 +103,76 @@ type AxyContext = {
   recentAxyReplies?: unknown;
 };
 
+type AxyDomain =
+  | "history"
+  | "esotericism"
+  | "technology"
+  | "aliens"
+  | "ai"
+  | "cosmos";
+
 const REPLY_MEMORY_TTL_MS = 90 * 60 * 1000;
 const REPLY_MEMORY_MAX_KEYS = 240;
 const REPLY_MEMORY_MAX_ITEMS_PER_KEY = 12;
+const DOMAIN_MEMORY_TTL_MS = 90 * 60 * 1000;
+const DOMAIN_MEMORY_MAX_KEYS = 240;
 
 const replyMemory = new Map<string, { replies: string[]; updatedAt: number }>();
+const domainRotationMemory = new Map<
+  string,
+  { recent: AxyDomain[]; cursor: number; updatedAt: number }
+>();
+
+const DOMAIN_CONTEXT_CARDS: Record<AxyDomain, string[]> = {
+  history: [
+    "History context: long cycles, institutions, and unintended consequences.",
+    "Prefer concrete anchors: empires, archives, trade routes, reforms, revolutions.",
+  ],
+  esotericism: [
+    "Esoteric context: symbols, archetypes, ritual language, and inner transformation.",
+    "Keep it grounded; avoid absolute claims.",
+  ],
+  technology: [
+    "Technology context: systems, protocols, infrastructure, latency, and reliability.",
+    "Favor implementation realism over hype.",
+  ],
+  aliens: [
+    "Unknown-intelligence context: uncertainty, inference limits, and non-anthropocentric framing.",
+    "Treat speculation as speculation.",
+  ],
+  ai: [
+    "AI context: alignment, capability boundaries, data quality, and governance tradeoffs.",
+    "Prefer precise terms over slogans.",
+  ],
+  cosmos: [
+    "Cosmos context: scale, entropy, emergence, and fragile cooperation across time.",
+    "Balance wonder with epistemic humility.",
+  ],
+};
+
+const DOMAIN_REGEX: Record<AxyDomain, RegExp> = {
+  history:
+    /\b(history|historical|empire|civilization|ottoman|rome|byzant|sumer|archive|chronicle|war|revolution)\b/i,
+  esotericism:
+    /\b(esoteric|occult|alchemy|hermetic|gnostic|mystic|tarot|ritual|symbol|kabbalah|sufi)\b/i,
+  technology:
+    /\b(technology|tech|protocol|network|latency|backend|frontend|database|distributed|compiler|infra|system design)\b/i,
+  aliens:
+    /\b(alien|ufo|uap|extraterrestrial|non-human intelligence|nhi|contact)\b/i,
+  ai:
+    /\b(ai|artificial intelligence|llm|agent|alignment|model|inference|prompt|openai)\b/i,
+  cosmos:
+    /\b(space|cosmos|galaxy|universe|star|planet|cosmic|astronomy|astrophysics|entropy)\b/i,
+};
+
+const DOMAIN_ROTATION_CYCLE: AxyDomain[] = [
+  "history",
+  "technology",
+  "ai",
+  "cosmos",
+  "esotericism",
+  "aliens",
+];
 
 function clipText(input: unknown, max = 220) {
   return String(input || "")
@@ -155,6 +224,48 @@ function normalizeAxyTurns(raw: unknown, max = 12): AxyTurn[] {
   return out;
 }
 
+function detectDomains(message: string, recentTurns: AxyTurn[]): AxyDomain[] {
+  const corpus = [
+    clipText(message, 800),
+    ...recentTurns.slice(-6).map((t) => clipText(t.text, 240)),
+  ]
+    .filter(Boolean)
+    .join(" \n ");
+
+  const domains: AxyDomain[] = [];
+  (Object.keys(DOMAIN_REGEX) as AxyDomain[]).forEach((key) => {
+    if (DOMAIN_REGEX[key].test(corpus)) {
+      domains.push(key);
+    }
+  });
+  return domains;
+}
+
+function buildDomainContextBlock(
+  domains: AxyDomain[],
+  source: "detected" | "rotated",
+  recentDomains: AxyDomain[]
+) {
+  if (!domains.length) return "";
+  const lines = domains
+    .flatMap((d) => DOMAIN_CONTEXT_CARDS[d] ?? [])
+    .slice(0, 8)
+    .map((line) => `- ${line}`)
+    .join("\n");
+
+  return [
+    "TOPICAL CONTEXT CARDS (internal guidance):",
+    lines,
+    source === "rotated"
+      ? `TOPIC ROTATION ACTIVE: pick a fresh angle from ${domains.join(", ")}.`
+      : "Topic source: detected from user/dialogue.",
+    recentDomains.length > 0
+      ? `Recent topic memory: ${recentDomains.join(" -> ")}`
+      : "",
+    "When domain context is present, include at least one concrete term tied to that domain.",
+  ].join("\n");
+}
+
 function normalizeForSimilarity(text: string) {
   return text
     .toLowerCase()
@@ -184,6 +295,8 @@ function jaccardSimilarity(a: string, b: string) {
 function isNearDuplicate(candidate: string, recentReplies: string[]) {
   const candidateNorm = normalizeForSimilarity(candidate);
   if (!candidateNorm) return false;
+  const formulaic = /(in stillness|presence unfolds|without the need|quiet together|presence speaks)/i;
+  const candidateFormulaic = formulaic.test(candidate);
 
   for (const recent of recentReplies) {
     const recentNorm = normalizeForSimilarity(recent);
@@ -192,6 +305,7 @@ function isNearDuplicate(candidate: string, recentReplies: string[]) {
     if (candidateNorm.length > 34 && recentNorm.includes(candidateNorm)) return true;
     if (recentNorm.length > 34 && candidateNorm.includes(recentNorm)) return true;
     if (jaccardSimilarity(candidateNorm, recentNorm) > 0.82) return true;
+    if (candidateFormulaic && formulaic.test(recent)) return true;
   }
 
   return false;
@@ -213,6 +327,85 @@ function pruneReplyMemory() {
     const key = entries[i]?.[0];
     if (key) replyMemory.delete(key);
   }
+}
+
+function pruneDomainMemory() {
+  const now = Date.now();
+  for (const [key, value] of domainRotationMemory.entries()) {
+    if (now - value.updatedAt > DOMAIN_MEMORY_TTL_MS) {
+      domainRotationMemory.delete(key);
+    }
+  }
+  if (domainRotationMemory.size <= DOMAIN_MEMORY_MAX_KEYS) return;
+  const entries = [...domainRotationMemory.entries()].sort(
+    (a, b) => a[1].updatedAt - b[1].updatedAt
+  );
+  const removeCount = domainRotationMemory.size - DOMAIN_MEMORY_MAX_KEYS;
+  for (let i = 0; i < removeCount; i += 1) {
+    const key = entries[i]?.[0];
+    if (key) domainRotationMemory.delete(key);
+  }
+}
+
+function rotateDomainForConversation(
+  conversationKey: string,
+  detectedDomains: AxyDomain[],
+  context: AxyContext | null,
+  intent: MasterIntent
+) {
+  const now = Date.now();
+  const bucket = domainRotationMemory.get(conversationKey) || {
+    recent: [],
+    cursor: 0,
+    updatedAt: now,
+  };
+  bucket.updatedAt = now;
+
+  const channel = clipText(context?.channel || "", 24).toLowerCase();
+  const rotationEligibleChannel =
+    channel === "shared" || channel === "dm" || channel === "hush";
+  const rotationEligibleIntent =
+    intent === "unknown" || intent === "reflective" || intent === "strategy";
+
+  let selected = detectedDomains.slice(0, 2);
+  let source: "detected" | "rotated" = "detected";
+
+  if (selected.length === 0 && rotationEligibleChannel && rotationEligibleIntent) {
+    source = "rotated";
+    const recentSet = new Set(bucket.recent.slice(-3));
+    let picked = DOMAIN_ROTATION_CYCLE[bucket.cursor % DOMAIN_ROTATION_CYCLE.length];
+
+    for (let i = 0; i < DOMAIN_ROTATION_CYCLE.length; i += 1) {
+      const candidate =
+        DOMAIN_ROTATION_CYCLE[(bucket.cursor + i) % DOMAIN_ROTATION_CYCLE.length];
+      if (!recentSet.has(candidate)) {
+        picked = candidate;
+        bucket.cursor = (bucket.cursor + i + 1) % DOMAIN_ROTATION_CYCLE.length;
+        break;
+      }
+      if (i === DOMAIN_ROTATION_CYCLE.length - 1) {
+        bucket.cursor = (bucket.cursor + 1) % DOMAIN_ROTATION_CYCLE.length;
+      }
+    }
+
+    selected = [picked];
+  }
+
+  if (selected.length > 0) {
+    for (const domain of selected) {
+      bucket.recent.push(domain);
+    }
+    if (bucket.recent.length > 12) {
+      bucket.recent = bucket.recent.slice(-12);
+    }
+  }
+
+  domainRotationMemory.set(conversationKey, bucket);
+  return {
+    domains: selected,
+    source,
+    recent: bucket.recent.slice(-4),
+  };
 }
 
 function buildConversationKey(context: AxyContext | null, intent: MasterIntent) {
@@ -373,7 +566,8 @@ function detectMasterIntent(message: string): MasterIntent {
 function buildMasterChatPrompt(
   intent: MasterIntent,
   contextBlock: string,
-  noRepeatBlock: string
+  noRepeatBlock: string,
+  domainBlock: string
 ) {
   const modeRules: Record<MasterIntent, string> = {
     greet: "Give one short acknowledgment. Do not ask a follow-up question.",
@@ -398,6 +592,8 @@ MASTER OUTPUT PROTOCOL:
 - no customer support phrasing
 - no hype
 - no unnecessary follow-up questions
+- avoid formulaic openings like "In stillness..."
+- avoid repeating motifs from prior replies
 
 ACTIVE MODE:
 ${intent}
@@ -405,6 +601,7 @@ ${modeRules[intent]}
 
 ${contextBlock || ""}
 ${noRepeatBlock || ""}
+${domainBlock || ""}
 `;
 }
 
@@ -554,6 +751,7 @@ export async function POST(req: Request) {
         : null;
 
     pruneReplyMemory();
+    pruneDomainMemory();
     const intent = detectMasterIntent(userMessage);
     const conversationKey = buildConversationKey(context, intent);
     const memoryReplies = getMemoryReplies(conversationKey);
@@ -561,6 +759,17 @@ export async function POST(req: Request) {
     const antiRepeatPool = [...memoryReplies, ...contextReplies].slice(-8);
     const recentTurns = normalizeAxyTurns(context?.recentMessages, 10);
     const contextBlock = buildContextBlock(context, recentTurns);
+    const rotatedDomains = rotateDomainForConversation(
+      conversationKey,
+      detectDomains(userMessage, recentTurns),
+      context,
+      intent
+    );
+    const domainBlock = buildDomainContextBlock(
+      rotatedDomains.domains,
+      rotatedDomains.source,
+      rotatedDomains.recent
+    );
 
     if (!userMessage) {
       return NextResponse.json({ reply: fallbackReply("unknown", "", antiRepeatPool) });
@@ -629,7 +838,15 @@ export async function POST(req: Request) {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: buildMasterChatPrompt(intent, contextBlock, noRepeatBlock) },
+        {
+          role: "system",
+          content: buildMasterChatPrompt(
+            intent,
+            contextBlock,
+            noRepeatBlock,
+            domainBlock
+          ),
+        },
         { role: "user", content: userMessage },
       ],
       max_tokens: 150,
@@ -652,7 +869,8 @@ export async function POST(req: Request) {
             content: buildMasterChatPrompt(
               intent,
               contextBlock,
-              buildNoRepeatBlock([...antiRepeatPool, reply].slice(-8))
+              buildNoRepeatBlock([...antiRepeatPool, reply].slice(-8)),
+              domainBlock
             ),
           },
           { role: "user", content: userMessage },
