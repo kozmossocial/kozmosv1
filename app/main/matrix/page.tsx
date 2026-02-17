@@ -76,10 +76,22 @@ export default function MainMatrixPage() {
   const [savingColor, setSavingColor] = useState(false);
   const [infoText, setInfoText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [mobileControls, setMobileControls] = useState(false);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const keysRef = useRef<Record<string, boolean>>({});
   const latestTrackRef = useRef({ x: 0, z: 0, color: "#7df9ff" });
+
+  const setMoveKey = useCallback((key: "w" | "a" | "s" | "d", pressed: boolean) => {
+    keysRef.current[key] = pressed;
+  }, []);
+
+  const clearMoveKeys = useCallback(() => {
+    keysRef.current.w = false;
+    keysRef.current.a = false;
+    keysRef.current.s = false;
+    keysRef.current.d = false;
+  }, []);
 
   useEffect(() => {
     latestTrackRef.current = { x: selfPos.x, z: selfPos.z, color: orbColor };
@@ -173,6 +185,19 @@ export default function MainMatrixPage() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
+  useEffect(() => {
+    function syncMobileControls() {
+      const coarse = window.matchMedia("(pointer: coarse)").matches;
+      setMobileControls(coarse || window.innerWidth <= 900);
+    }
+
+    syncMobileControls();
+    window.addEventListener("resize", syncMobileControls);
+    return () => {
+      window.removeEventListener("resize", syncMobileControls);
     };
   }, []);
 
@@ -391,7 +416,13 @@ export default function MainMatrixPage() {
           </div>
 
           <div style={{ fontSize: 12, opacity: 0.66 }}>
-            controls: <code>WASD</code> / arrow keys
+            {mobileControls ? (
+              <>controls: touch pad</>
+            ) : (
+              <>
+                controls: <code>WASD</code> / arrow keys
+              </>
+            )}
           </div>
         </div>
 
@@ -500,7 +531,109 @@ export default function MainMatrixPage() {
         <div style={{ position: "absolute", right: 12, bottom: 12, fontSize: 11, opacity: 0.7 }}>
           present: {allOrbs.length}
         </div>
+
+        {mobileControls ? (
+          <div
+            style={{
+              position: "absolute",
+              left: 14,
+              bottom: 14,
+              width: 112,
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gridTemplateRows: "repeat(3, 1fr)",
+              gap: 6,
+              zIndex: 1200,
+              touchAction: "none",
+            }}
+          >
+            <div />
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                setMoveKey("w", true);
+              }}
+              onPointerUp={() => setMoveKey("w", false)}
+              onPointerCancel={() => setMoveKey("w", false)}
+              onPointerLeave={() => setMoveKey("w", false)}
+              style={mobilePadButtonStyle}
+            >
+              ↑
+            </button>
+            <div />
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                setMoveKey("a", true);
+              }}
+              onPointerUp={() => setMoveKey("a", false)}
+              onPointerCancel={() => setMoveKey("a", false)}
+              onPointerLeave={() => setMoveKey("a", false)}
+              style={mobilePadButtonStyle}
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                clearMoveKeys();
+              }}
+              onPointerUp={clearMoveKeys}
+              onPointerCancel={clearMoveKeys}
+              onPointerLeave={clearMoveKeys}
+              style={{ ...mobilePadButtonStyle, opacity: 0.56 }}
+            >
+              •
+            </button>
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                setMoveKey("d", true);
+              }}
+              onPointerUp={() => setMoveKey("d", false)}
+              onPointerCancel={() => setMoveKey("d", false)}
+              onPointerLeave={() => setMoveKey("d", false)}
+              style={mobilePadButtonStyle}
+            >
+              →
+            </button>
+            <div />
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                setMoveKey("s", true);
+              }}
+              onPointerUp={() => setMoveKey("s", false)}
+              onPointerCancel={() => setMoveKey("s", false)}
+              onPointerLeave={() => setMoveKey("s", false)}
+              style={mobilePadButtonStyle}
+            >
+              ↓
+            </button>
+            <div />
+          </div>
+        ) : null}
       </section>
     </main>
   );
 }
+
+const mobilePadButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.32)",
+  borderRadius: 10,
+  background: "rgba(8,8,8,0.72)",
+  color: "#eaeaea",
+  fontSize: 18,
+  lineHeight: 1,
+  height: 32,
+  width: 32,
+  display: "grid",
+  placeItems: "center",
+  userSelect: "none",
+  touchAction: "none",
+};
