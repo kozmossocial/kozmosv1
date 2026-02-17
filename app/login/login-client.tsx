@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
+const PENDING_RECOVERY_KEY = "kozmos:pending_password_recovery";
+
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -111,7 +113,7 @@ export default function LoginClient() {
 
     const redirectToUrl =
       typeof window !== "undefined"
-        ? `${window.location.origin}/reset-password`
+        ? `${window.location.origin}/reset-password?flow=recovery`
         : undefined;
 
     const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
@@ -122,6 +124,16 @@ export default function LoginClient() {
       setResetMessage(error.message);
       setResetLoading(false);
       return;
+    }
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        PENDING_RECOVERY_KEY,
+        JSON.stringify({
+          at: Date.now(),
+          email: targetEmail,
+        })
+      );
     }
 
     setResetMessage("reset mail sent");

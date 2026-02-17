@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabaseClient";
 const INACTIVITY_LIMIT_MS = 60 * 60 * 1000; // 1 hour
 const ACTIVITY_STORAGE_KEY = "kozmos:last_activity_at";
 const ACTIVITY_WRITE_THROTTLE_MS = 15 * 1000;
+const PENDING_RECOVERY_KEY = "kozmos:pending_password_recovery";
+const PENDING_RECOVERY_TTL_MS = 45 * 60 * 1000;
 
 function isProtectedPath(pathname: string) {
   return (
@@ -106,6 +108,27 @@ export default function AuthSyncGuard() {
       return value;
     };
 
+    const readPendingRecovery = () => {
+      try {
+        const raw = localStorage.getItem(PENDING_RECOVERY_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { at?: number };
+        const at = Number(parsed?.at || 0);
+        if (!Number.isFinite(at) || at <= 0) {
+          localStorage.removeItem(PENDING_RECOVERY_KEY);
+          return null;
+        }
+        if (Date.now() - at > PENDING_RECOVERY_TTL_MS) {
+          localStorage.removeItem(PENDING_RECOVERY_KEY);
+          return null;
+        }
+        return parsed;
+      } catch {
+        localStorage.removeItem(PENDING_RECOVERY_KEY);
+        return null;
+      }
+    };
+
     const markActivity = (force = false) => {
       const now = Date.now();
       if (!force && now - lastWriteAt < ACTIVITY_WRITE_THROTTLE_MS) {
@@ -149,9 +172,26 @@ export default function AuthSyncGuard() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        localStorage.removeItem(PENDING_RECOVERY_KEY);
+        if (window.location.pathname !== "/reset-password") {
+          window.location.replace("/reset-password");
+        }
+        return;
+      }
+
       if (event === "SIGNED_OUT" || !session) {
         redirectIfProtected();
         return;
+      }
+
+      if (event === "SIGNED_IN") {
+        const pendingRecovery = readPendingRecovery();
+        if (pendingRecovery && window.location.pathname === "/") {
+          localStorage.removeItem(PENDING_RECOVERY_KEY);
+          window.location.replace("/account?recovery=1");
+          return;
+        }
       }
 
       if (event === "SIGNED_IN" || event === "USER_UPDATED") {
