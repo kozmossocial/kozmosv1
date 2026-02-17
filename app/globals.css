@@ -197,6 +197,23 @@ body {
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
 }
 
+.principle-fade.afterglow {
+  animation: principle-afterglow 1.05s ease-out 1;
+}
+
+@keyframes principle-afterglow {
+  0% {
+    text-shadow:
+      0 0 18px rgba(255, 255, 255, 0.78),
+      0 0 36px rgba(255, 255, 255, 0.4);
+  }
+  100% {
+    text-shadow:
+      0 0 5px rgba(255, 255, 255, 0.1),
+      0 0 10px rgba(255, 255, 255, 0.04);
+  }
+}
+
 @keyframes principle-fragment {
   0% {
     opacity: 1;

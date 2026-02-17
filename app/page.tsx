@@ -10,6 +10,7 @@ const MATRIX_BASE_CHARS =
   'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾔﾖﾙﾚﾛﾝ:・."=*+-<>¦｜çöşğı:."=*+-¦|_kozmos';
 const MATRIX_DIGITS = "012345678";
 const HOME_AMBIENT_SRC = "/ambient-main.mp3";
+const AMBIENT_PREF_KEY = "kozmos:ambient-sound-on";
 
 function createSeededRng(seed: number) {
   let s = seed;
@@ -58,6 +59,7 @@ export default function Home() {
 
   const [principle, setPrinciple] = useState<string | null>(null);
   const [principleDissolving, setPrincipleDissolving] = useState(false);
+  const [principleAfterglow, setPrincipleAfterglow] = useState(false);
   const [axyOpen, setAxyOpen] = useState(false);
   const [axyInput, setAxyInput] = useState("");
   const [axyReply, setAxyReply] = useState<string | null>(null);
@@ -81,6 +83,7 @@ export default function Home() {
   const [ambientSoft, setAmbientSoft] = useState(false);
   const [matrixMotionActive, setMatrixMotionActive] = useState(false);
   const [ambientSoundOn, setAmbientSoundOn] = useState(true);
+  const [ambientPrefReady, setAmbientPrefReady] = useState(false);
   const [lowPerfMotion, setLowPerfMotion] = useState(false);
 
   const matrixColumns = useMemo(() => {
@@ -324,33 +327,81 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const audio = ambientAudioRef.current;
-    if (!audio) return;
-
-    let cancelled = false;
-    audio.volume = 0.34;
-    audio.loop = true;
-
-    void audio.play().catch(() => {
-      if (!cancelled) setAmbientSoundOn(false);
-    });
-
-    return () => {
-      cancelled = true;
-      audio.pause();
-      audio.currentTime = 0;
-    };
+    try {
+      const saved = window.localStorage.getItem(AMBIENT_PREF_KEY);
+      if (saved === "0") setAmbientSoundOn(false);
+      if (saved === "1") setAmbientSoundOn(true);
+    } catch {
+      // ignore localStorage failures
+    } finally {
+      setAmbientPrefReady(true);
+    }
   }, []);
 
   useEffect(() => {
+    if (!ambientPrefReady) return;
+    try {
+      window.localStorage.setItem(AMBIENT_PREF_KEY, ambientSoundOn ? "1" : "0");
+    } catch {
+      // ignore localStorage failures
+    }
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  useEffect(() => {
     const audio = ambientAudioRef.current;
-    if (!audio) return;
+    if (!audio || !ambientPrefReady) return;
+
+    audio.volume = 0.34;
+    audio.loop = true;
+
     if (ambientSoundOn) {
-      void audio.play().catch(() => setAmbientSoundOn(false));
+      void audio.play().catch(() => {
+        // autoplay can be blocked by browser policy; keep preference on
+      });
+    } else {
+      audio.pause();
+    }
+
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  useEffect(() => {
+    const audio = ambientAudioRef.current;
+    if (!audio || !ambientPrefReady) return;
+    if (ambientSoundOn) {
+      void audio.play().catch(() => {
+        // keep preferred state; retry after user interaction
+      });
       return;
     }
     audio.pause();
-  }, [ambientSoundOn]);
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  useEffect(() => {
+    if (!ambientPrefReady || !ambientSoundOn) return;
+
+    const tryResume = () => {
+      const audio = ambientAudioRef.current;
+      if (!audio) return;
+      if (!audio.paused) return;
+      void audio.play().catch(() => {
+        // still blocked
+      });
+    };
+
+    window.addEventListener("pointerdown", tryResume, { passive: true });
+    window.addEventListener("keydown", tryResume);
+    document.addEventListener("visibilitychange", tryResume);
+
+    return () => {
+      window.removeEventListener("pointerdown", tryResume);
+      window.removeEventListener("keydown", tryResume);
+      document.removeEventListener("visibilitychange", tryResume);
+    };
+  }, [ambientPrefReady, ambientSoundOn]);
 
   async function handleLoginClick() {
     if (user) {
@@ -461,11 +512,17 @@ export default function Home() {
   function dissolvePrinciple() {
     if (!principle || principleDissolving) return;
     setPrincipleDissolving(true);
+    if (!lowPerfMotion) setPrincipleAfterglow(true);
     const dissolveMs = lowPerfMotion ? 320 : 460;
     setTimeout(() => {
       setPrinciple(null);
       setPrincipleDissolving(false);
     }, dissolveMs);
+    if (!lowPerfMotion) {
+      setTimeout(() => {
+        setPrincipleAfterglow(false);
+      }, 1120);
+    }
   }
 
   async function askAxy() {
@@ -1067,7 +1124,7 @@ export default function Home() {
           <div
             className={`principle-fade${principleDissolving ? " dissolve" : ""}${
               lowPerfMotion ? " low-perf" : ""
-            }`}
+            }${principleAfterglow ? " afterglow" : ""}`}
             onClick={dissolvePrinciple}
             style={{
               maxWidth: 520,
