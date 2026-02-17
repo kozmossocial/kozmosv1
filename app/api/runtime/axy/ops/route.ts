@@ -5,6 +5,7 @@ import { requireRuntimeCapability, type RuntimeActor } from "@/app/api/runtime/_
 const AXY_SUPER_CAPABILITY = "axy.super";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MATRIX_WORLD_LIMIT = 14;
 
 type TouchLinkRow = {
   id: number;
@@ -84,6 +85,14 @@ type BuildFileRow = {
   updated_at: string;
 };
 
+type RuntimePresenceMatrixRow = {
+  user_id: string;
+  last_seen_at: string;
+  matrix_x: number | null;
+  matrix_z: number | null;
+  matrix_updated_at: string | null;
+};
+
 function isUuid(input: string) {
   return UUID_RE.test(input);
 }
@@ -108,6 +117,10 @@ function normalizeBuildPath(input: unknown) {
 function sanitizeHexColor(input: string) {
   const color = input.trim();
   return /^#[0-9A-Fa-f]{6}$/.test(color) ? color.toLowerCase() : null;
+}
+
+function clampMatrix(value: number) {
+  return Math.max(-MATRIX_WORLD_LIMIT, Math.min(MATRIX_WORLD_LIMIT, value));
 }
 
 function isHushActiveMemberStatus(status: string) {
@@ -1145,6 +1158,119 @@ async function updateMatrixColor(userId: string, orbColorInput: string) {
   };
 }
 
+async function getMatrixPosition(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("runtime_presence")
+    .select("user_id, matrix_x, matrix_z, matrix_updated_at, last_seen_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/matrix_x|matrix_z|matrix_updated_at/i.test(msg)) {
+      throw new Error("matrix move schema missing (run migration)");
+    }
+    throw new Error("matrix position load failed");
+  }
+
+  return {
+    x: Number((data as RuntimePresenceMatrixRow | null)?.matrix_x ?? 0),
+    z: Number((data as RuntimePresenceMatrixRow | null)?.matrix_z ?? 0),
+    updated_at: (data as RuntimePresenceMatrixRow | null)?.matrix_updated_at || null,
+    last_seen_at: (data as RuntimePresenceMatrixRow | null)?.last_seen_at || null,
+  };
+}
+
+async function moveMatrix(
+  userId: string,
+  payload: { x?: unknown; z?: unknown; dx?: unknown; dz?: unknown }
+) {
+  const current = await getMatrixPosition(userId);
+
+  const hasAbsX = typeof payload.x === "number" && Number.isFinite(payload.x);
+  const hasAbsZ = typeof payload.z === "number" && Number.isFinite(payload.z);
+  const hasDeltaX = typeof payload.dx === "number" && Number.isFinite(payload.dx);
+  const hasDeltaZ = typeof payload.dz === "number" && Number.isFinite(payload.dz);
+
+  if (!hasAbsX && !hasAbsZ && !hasDeltaX && !hasDeltaZ) {
+    throw new Error("matrix move requires x/z or dx/dz");
+  }
+
+  const baseX = current.x;
+  const baseZ = current.z;
+  const nextX = clampMatrix(
+    hasAbsX ? Number(payload.x) : baseX + (hasDeltaX ? Number(payload.dx) : 0)
+  );
+  const nextZ = clampMatrix(
+    hasAbsZ ? Number(payload.z) : baseZ + (hasDeltaZ ? Number(payload.dz) : 0)
+  );
+  const nowIso = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from("runtime_presence").upsert({
+    user_id: userId,
+    last_seen_at: nowIso,
+    matrix_x: nextX,
+    matrix_z: nextZ,
+    matrix_updated_at: nowIso,
+  });
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/matrix_x|matrix_z|matrix_updated_at/i.test(msg)) {
+      throw new Error("matrix move schema missing (run migration)");
+    }
+    throw new Error("matrix move failed");
+  }
+
+  return { x: nextX, z: nextZ, updated_at: nowIso };
+}
+
+async function listMatrixRuntimeWorld() {
+  const { data, error } = await supabaseAdmin
+    .from("runtime_presence")
+    .select("user_id, last_seen_at, matrix_x, matrix_z, matrix_updated_at")
+    .not("matrix_updated_at", "is", null)
+    .gte("last_seen_at", new Date(Date.now() - 10 * 60 * 1000).toISOString())
+    .order("matrix_updated_at", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/matrix_x|matrix_z|matrix_updated_at/i.test(msg)) {
+      throw new Error("matrix move schema missing (run migration)");
+    }
+    throw new Error("matrix world load failed");
+  }
+
+  const rows = (data || []) as RuntimePresenceMatrixRow[];
+  if (rows.length === 0) return [];
+
+  const userIds = rows.map((row) => row.user_id);
+  const { data: profiles, error: profilesErr } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id, username, orb_color")
+    .in("id", userIds);
+  if (profilesErr) throw new Error("matrix world profile load failed");
+
+  const profileMap: Record<string, { username: string; orb_color: string }> = {};
+  (profiles || []).forEach((profile) => {
+    const id = String((profile as { id: string }).id);
+    const username = String((profile as { username: string }).username || "user");
+    const orbColor = String((profile as { orb_color?: string }).orb_color || "#7df9ff");
+    profileMap[id] = { username, orb_color: orbColor };
+  });
+
+  return rows.map((row) => ({
+    user_id: row.user_id,
+    username: profileMap[row.user_id]?.username || "user",
+    orb_color: profileMap[row.user_id]?.orb_color || "#7df9ff",
+    x: Number(row.matrix_x ?? 0),
+    z: Number(row.matrix_z ?? 0),
+    updated_at: row.matrix_updated_at,
+    last_seen_at: row.last_seen_at,
+  }));
+}
+
 function listKozmosPlay() {
   return KOZMOS_PLAY_CATALOG.map((game) => ({ ...game }));
 }
@@ -1731,12 +1857,13 @@ async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
 }
 
 async function buildSnapshot(actor: RuntimeActor) {
-  const [notes, touch, chats, hush, matrix] = await Promise.all([
+  const [notes, touch, chats, hush, matrix, matrixPosition] = await Promise.all([
     listNotes(actor.userId),
     listTouch(actor.userId),
     listDirectChats(actor.userId),
     listHush(actor.userId),
     getMatrixProfile(actor.userId),
+    getMatrixPosition(actor.userId),
   ]);
 
   return {
@@ -1749,6 +1876,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     chats,
     hush,
     matrix,
+    matrix_position: matrixPosition,
     play: listKozmosPlay(),
   };
 }
@@ -2026,6 +2154,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, action, data: profile });
     }
 
+    if (action === "matrix.position") {
+      const position = await getMatrixPosition(actor.userId);
+      return NextResponse.json({ ok: true, action, data: position });
+    }
+
+    if (action === "matrix.move") {
+      const position = await moveMatrix(actor.userId, payload as Record<string, unknown>);
+      return NextResponse.json({ ok: true, action, data: position });
+    }
+
+    if (action === "matrix.world") {
+      const world = await listMatrixRuntimeWorld();
+      return NextResponse.json({ ok: true, action, data: world });
+    }
+
     if (action === "play.catalog") {
       return NextResponse.json({ ok: true, action, data: listKozmosPlay() });
     }
@@ -2085,7 +2228,7 @@ export async function POST(req: Request) {
         ? 403
         : /not found/i.test(detail)
         ? 404
-        : /required|invalid|unknown action|cannot|no updates/i.test(detail)
+        : /required|invalid|unknown action|cannot|no updates|schema missing|requires/i.test(detail)
         ? 400
         : 500;
 

@@ -241,6 +241,11 @@ async function main() {
   const dmTriggerRegexRaw =
     args["dm-trigger-regex"] || process.env.KOZMOS_DM_TRIGGER_REGEX || "";
   const autoBuild = toBool(args["auto-build"] ?? process.env.KOZMOS_AUTO_BUILD, false);
+  const autoMatrix = toBool(args["auto-matrix"] ?? process.env.KOZMOS_AUTO_MATRIX, false);
+  const matrixStep = Math.max(
+    0.05,
+    Math.min(2, Number(args["matrix-step"] || process.env.KOZMOS_MATRIX_STEP || 0.45))
+  );
   const buildSpaceId = String(
     args["build-space-id"] || process.env.KOZMOS_BUILD_SPACE_ID || ""
   ).trim();
@@ -286,7 +291,7 @@ async function main() {
     `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
   );
   console.log(
-    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild}`
+    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoMatrix=${autoMatrix}`
   );
   if (autoBuild) {
     console.log(
@@ -623,6 +628,16 @@ async function main() {
               console.log(`[${now()}] build helper fail: ${buildMsg}`);
             }
           }
+        }
+
+        if (autoMatrix) {
+          const dx = (Math.random() * 2 - 1) * matrixStep;
+          const dz = (Math.random() * 2 - 1) * matrixStep;
+          const moveRes = await callAxyOps(baseUrl, token, "matrix.move", { dx, dz });
+          const pos = moveRes?.data || {};
+          console.log(
+            `[${now()}] matrix moved x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
+          );
         }
       } catch (err) {
         const msg = err?.body?.error || err.message || "ops loop error";

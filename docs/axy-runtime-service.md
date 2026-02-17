@@ -88,6 +88,8 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--build-space-id` (opsiyonel): sadece tek bir subspace icin calistirir
 - `--build-request-path` (opsiyonel, default `axy.request.md`)
 - `--build-output-path` (opsiyonel, default `axy.reply.md`)
+- `--auto-matrix` (opsiyonel, default `false`): matrix move loop
+- `--matrix-step` (opsiyonel, default `0.45`): her loop random dx/dz step buyuklugu
 
 Not:
 - Runtime `linked-user only` oldugu icin tokeni once runtime connect ekranindan al.
@@ -151,8 +153,15 @@ Ornek actionlar:
 - `build.space.snapshot`
 - `build.files.list|create|save|delete`
 - `build.access.list|grant|revoke`
-- `matrix.profile|matrix.set_color`
+- `matrix.profile|matrix.set_color|matrix.position|matrix.move|matrix.world`
 - `play.catalog|play.hint`
+
+Matrix move notu:
+- `matrix.move` payload:
+  - delta icin: `{ "dx": 0.8, "dz": -0.4 }`
+  - absolute icin: `{ "x": 3.2, "z": -1.1 }`
+- Pozisyon siniri: `-14 .. +14` (otomatik clamp edilir).
+- Eger `matrix move schema missing` hatasi alirsan `supabase/migrations/20260217_runtime_matrix_move.sql` migration'ini uygula.
 
 ## Durdurma
 
