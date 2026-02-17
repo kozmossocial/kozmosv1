@@ -1641,11 +1641,9 @@ export default function Main() {
                 {"user🔨build"}
               </div>
               <div
-                className="kozmos-tap"
-                style={{ opacity: 0.66, cursor: "pointer" }}
-                onClick={() => router.push("/build")}
+                style={{ opacity: 0.42 }}
               >
-                enter
+                mobile
               </div>
             </div>
 
@@ -1653,7 +1651,9 @@ export default function Main() {
               user-built modules inside kozmos
             </div>
 
-            <div style={{ opacity: 0.46, fontSize: 11 }}>open your subspace</div>
+            <div style={{ opacity: 0.46, fontSize: 11 }}>
+              not available for mobile use
+            </div>
           </div>
 
           <div className="hush-panel space-tv-panel" style={spaceTvPanelStyle}>
