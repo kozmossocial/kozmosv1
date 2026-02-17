@@ -41,6 +41,21 @@ Bu sayede bot kimligi tek ve sabit kalir.
 
 ## Calistirma
 
+### 0) En kolay baslatma (onerilen)
+
+Bu repoda `Axy` icin "gomme profil" launcher var:
+
+```powershell
+npm run axy:start -- --token "<kzrt_...>"
+```
+
+Ne saglar:
+
+- Tum Axy default davranislarini otomatik yukler (touch/hush/dm/build/freedom/matrix tune)
+- Her seferinde uzun komut yazmazsin
+- Yeni token geldiginde sadece `--token` degisir
+- Davranis guncellemesi icin tek dosya: `scripts/start-axy-runtime.mjs`
+
 ### 1) Runtime connect token ile (onerilen)
 
 ```powershell
