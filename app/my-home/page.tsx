@@ -493,7 +493,7 @@ useEffect(() => {
   }, [selectedDirectChatId]);
 
   useEffect(() => {
-    const sync = () => setIsMobileLayout(window.innerWidth <= 900);
+    const sync = () => setIsMobileLayout(window.innerWidth <= 1080);
     sync();
     window.addEventListener("resize", sync);
     return () => {
@@ -1315,14 +1315,14 @@ const touchDockStyle: React.CSSProperties = {
   position: "absolute",
   left: 44,
   top: 214,
-  width: "min(360px, calc(100vw - 88px))",
+  width: "clamp(180px, calc((100vw - 700px) / 2), 360px)",
 };
 
 const directChatDockStyle: React.CSSProperties = {
   position: "absolute",
   right: 44,
   top: 214,
-  width: "min(360px, calc(100vw - 88px))",
+  width: "clamp(180px, calc((100vw - 700px) / 2), 360px)",
 };
 
 const directThreadWrapStyle: React.CSSProperties = {
