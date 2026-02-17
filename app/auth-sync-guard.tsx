@@ -55,6 +55,43 @@ export default function AuthSyncGuard() {
     let signingOut = false;
     let lastWriteAt = 0;
 
+    const redirectRecoveryFlowToResetPage = () => {
+      const hashRaw = window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+      const hash = new URLSearchParams(hashRaw);
+      const search = new URLSearchParams(window.location.search);
+
+      const hasRecoveryHash =
+        hash.get("type") === "recovery" ||
+        (Boolean(hash.get("access_token")) && Boolean(hash.get("refresh_token")));
+      const hasRecoveryQuery =
+        search.get("type") === "recovery" && Boolean(search.get("code"));
+      const hasRecoveryError =
+        hash.get("error_code") === "otp_expired" ||
+        (hash.get("error") === "access_denied" && hash.has("error_description"));
+
+      if (
+        (hasRecoveryHash || hasRecoveryQuery || hasRecoveryError) &&
+        window.location.pathname !== "/reset-password"
+      ) {
+        const target = new URL("/reset-password", window.location.origin);
+        if (hasRecoveryQuery) {
+          target.search = `?${search.toString()}`;
+        }
+        if (window.location.hash) {
+          target.hash = window.location.hash;
+        }
+        window.location.replace(target.toString());
+        return true;
+      }
+      return false;
+    };
+
+    if (redirectRecoveryFlowToResetPage()) {
+      return;
+    }
+
     const redirectIfProtected = () => {
       if (isProtectedPath(window.location.pathname)) {
         window.location.replace("/");

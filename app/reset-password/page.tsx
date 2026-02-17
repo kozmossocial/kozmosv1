@@ -16,11 +16,80 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     let active = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    const cleanResetUrl = () => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      url.hash = "";
+      url.searchParams.delete("code");
+      url.searchParams.delete("type");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    };
+
+    const resolveRecoverySession = async () => {
+      const hashRaw = window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+      const hash = new URLSearchParams(hashRaw);
+      const search = new URLSearchParams(window.location.search);
+
+      const hashErrorCode = hash.get("error_code");
+      const hashErrorDescription = hash.get("error_description");
+      if (hashErrorCode) {
+        setMessage(
+          hashErrorCode === "otp_expired"
+            ? "reset link expired. request a new one."
+            : hashErrorDescription || "reset link invalid"
+        );
+        setHasSession(false);
+        setSessionReady(true);
+        cleanResetUrl();
+        return;
+      }
+
+      const hashType = hash.get("type");
+      const accessToken = hash.get("access_token");
+      const refreshToken = hash.get("refresh_token");
+      if (hashType === "recovery" && accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (!active) return;
+        if (error) {
+          setMessage("reset session invalid. request a new reset link.");
+          setHasSession(false);
+          setSessionReady(true);
+          cleanResetUrl();
+          return;
+        }
+        cleanResetUrl();
+      } else {
+        const code = search.get("code");
+        const type = search.get("type");
+        if (type === "recovery" && code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!active) return;
+          if (error) {
+            setMessage("reset link invalid or expired. request a new one.");
+            setHasSession(false);
+            setSessionReady(true);
+            cleanResetUrl();
+            return;
+          }
+          cleanResetUrl();
+        }
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!active) return;
-      setHasSession(Boolean(data.session));
+      setHasSession(Boolean(session));
       setSessionReady(true);
-    });
+    };
+
+    void resolveRecoverySession();
 
     const {
       data: { subscription },
