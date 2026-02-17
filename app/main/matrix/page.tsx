@@ -93,6 +93,18 @@ export default function MainMatrixPage() {
     keysRef.current.d = false;
   }, []);
 
+  const startMove = useCallback(
+    (event: { preventDefault: () => void }, key: "w" | "a" | "s" | "d") => {
+      event.preventDefault();
+      setMoveKey(key, true);
+    },
+    [setMoveKey]
+  );
+
+  const stopMove = useCallback((key: "w" | "a" | "s" | "d") => {
+    setMoveKey(key, false);
+  }, [setMoveKey]);
+
   useEffect(() => {
     latestTrackRef.current = { x: selfPos.x, z: selfPos.z, color: orbColor };
   }, [selfPos.x, selfPos.z, orbColor]);
@@ -417,122 +429,6 @@ export default function MainMatrixPage() {
 
           <div style={{ fontSize: 12, opacity: 0.66 }}>
             {mobileControls ? (
-              <>controls: touch pad</>
-            ) : (
-              <>
-                controls: <code>WASD</code> / arrow keys
-              </>
-            )}
-          </div>
-        </div>
-
-        {infoText ? <div style={{ marginTop: 8, fontSize: 12, color: "#b8ffd1" }}>{infoText}</div> : null}
-        {errorText ? <div style={{ marginTop: 8, fontSize: 12, color: "#ff9d9d" }}>{errorText}</div> : null}
-      </section>
-
-      <section
-        style={{
-          marginTop: 14,
-          border: "1px solid rgba(255,255,255,0.15)",
-          borderRadius: 12,
-          overflow: "hidden",
-          background:
-            "radial-gradient(circle at 50% 22%, rgba(130,170,255,0.22), rgba(11,11,11,1) 58%)",
-          height: 560,
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "72%",
-            width: "120%",
-            height: "52%",
-            transform: "translateX(-50%)",
-            borderTop: "1px solid rgba(255,255,255,0.18)",
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-            opacity: 0.24,
-            filter: "blur(0.4px)",
-          }}
-        />
-
-        {allOrbs.map((orb) => {
-          const { xPercent, yPercent, size, depth } = projectOrb(orb.x, orb.z);
-          const phase = seedPhase(orb.id);
-          const bob = Math.sin(pulseTick / 1400 + phase) * 2.2;
-          const labelLift = size * 0.86;
-          const shadowY = yPercent + size * 0.45;
-          const zIndex = 1000 - Math.floor(depth * 500) + (orb.isSelf ? 80 : 0);
-          const glow = orb.isSelf ? 0.85 : 0.6;
-
-          return (
-            <div key={orb.id}>
-              <div
-                style={{
-                  position: "absolute",
-                  left: `${xPercent}%`,
-                  top: `${shadowY}%`,
-                  width: size * 1.42,
-                  height: size * 0.38,
-                  transform: "translate(-50%, -50%)",
-                  borderRadius: "999px",
-                  background: `radial-gradient(circle, ${hexToRgba(orb.color, 0.34)}, rgba(0,0,0,0))`,
-                  filter: "blur(5px)",
-                  opacity: 0.75 - depth * 0.35,
-                  zIndex,
-                }}
-              />
-
-              <div
-                style={{
-                  position: "absolute",
-                  left: `${xPercent}%`,
-                  top: `calc(${yPercent}% + ${bob}px)`,
-                  width: size,
-                  height: size,
-                  transform: "translate(-50%, -50%)",
-                  borderRadius: "999px",
-                  background: `radial-gradient(circle at 28% 26%, rgba(255,255,255,0.96), ${hexToRgba(
-                    orb.color,
-                    0.92
-                  )} 38%, ${hexToRgba(orb.color, 0.35)} 72%)`,
-                  boxShadow: `0 0 ${Math.round(size * 0.9)}px ${hexToRgba(orb.color, glow)}`,
-                  border: orb.isSelf ? "1px solid rgba(255,255,255,0.85)" : "1px solid rgba(255,255,255,0.45)",
-                  zIndex: zIndex + 10,
-                }}
-              />
-
-              <div
-                style={{
-                  position: "absolute",
-                  left: `${xPercent}%`,
-                  top: `calc(${yPercent}% + ${bob}px - ${labelLift}px)`,
-                  transform: "translate(-50%, -100%)",
-                  fontSize: orb.isSelf ? 12 : 11,
-                  opacity: orb.isSelf ? 0.92 : 0.75,
-                  textShadow: "0 0 10px rgba(0,0,0,0.6)",
-                  whiteSpace: "nowrap",
-                  zIndex: zIndex + 20,
-                  pointerEvents: "none",
-                }}
-              >
-                {orb.isSelf ? `${orb.username} (you)` : orb.username}
-              </div>
-            </div>
-          );
-        })}
-
-        <div style={{ position: "absolute", left: 12, bottom: 12, fontSize: 11, opacity: 0.7 }}>
-          x: {selfPos.x.toFixed(1)} / z: {selfPos.z.toFixed(1)}
-        </div>
-        <div style={{ position: "absolute", right: 12, bottom: 12, fontSize: 11, opacity: 0.7 }}>
-          present: {allOrbs.length}
-        </div>
-
-        {mobileControls ? (
           <div
             style={{
               position: "absolute",
@@ -545,38 +441,46 @@ export default function MainMatrixPage() {
               gap: 6,
               zIndex: 1200,
               touchAction: "none",
+              userSelect: "none",
+              WebkitUserSelect: "none",
+              WebkitTouchCallout: "none",
             }}
           >
             <div />
             <button
               type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                setMoveKey("w", true);
-              }}
-              onPointerUp={() => setMoveKey("w", false)}
-              onPointerCancel={() => setMoveKey("w", false)}
-              onPointerLeave={() => setMoveKey("w", false)}
+              aria-label="move up"
+              onPointerDown={(event) => startMove(event, "w")}
+              onPointerUp={() => stopMove("w")}
+              onPointerCancel={() => stopMove("w")}
+              onPointerLeave={() => stopMove("w")}
+              onTouchStart={(event) => event.preventDefault()}
+              onTouchEnd={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+              onContextMenu={(event) => event.preventDefault()}
               style={mobilePadButtonStyle}
             >
-              ↑
+              ^
             </button>
             <div />
             <button
               type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                setMoveKey("a", true);
-              }}
-              onPointerUp={() => setMoveKey("a", false)}
-              onPointerCancel={() => setMoveKey("a", false)}
-              onPointerLeave={() => setMoveKey("a", false)}
+              aria-label="move left"
+              onPointerDown={(event) => startMove(event, "a")}
+              onPointerUp={() => stopMove("a")}
+              onPointerCancel={() => stopMove("a")}
+              onPointerLeave={() => stopMove("a")}
+              onTouchStart={(event) => event.preventDefault()}
+              onTouchEnd={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+              onContextMenu={(event) => event.preventDefault()}
               style={mobilePadButtonStyle}
             >
-              ←
+              {"<"}
             </button>
             <button
               type="button"
+              aria-label="stop"
               onPointerDown={(event) => {
                 event.preventDefault();
                 clearMoveKeys();
@@ -584,36 +488,44 @@ export default function MainMatrixPage() {
               onPointerUp={clearMoveKeys}
               onPointerCancel={clearMoveKeys}
               onPointerLeave={clearMoveKeys}
+              onTouchStart={(event) => event.preventDefault()}
+              onTouchEnd={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+              onContextMenu={(event) => event.preventDefault()}
               style={{ ...mobilePadButtonStyle, opacity: 0.56 }}
             >
-              •
+              o
             </button>
             <button
               type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                setMoveKey("d", true);
-              }}
-              onPointerUp={() => setMoveKey("d", false)}
-              onPointerCancel={() => setMoveKey("d", false)}
-              onPointerLeave={() => setMoveKey("d", false)}
+              aria-label="move right"
+              onPointerDown={(event) => startMove(event, "d")}
+              onPointerUp={() => stopMove("d")}
+              onPointerCancel={() => stopMove("d")}
+              onPointerLeave={() => stopMove("d")}
+              onTouchStart={(event) => event.preventDefault()}
+              onTouchEnd={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+              onContextMenu={(event) => event.preventDefault()}
               style={mobilePadButtonStyle}
             >
-              →
+              {">"}
             </button>
             <div />
             <button
               type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                setMoveKey("s", true);
-              }}
-              onPointerUp={() => setMoveKey("s", false)}
-              onPointerCancel={() => setMoveKey("s", false)}
-              onPointerLeave={() => setMoveKey("s", false)}
+              aria-label="move down"
+              onPointerDown={(event) => startMove(event, "s")}
+              onPointerUp={() => stopMove("s")}
+              onPointerCancel={() => stopMove("s")}
+              onPointerLeave={() => stopMove("s")}
+              onTouchStart={(event) => event.preventDefault()}
+              onTouchEnd={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+              onContextMenu={(event) => event.preventDefault()}
               style={mobilePadButtonStyle}
             >
-              ↓
+              v
             </button>
             <div />
           </div>
@@ -637,3 +549,4 @@ const mobilePadButtonStyle: React.CSSProperties = {
   userSelect: "none",
   touchAction: "none",
 };
+
