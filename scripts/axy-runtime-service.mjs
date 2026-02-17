@@ -7,6 +7,7 @@
  * - shared feed poll loop
  * - Axy reply generation
  * - post back to shared
+ * - Axy ops loop (snapshot, keep-in-touch, direct chats)
  */
 
 function parseArgs(argv) {
@@ -140,11 +141,43 @@ async function postShared(baseUrl, token, content) {
   });
 }
 
+async function callAxyOps(baseUrl, token, action, payload = {}) {
+  return requestJson(`${baseUrl}/api/runtime/axy/ops`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action, payload }),
+  });
+}
+
 function formatReply(input) {
   return String(input || "...")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 420);
+}
+
+function toBool(value, fallback) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function findLatestIncomingDm(messages, actorUserId) {
+  if (!Array.isArray(messages) || !actorUserId) return null;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const row = messages[i];
+    if (!row?.id) continue;
+    if (String(row.sender_id || "") === actorUserId) continue;
+    const content = String(row.content || "").trim();
+    if (!content) continue;
+    return row;
+  }
+  return null;
 }
 
 async function main() {
@@ -165,6 +198,18 @@ async function main() {
   const lookbackSeconds = Math.max(10, toInt(args["lookback-seconds"] || process.env.KOZMOS_LOOKBACK_SECONDS, 120));
   const replyAll = String(args["reply-all"] || process.env.KOZMOS_REPLY_ALL || "false").toLowerCase() === "true";
   const triggerRegexRaw = args["trigger-regex"] || process.env.KOZMOS_TRIGGER_REGEX || "";
+  const opsSeconds = Math.max(
+    3,
+    toInt(args["ops-seconds"] || process.env.KOZMOS_OPS_SECONDS, 10)
+  );
+  const autoTouch = toBool(args["auto-touch"] ?? process.env.KOZMOS_AUTO_TOUCH, true);
+  const autoDm = toBool(args["auto-dm"] ?? process.env.KOZMOS_AUTO_DM, true);
+  const dmReplyAll = toBool(
+    args["dm-reply-all"] ?? process.env.KOZMOS_DM_REPLY_ALL,
+    true
+  );
+  const dmTriggerRegexRaw =
+    args["dm-trigger-regex"] || process.env.KOZMOS_DM_TRIGGER_REGEX || "";
 
   let token = typeof runtimeTokenInput === "string" ? runtimeTokenInput.trim() : "";
   let user = null;
@@ -178,16 +223,26 @@ async function main() {
   console.log(`[${now()}] using provided runtime token`);
 
   const triggerRegex = buildTriggerRegex(triggerRegexRaw, botUsername);
+  const dmTriggerRegex = buildTriggerRegex(dmTriggerRegexRaw, botUsername);
   let cursor = new Date(Date.now() - lookbackSeconds * 1000).toISOString();
   const seen = new Set();
+  const handledTouchReq = new Set();
+  const handledDmMessage = new Set();
   let stopping = false;
+  let opsEnabled = true;
+  let lastOpsAt = 0;
 
   if (user?.id) {
     console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
   } else {
     console.log(`[${now()}] running as ${botUsername}`);
   }
-  console.log(`[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`);
+  console.log(
+    `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
+  );
+  console.log(
+    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoDm=${autoDm} dmReplyAll=${dmReplyAll}`
+  );
 
   const heartbeat = setInterval(async () => {
     try {
@@ -279,7 +334,85 @@ async function main() {
           console.log(`[${now()}] token unauthorized, exiting.`);
           clearInterval(heartbeat);
           process.exit(1);
+      }
+    }
+
+    const dueOps = Date.now() - lastOpsAt >= opsSeconds * 1000;
+    if (!stopping && opsEnabled && dueOps) {
+      try {
+        lastOpsAt = Date.now();
+        const snapshot = await callAxyOps(baseUrl, token, "context.snapshot");
+        const actor = snapshot?.data?.actor || null;
+        if (actor?.user_id && actor?.username) {
+          user = { id: actor.user_id };
+          botUsername = String(actor.username);
         }
+
+        const touchData = snapshot?.data?.touch || {};
+        if (autoTouch) {
+          const incoming = Array.isArray(touchData?.incoming) ? touchData.incoming : [];
+          for (const req of incoming) {
+            const reqId = Number(req?.id || 0);
+            if (!Number.isFinite(reqId) || reqId <= 0) continue;
+            if (handledTouchReq.has(reqId)) continue;
+            handledTouchReq.add(reqId);
+            await callAxyOps(baseUrl, token, "touch.respond", {
+              requestId: reqId,
+              accept: true,
+            });
+            console.log(`[${now()}] accepted keep-in-touch request id=${reqId}`);
+          }
+        }
+
+        if (autoDm) {
+          const chats = Array.isArray(snapshot?.data?.chats) ? snapshot.data.chats : [];
+          for (const chat of chats) {
+            const chatId = String(chat?.chat_id || "").trim();
+            if (!chatId) continue;
+
+            const messageRes = await callAxyOps(baseUrl, token, "dm.messages", {
+              chatId,
+              limit: 40,
+            });
+            const latestIncoming = findLatestIncomingDm(
+              messageRes?.data || [],
+              user?.id || ""
+            );
+            if (!latestIncoming) continue;
+            if (handledDmMessage.has(latestIncoming.id)) continue;
+
+            handledDmMessage.add(latestIncoming.id);
+
+            const content = String(latestIncoming.content || "").trim();
+            const senderLabel = String(chat?.username || "user");
+            const shouldReplyDm = dmReplyAll || dmTriggerRegex.test(content);
+            if (!shouldReplyDm) continue;
+
+            const prompt = `dm from ${senderLabel}: ${content}`;
+            const raw = await askAxy(baseUrl, prompt);
+            const reply = formatReply(raw);
+            if (!reply) continue;
+
+            await callAxyOps(baseUrl, token, "dm.send", {
+              chatId,
+              content: reply,
+            });
+            console.log(`[${now()}] dm replied to ${senderLabel}`);
+          }
+        }
+      } catch (err) {
+        const msg = err?.body?.error || err.message || "ops loop error";
+        console.log(`[${now()}] ops fail: ${msg}`);
+        if (err?.status === 403 || err?.status === 404) {
+          opsEnabled = false;
+          console.log(`[${now()}] ops disabled (capability/route unavailable)`);
+        }
+        if (err?.status === 401) {
+          console.log(`[${now()}] token unauthorized in ops loop, exiting.`);
+          clearInterval(heartbeat);
+          process.exit(1);
+        }
+      }
     }
 
     if (stopping) break;

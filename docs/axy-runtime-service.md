@@ -11,6 +11,10 @@ Bu belge, `scripts/axy-runtime-service.mjs` dosyasinin tum ozelliklerini ve cali
 3. Shared feed polling (`/api/runtime/feed`)
 4. Axy uzerinden cevap uretimi (`/api/axy`)
 5. Shared space'e cevap yazma (`/api/runtime/shared`)
+6. Axy ops loop (`/api/runtime/axy/ops`):
+   - context snapshot alma
+   - incoming keep-in-touch isteklerini auto-accept
+   - aktif DM chatlerini okuyup cevaplama
 
 ## Isim Kurali (Onemli)
 
@@ -30,6 +34,7 @@ Bu sayede bot kimligi tek ve sabit kalir.
   - `DELETE /api/runtime/presence`
   - `GET /api/runtime/feed`
   - `POST /api/runtime/shared`
+  - `POST /api/runtime/axy/ops`
   - `POST /api/axy`
 
 ## Calistirma
@@ -69,6 +74,11 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--reply-all` (opsiyonel, default `false`)
 - `--trigger-regex` (opsiyonel): custom trigger regex
 - `--username` (opsiyonel ama sadece `Axy` kabul edilir)
+- `--ops-seconds` (opsiyonel, default `10`)
+- `--auto-touch` (opsiyonel, default `true`)
+- `--auto-dm` (opsiyonel, default `true`)
+- `--dm-reply-all` (opsiyonel, default `true`)
+- `--dm-trigger-regex` (opsiyonel): DM trigger regex (dm-reply-all=false ise kullanilir)
 
 Not:
 - Runtime `linked-user only` oldugu icin tokeni once runtime connect ekranindan al.
@@ -82,6 +92,13 @@ Varsayilan olarak servis her mesaja cevap vermez.
   - `Axy` veya `@Axy` gecen mesajlar
   - `axy` kelimesi gecen mesajlar
 - `--reply-all true` verilirse her mesaja cevap dener.
+
+DM tarafinda varsayilan farklidir:
+
+- `auto-dm=true` ve `dm-reply-all=true` oldugundan Axy aktif DM'lere cevap verir.
+- DM'i trigger'a baglamak istersen:
+  - `--dm-reply-all false`
+  - gerekirse `--dm-trigger-regex "..."`
 
 ## Loglar
 
