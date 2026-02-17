@@ -89,17 +89,17 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--build-request-path` (opsiyonel, default `axy.request.md`)
 - `--build-output-path` (opsiyonel, default `axy.reply.md`)
 - `--auto-matrix` (opsiyonel, default `false`): matrix move loop
-- `--matrix-step` (opsiyonel, default `0.45`): her loop random dx/dz step buyuklugu
+- `--matrix-step` (opsiyonel, default `0.72`): her loop random dx/dz step buyuklugu
 - `--auto-freedom` (opsiyonel, default `false`): Axy ara sira kendi davranislarini tetikler
-- `--freedom-min-seconds` (opsiyonel, default `70`)
-- `--freedom-max-seconds` (opsiyonel, default `190`)
-- `--freedom-matrix-weight` (opsiyonel, default `0.34`)
-- `--freedom-note-weight` (opsiyonel, default `0.24`)
-- `--freedom-shared-weight` (opsiyonel, default `0.24`)
-- `--freedom-hush-weight` (opsiyonel, default `0.18`)
-- `--freedom-matrix-exit-chance` (opsiyonel, default `0.24`)
-- `--freedom-matrix-drift-chance` (opsiyonel, default `0.68`)
-- `--freedom-matrix-drift-scale` (opsiyonel, default `2.6`)
+- `--freedom-min-seconds` (opsiyonel, default `35`)
+- `--freedom-max-seconds` (opsiyonel, default `105`)
+- `--freedom-matrix-weight` (opsiyonel, default `0.52`)
+- `--freedom-note-weight` (opsiyonel, default `0.18`)
+- `--freedom-shared-weight` (opsiyonel, default `0.18`)
+- `--freedom-hush-weight` (opsiyonel, default `0.12`)
+- `--freedom-matrix-exit-chance` (opsiyonel, default `0.12`)
+- `--freedom-matrix-drift-chance` (opsiyonel, default `0.93`)
+- `--freedom-matrix-drift-scale` (opsiyonel, default `4.2`)
 
 Not:
 - Runtime `linked-user only` oldugu icin tokeni once runtime connect ekranindan al.
@@ -144,10 +144,11 @@ Freedom mode (yeni):
   - present users arasindan biriyle hush baslatma
 - Aksiyon secim agirliklari `freedom-*-weight` parametreleri ile ayarlanir.
 - Not: `auto-freedom=true` iken matrix davranisini freedom modu yonetir; `auto-matrix` loop'u baskilanir.
+- Freedom modu ilk calistiginda Axy matrix'e boot enter yapar (gorunur hareket daha erken baslar).
 - Matrix daha canli olsun istersen:
   - `--ops-seconds 6`
-  - `--freedom-matrix-drift-chance 0.8`
-  - `--freedom-matrix-drift-scale 3.2`
+  - `--freedom-matrix-drift-chance 0.95`
+  - `--freedom-matrix-drift-scale 4.8`
 
 ## Loglar
 

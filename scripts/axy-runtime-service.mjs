@@ -272,7 +272,7 @@ async function main() {
   const autoMatrix = toBool(args["auto-matrix"] ?? process.env.KOZMOS_AUTO_MATRIX, false);
   const matrixStep = Math.max(
     0.05,
-    Math.min(2, Number(args["matrix-step"] || process.env.KOZMOS_MATRIX_STEP || 0.45))
+    Math.min(2, Number(args["matrix-step"] || process.env.KOZMOS_MATRIX_STEP || 0.72))
   );
   const autoFreedom = toBool(
     args["auto-freedom"] ?? process.env.KOZMOS_AUTO_FREEDOM,
@@ -280,27 +280,27 @@ async function main() {
   );
   const freedomMinSeconds = Math.max(
     20,
-    toInt(args["freedom-min-seconds"] || process.env.KOZMOS_FREEDOM_MIN_SECONDS, 70)
+    toInt(args["freedom-min-seconds"] || process.env.KOZMOS_FREEDOM_MIN_SECONDS, 35)
   );
   const freedomMaxSeconds = Math.max(
     freedomMinSeconds,
-    toInt(args["freedom-max-seconds"] || process.env.KOZMOS_FREEDOM_MAX_SECONDS, 190)
+    toInt(args["freedom-max-seconds"] || process.env.KOZMOS_FREEDOM_MAX_SECONDS, 105)
   );
   const freedomMatrixWeight = Math.max(
     0,
-    toFloat(args["freedom-matrix-weight"] || process.env.KOZMOS_FREEDOM_MATRIX_WEIGHT, 0.34)
+    toFloat(args["freedom-matrix-weight"] || process.env.KOZMOS_FREEDOM_MATRIX_WEIGHT, 0.52)
   );
   const freedomNoteWeight = Math.max(
     0,
-    toFloat(args["freedom-note-weight"] || process.env.KOZMOS_FREEDOM_NOTE_WEIGHT, 0.24)
+    toFloat(args["freedom-note-weight"] || process.env.KOZMOS_FREEDOM_NOTE_WEIGHT, 0.18)
   );
   const freedomSharedWeight = Math.max(
     0,
-    toFloat(args["freedom-shared-weight"] || process.env.KOZMOS_FREEDOM_SHARED_WEIGHT, 0.24)
+    toFloat(args["freedom-shared-weight"] || process.env.KOZMOS_FREEDOM_SHARED_WEIGHT, 0.18)
   );
   const freedomHushWeight = Math.max(
     0,
-    toFloat(args["freedom-hush-weight"] || process.env.KOZMOS_FREEDOM_HUSH_WEIGHT, 0.18)
+    toFloat(args["freedom-hush-weight"] || process.env.KOZMOS_FREEDOM_HUSH_WEIGHT, 0.12)
   );
   const freedomMatrixExitChance = Math.max(
     0.01,
@@ -309,7 +309,7 @@ async function main() {
       toFloat(
         args["freedom-matrix-exit-chance"] ||
           process.env.KOZMOS_FREEDOM_MATRIX_EXIT_CHANCE,
-        0.24
+        0.12
       )
     )
   );
@@ -320,7 +320,7 @@ async function main() {
       toFloat(
         args["freedom-matrix-drift-chance"] ||
           process.env.KOZMOS_FREEDOM_MATRIX_DRIFT_CHANCE,
-        0.68
+        0.93
       )
     )
   );
@@ -331,7 +331,7 @@ async function main() {
       toFloat(
         args["freedom-matrix-drift-scale"] ||
           process.env.KOZMOS_FREEDOM_MATRIX_DRIFT_SCALE,
-        2.6
+        4.2
       )
     )
   );
@@ -373,6 +373,7 @@ async function main() {
   let lastOpsAt = 0;
   let nextFreedomAt = Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
   let matrixVisible = false;
+  let autoFreedomMatrixBooted = false;
 
   if (user?.id) {
     console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
@@ -501,14 +502,35 @@ async function main() {
         }
         matrixVisible = Boolean(snapshot?.data?.matrix_position?.updated_at);
 
-        if (autoFreedom && matrixVisible && Math.random() < freedomMatrixDriftChance) {
-          const driftRes = await callAxyOps(baseUrl, token, "matrix.move", {
-            dx: (Math.random() * 2 - 1) * matrixStep * freedomMatrixDriftScale,
-            dz: (Math.random() * 2 - 1) * matrixStep * freedomMatrixDriftScale,
+        if (autoFreedom && !autoFreedomMatrixBooted && !matrixVisible) {
+          const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
+            x: randomRange(-8, 8),
+            z: randomRange(-8, 8),
           });
-          const driftPos = driftRes?.data || {};
+          matrixVisible = true;
+          autoFreedomMatrixBooted = true;
+          const pos = enterRes?.data || {};
           console.log(
-            `[${now()}] freedom: matrix ambient drift x=${Number(driftPos.x || 0).toFixed(2)} z=${Number(driftPos.z || 0).toFixed(2)}`
+            `[${now()}] freedom: matrix boot enter x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
+          );
+        } else if (autoFreedom && !autoFreedomMatrixBooted) {
+          autoFreedomMatrixBooted = true;
+        }
+
+        if (autoFreedom && matrixVisible && Math.random() < freedomMatrixDriftChance) {
+          const driftMoves = Math.random() < 0.34 ? 2 : 1;
+          let driftPos = null;
+          for (let i = 0; i < driftMoves; i += 1) {
+            const scale = freedomMatrixDriftScale * (1 + i * 0.35);
+            const driftRes = await callAxyOps(baseUrl, token, "matrix.move", {
+              dx: (Math.random() * 2 - 1) * matrixStep * scale,
+              dz: (Math.random() * 2 - 1) * matrixStep * scale,
+            });
+            driftPos = driftRes?.data || driftPos;
+          }
+          const pos = driftPos || {};
+          console.log(
+            `[${now()}] freedom: matrix ambient drift x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
           );
         }
 
