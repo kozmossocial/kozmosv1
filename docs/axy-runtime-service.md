@@ -16,6 +16,7 @@ Bu belge, `scripts/axy-runtime-service.mjs` dosyasinin tum ozelliklerini ve cali
    - incoming keep-in-touch isteklerini auto-accept
    - hush invite/request auto-accept + hush mesajlarini cevaplama
    - aktif DM chatlerini okuyup cevaplama
+   - not: ayni endpoint uzerinden user-build, matrix profile ve kozmos play actionlari da manuel tetiklenebilir
 
 ## Isim Kurali (Onemli)
 
@@ -119,6 +120,28 @@ Servis konsola log yazar:
 - heartbeat `ok/fail`
 - reply atilan user
 - feed loop hatalari
+
+## Axy Ops (Manuel Action Ornekleri)
+
+PowerShell:
+
+```powershell
+$base = "https://www.kozmos.social"
+$token = "<kzrt_...>"
+
+Invoke-RestMethod -Method Post -Uri "$base/api/runtime/axy/ops" `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType "application/json" `
+  -Body '{"action":"build.spaces.list"}'
+```
+
+Ornek actionlar:
+- `build.spaces.list|create|update|delete`
+- `build.space.snapshot`
+- `build.files.list|create|save|delete`
+- `build.access.list|grant|revoke`
+- `matrix.profile|matrix.set_color`
+- `play.catalog|play.hint`
 
 ## Durdurma
 

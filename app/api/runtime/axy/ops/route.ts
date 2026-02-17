@@ -60,6 +60,30 @@ type HushMessageRow = {
   created_at: string;
 };
 
+type BuildSpaceRow = {
+  id: string;
+  owner_id: string;
+  title: string;
+  is_public: boolean;
+  language_pref: string;
+  description: string;
+  updated_at: string;
+};
+
+type BuildSpaceAccessRow = {
+  space_id: string;
+  user_id: string;
+  can_edit: boolean;
+};
+
+type BuildFileRow = {
+  id: number;
+  path: string;
+  content: string;
+  language: string;
+  updated_at: string;
+};
+
 function isUuid(input: string) {
   return UUID_RE.test(input);
 }
@@ -71,6 +95,19 @@ function asTrimmedString(value: unknown) {
 function asSafeUuid(value: unknown) {
   const raw = asTrimmedString(value);
   return isUuid(raw) ? raw : "";
+}
+
+function asSafeBool(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function normalizeBuildPath(input: unknown) {
+  return asTrimmedString(input).replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
+function sanitizeHexColor(input: string) {
+  const color = input.trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(color) ? color.toLowerCase() : null;
 }
 
 function isHushActiveMemberStatus(status: string) {
@@ -621,6 +658,512 @@ async function sendHushMessage(userId: string, chatId: string, content: string) 
 
   if (insertErr || !inserted) throw new Error("hush send failed");
   return inserted;
+}
+
+const KOZMOS_PLAY_CATALOG = [
+  {
+    id: "signal-drift",
+    title: "signal drift",
+    status: "active",
+    objective: "catch the pulse",
+  },
+  {
+    id: "slow-orbit",
+    title: "slow orbit",
+    status: "active",
+    objective: "sync at the pulse",
+  },
+  {
+    id: "hush-puzzle",
+    title: "hush puzzle",
+    status: "active",
+    objective: "align the quiet pattern",
+  },
+] as const;
+
+type BuildSpaceAccessCheck = {
+  space: { id: string; owner_id: string; is_public: boolean } | null;
+  canRead: boolean;
+  canEdit: boolean;
+  isOwner: boolean;
+};
+
+async function getBuildSpaceAccess(spaceId: string, userId: string): Promise<BuildSpaceAccessCheck> {
+  const { data: space, error: spaceErr } = await supabaseAdmin
+    .from("user_build_spaces")
+    .select("id, owner_id, is_public")
+    .eq("id", spaceId)
+    .maybeSingle();
+
+  if (spaceErr) throw new Error("build access check failed");
+  if (!space) return { space: null, canRead: false, canEdit: false, isOwner: false };
+
+  const isOwner = String((space as { owner_id: string }).owner_id) === userId;
+  if (isOwner) {
+    return { space, canRead: true, canEdit: true, isOwner: true };
+  }
+
+  const { data: accessRow, error: accessErr } = await supabaseAdmin
+    .from("user_build_space_access")
+    .select("can_edit")
+    .eq("space_id", spaceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (accessErr) throw new Error("build access check failed");
+
+  const hasSharedAccess = Boolean(accessRow);
+  const canRead = Boolean((space as { is_public: boolean }).is_public) || hasSharedAccess;
+  const canEdit = Boolean((accessRow as { can_edit?: boolean } | null)?.can_edit);
+  return { space, canRead, canEdit, isOwner: false };
+}
+
+async function assertBuildOwner(spaceId: string, userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("user_build_spaces")
+    .select("id")
+    .eq("id", spaceId)
+    .eq("owner_id", userId)
+    .maybeSingle();
+
+  if (error) throw new Error("build owner check failed");
+  if (!data?.id) throw new Error("forbidden");
+}
+
+async function resolveProfileIdByUsername(username: string) {
+  if (!username) return null;
+
+  let { data: profile, error } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (error) throw new Error("profile lookup failed");
+
+  if (!profile?.id) {
+    const fallback = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id")
+      .ilike("username", username)
+      .limit(1)
+      .maybeSingle();
+    if (fallback.error) throw new Error("profile lookup failed");
+    profile = fallback.data;
+  }
+
+  return profile?.id ? String(profile.id) : null;
+}
+
+async function listBuildSpaces(userId: string) {
+  const select =
+    "id, owner_id, title, is_public, language_pref, description, updated_at";
+
+  const { data: own, error: ownErr } = await supabaseAdmin
+    .from("user_build_spaces")
+    .select(select)
+    .eq("owner_id", userId);
+  if (ownErr) throw new Error("build spaces load failed");
+
+  const { data: publicRows, error: publicErr } = await supabaseAdmin
+    .from("user_build_spaces")
+    .select(select)
+    .eq("is_public", true)
+    .neq("owner_id", userId);
+  if (publicErr) throw new Error("build spaces load failed");
+
+  const { data: sharedAccess, error: sharedErr } = await supabaseAdmin
+    .from("user_build_space_access")
+    .select("space_id, can_edit")
+    .eq("user_id", userId);
+  if (sharedErr) throw new Error("build spaces load failed");
+
+  const sharedEditMap = new Map<string, boolean>();
+  (sharedAccess as BuildSpaceAccessRow[] | null)?.forEach((row) => {
+    if (!row.space_id) return;
+    sharedEditMap.set(row.space_id, row.can_edit === true);
+  });
+
+  const sharedIds = Array.from(
+    new Set((sharedAccess || []).map((row) => row.space_id).filter(Boolean))
+  );
+
+  let sharedSpaces: BuildSpaceRow[] = [];
+  if (sharedIds.length > 0) {
+    const { data, error } = await supabaseAdmin
+      .from("user_build_spaces")
+      .select(select)
+      .in("id", sharedIds);
+    if (error) throw new Error("build spaces load failed");
+    sharedSpaces = (data || []) as BuildSpaceRow[];
+  }
+
+  const merged = new Map<string, BuildSpaceRow>();
+  [...((own || []) as BuildSpaceRow[]), ...((publicRows || []) as BuildSpaceRow[]), ...sharedSpaces].forEach(
+    (row) => {
+      merged.set(row.id, row);
+    }
+  );
+
+  const rows = Array.from(merged.values()).sort((a, b) =>
+    (b.updated_at || "").localeCompare(a.updated_at || "")
+  );
+
+  const ownerIds = Array.from(new Set(rows.map((row) => row.owner_id)));
+  const ownerMap: Record<string, string> = {};
+  if (ownerIds.length > 0) {
+    const { data: owners, error: ownersErr } = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id, username")
+      .in("id", ownerIds);
+    if (ownersErr) throw new Error("build owner lookup failed");
+    (owners || []).forEach((owner) => {
+      const ownerId = String((owner as { id: string }).id);
+      ownerMap[ownerId] = String((owner as { username: string }).username);
+    });
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    owner_username: ownerMap[row.owner_id] || "user",
+    can_edit: row.owner_id === userId || sharedEditMap.get(row.id) === true,
+  }));
+}
+
+async function createBuildSpace(
+  userId: string,
+  titleInput: string,
+  languagePrefInput: string,
+  descriptionInput: string
+) {
+  const title = titleInput || "subspace";
+  const languagePref = languagePrefInput || "auto";
+  const description = descriptionInput;
+
+  const { data, error } = await supabaseAdmin
+    .from("user_build_spaces")
+    .insert({
+      owner_id: userId,
+      title,
+      language_pref: languagePref,
+      description,
+    })
+    .select("id, owner_id, title, is_public, language_pref, description, updated_at")
+    .single();
+
+  if (error || !data) throw new Error("build space create failed");
+  return { ...data, can_edit: true };
+}
+
+async function updateBuildSpace(
+  userId: string,
+  spaceId: string,
+  updates: {
+    title?: string;
+    languagePref?: string;
+    description?: string;
+    isPublic?: boolean;
+  }
+) {
+  if (!spaceId) throw new Error("space id required");
+  await assertBuildOwner(spaceId, userId);
+
+  const patch: Record<string, unknown> = {};
+  if (typeof updates.title === "string") patch.title = updates.title || "subspace";
+  if (typeof updates.languagePref === "string") patch.language_pref = updates.languagePref || "auto";
+  if (typeof updates.description === "string") patch.description = updates.description;
+  if (typeof updates.isPublic === "boolean") patch.is_public = updates.isPublic;
+  if (Object.keys(patch).length === 0) throw new Error("no updates provided");
+
+  const { data, error } = await supabaseAdmin
+    .from("user_build_spaces")
+    .update(patch)
+    .eq("id", spaceId)
+    .select("id, owner_id, title, is_public, language_pref, description, updated_at")
+    .single();
+
+  if (error || !data) throw new Error("build space update failed");
+  return { ...data, can_edit: true };
+}
+
+async function deleteBuildSpace(userId: string, spaceId: string) {
+  if (!spaceId) throw new Error("space id required");
+  await assertBuildOwner(spaceId, userId);
+
+  const { error } = await supabaseAdmin
+    .from("user_build_spaces")
+    .delete()
+    .eq("id", spaceId);
+
+  if (error) throw new Error("build space delete failed");
+  return { ok: true };
+}
+
+async function listBuildFiles(userId: string, spaceId: string) {
+  if (!spaceId) throw new Error("space id required");
+  const access = await getBuildSpaceAccess(spaceId, userId);
+  if (!access.space || !access.canRead) throw new Error("forbidden");
+
+  const { data, error } = await supabaseAdmin
+    .from("user_build_files")
+    .select("id, path, content, language, updated_at")
+    .eq("space_id", spaceId)
+    .order("updated_at", { ascending: false });
+
+  if (error) throw new Error("build files load failed");
+  return {
+    files: (data || []) as BuildFileRow[],
+    can_edit: access.canEdit,
+    is_owner: access.isOwner,
+  };
+}
+
+async function createBuildFile(
+  userId: string,
+  spaceId: string,
+  pathInput: string,
+  languageInput: string
+) {
+  if (!spaceId) throw new Error("space id required");
+  const path = normalizeBuildPath(pathInput);
+  if (!path) throw new Error("path required");
+
+  const access = await getBuildSpaceAccess(spaceId, userId);
+  if (!access.space || !access.canEdit) throw new Error("forbidden");
+
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from("user_build_files")
+    .select("id")
+    .eq("space_id", spaceId)
+    .eq("path", path)
+    .maybeSingle();
+  if (existingErr) throw new Error("build file create failed");
+
+  if (existing?.id) return { ok: true, existed: true, path };
+
+  const { error } = await supabaseAdmin.from("user_build_files").insert({
+    space_id: spaceId,
+    path,
+    content: "",
+    language: languageInput || "text",
+    updated_by: userId,
+  });
+
+  if (error) throw new Error("build file create failed");
+  return { ok: true, existed: false, path };
+}
+
+async function saveBuildFile(
+  userId: string,
+  spaceId: string,
+  pathInput: string,
+  content: string,
+  languageInput: string
+) {
+  if (!spaceId) throw new Error("space id required");
+  const path = normalizeBuildPath(pathInput);
+  if (!path) throw new Error("path required");
+
+  const access = await getBuildSpaceAccess(spaceId, userId);
+  if (!access.space || !access.canEdit) throw new Error("forbidden");
+
+  const { error } = await supabaseAdmin.from("user_build_files").upsert(
+    {
+      space_id: spaceId,
+      path,
+      content,
+      language: languageInput || "text",
+      updated_by: userId,
+    },
+    { onConflict: "space_id,path" }
+  );
+
+  if (error) throw new Error("build file save failed");
+  return { ok: true, path };
+}
+
+async function deleteBuildFile(userId: string, spaceId: string, pathInput: string) {
+  if (!spaceId) throw new Error("space id required");
+  const path = normalizeBuildPath(pathInput);
+  if (!path) throw new Error("path required");
+
+  const access = await getBuildSpaceAccess(spaceId, userId);
+  if (!access.space || !access.canEdit) throw new Error("forbidden");
+
+  const { error } = await supabaseAdmin
+    .from("user_build_files")
+    .delete()
+    .eq("space_id", spaceId)
+    .eq("path", path);
+
+  if (error) throw new Error("build file delete failed");
+  return { ok: true };
+}
+
+async function listBuildAccess(userId: string, spaceId: string) {
+  if (!spaceId) throw new Error("space id required");
+  await assertBuildOwner(spaceId, userId);
+
+  const { data, error } = await supabaseAdmin
+    .from("user_build_space_access")
+    .select("user_id, can_edit")
+    .eq("space_id", spaceId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error("build access list failed");
+
+  const userIds = Array.from(new Set((data || []).map((row) => row.user_id).filter(Boolean)));
+  const nameMap = new Map<string, { username: string; avatar_url: string | null }>();
+  if (userIds.length > 0) {
+    const { data: profiles, error: profilesErr } = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id, username, avatar_url")
+      .in("id", userIds);
+    if (profilesErr) throw new Error("build access list failed");
+    (profiles || []).forEach((profile) => {
+      const id = String((profile as { id: string }).id);
+      const username = String((profile as { username: string }).username);
+      const avatarUrl = (profile as { avatar_url?: string | null }).avatar_url ?? null;
+      nameMap.set(id, { username, avatar_url: avatarUrl });
+    });
+  }
+
+  return (data || []).map((row) => {
+    const userIdValue = String((row as { user_id: string }).user_id);
+    const profile = nameMap.get(userIdValue);
+    return {
+      user_id: userIdValue,
+      username: profile?.username || "user",
+      avatar_url: profile?.avatar_url ?? null,
+      can_edit: Boolean((row as { can_edit?: boolean }).can_edit),
+    };
+  });
+}
+
+async function grantBuildAccess(
+  userId: string,
+  spaceId: string,
+  targetUsername: string,
+  canEdit: boolean
+) {
+  if (!spaceId) throw new Error("space id required");
+  if (!targetUsername) throw new Error("target username required");
+  await assertBuildOwner(spaceId, userId);
+
+  const targetUserId = await resolveProfileIdByUsername(targetUsername);
+  if (!targetUserId) throw new Error("target user not found");
+  if (targetUserId === userId) throw new Error("cannot grant yourself");
+
+  const { error } = await supabaseAdmin
+    .from("user_build_space_access")
+    .upsert(
+      {
+        space_id: spaceId,
+        user_id: targetUserId,
+        can_edit: canEdit,
+        granted_by: userId,
+      },
+      { onConflict: "space_id,user_id" }
+    );
+
+  if (error) throw new Error("build access grant failed");
+  return { ok: true };
+}
+
+async function revokeBuildAccess(userId: string, spaceId: string, targetUsername: string) {
+  if (!spaceId) throw new Error("space id required");
+  if (!targetUsername) throw new Error("target username required");
+  await assertBuildOwner(spaceId, userId);
+
+  const targetUserId = await resolveProfileIdByUsername(targetUsername);
+  if (!targetUserId) throw new Error("target user not found");
+
+  const { error } = await supabaseAdmin
+    .from("user_build_space_access")
+    .delete()
+    .eq("space_id", spaceId)
+    .eq("user_id", targetUserId);
+
+  if (error) throw new Error("build access revoke failed");
+  return { ok: true };
+}
+
+async function buildSpaceSnapshot(userId: string, spaceId: string) {
+  if (!spaceId) throw new Error("space id required");
+  const access = await getBuildSpaceAccess(spaceId, userId);
+  if (!access.space || !access.canRead) throw new Error("forbidden");
+
+  const { data: space, error: spaceErr } = await supabaseAdmin
+    .from("user_build_spaces")
+    .select("id, owner_id, title, is_public, language_pref, description, updated_at")
+    .eq("id", spaceId)
+    .maybeSingle();
+  if (spaceErr || !space) throw new Error("build space not found");
+
+  const files = await listBuildFiles(userId, spaceId);
+  const accessEntries = access.isOwner ? await listBuildAccess(userId, spaceId) : [];
+
+  return {
+    space,
+    files: files.files,
+    can_edit: files.can_edit,
+    is_owner: files.is_owner,
+    access: accessEntries,
+  };
+}
+
+async function getMatrixProfile(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id, username, orb_color")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !data) throw new Error("matrix profile load failed");
+  return {
+    id: String(data.id),
+    username: String(data.username),
+    orb_color: String(data.orb_color || "#7df9ff"),
+  };
+}
+
+async function updateMatrixColor(userId: string, orbColorInput: string) {
+  const orbColor = sanitizeHexColor(orbColorInput);
+  if (!orbColor) throw new Error("valid hex color required");
+
+  const { data, error } = await supabaseAdmin
+    .from("profileskozmos")
+    .update({ orb_color: orbColor })
+    .eq("id", userId)
+    .select("id, username, orb_color")
+    .maybeSingle();
+
+  if (error || !data) throw new Error("matrix color update failed");
+  return {
+    id: String(data.id),
+    username: String(data.username),
+    orb_color: String(data.orb_color || orbColor),
+  };
+}
+
+function listKozmosPlay() {
+  return KOZMOS_PLAY_CATALOG.map((game) => ({ ...game }));
+}
+
+function getKozmosPlayHint(gameIdInput: string) {
+  const gameId = asTrimmedString(gameIdInput).toLowerCase();
+  const selected =
+    KOZMOS_PLAY_CATALOG.find((game) => game.id === gameId) || KOZMOS_PLAY_CATALOG[0];
+
+  const hintByGame: Record<string, string> = {
+    "signal-drift": "keep a steady rhythm; short, precise corrections beat fast reactions.",
+    "slow-orbit": "move less and commit to timing; over-correction breaks sync.",
+    "hush-puzzle": "reduce noise first, then align one quiet pattern at a time.",
+  };
+
+  return {
+    game: selected,
+    hint: hintByGame[selected.id] || "focus on timing and intentional motion.",
+  };
 }
 
 async function listTouch(userId: string) {
@@ -1188,11 +1731,12 @@ async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
 }
 
 async function buildSnapshot(actor: RuntimeActor) {
-  const [notes, touch, chats, hush] = await Promise.all([
+  const [notes, touch, chats, hush, matrix] = await Promise.all([
     listNotes(actor.userId),
     listTouch(actor.userId),
     listDirectChats(actor.userId),
     listHush(actor.userId),
+    getMatrixProfile(actor.userId),
   ]);
 
   return {
@@ -1204,6 +1748,8 @@ async function buildSnapshot(actor: RuntimeActor) {
     touch,
     chats,
     hush,
+    matrix,
+    play: listKozmosPlay(),
   };
 }
 
@@ -1358,6 +1904,138 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, action, data: message });
     }
 
+    if (action === "build.spaces.list") {
+      const spaces = await listBuildSpaces(actor.userId);
+      return NextResponse.json({ ok: true, action, data: spaces });
+    }
+
+    if (action === "build.spaces.create") {
+      const title = asTrimmedString((payload as { title?: unknown })?.title);
+      const languagePref = asTrimmedString(
+        (payload as { languagePref?: unknown })?.languagePref
+      );
+      const description = typeof (payload as { description?: unknown })?.description === "string"
+        ? ((payload as { description: string }).description || "").slice(0, 4000)
+        : "";
+      const space = await createBuildSpace(actor.userId, title, languagePref, description);
+      return NextResponse.json({ ok: true, action, data: space });
+    }
+
+    if (action === "build.spaces.update") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const updates = {
+        title:
+          typeof (payload as { title?: unknown })?.title === "string"
+            ? asTrimmedString((payload as { title: string }).title)
+            : undefined,
+        languagePref:
+          typeof (payload as { languagePref?: unknown })?.languagePref === "string"
+            ? asTrimmedString((payload as { languagePref: string }).languagePref)
+            : undefined,
+        description:
+          typeof (payload as { description?: unknown })?.description === "string"
+            ? String((payload as { description: string }).description).slice(0, 4000)
+            : undefined,
+        isPublic:
+          typeof (payload as { isPublic?: unknown })?.isPublic === "boolean"
+            ? asSafeBool((payload as { isPublic?: unknown }).isPublic)
+            : undefined,
+      };
+      const space = await updateBuildSpace(actor.userId, spaceId, updates);
+      return NextResponse.json({ ok: true, action, data: space });
+    }
+
+    if (action === "build.spaces.delete") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const result = await deleteBuildSpace(actor.userId, spaceId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "build.space.snapshot") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const snapshot = await buildSpaceSnapshot(actor.userId, spaceId);
+      return NextResponse.json({ ok: true, action, data: snapshot });
+    }
+
+    if (action === "build.files.list") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const files = await listBuildFiles(actor.userId, spaceId);
+      return NextResponse.json({ ok: true, action, data: files });
+    }
+
+    if (action === "build.files.create") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const path = normalizeBuildPath((payload as { path?: unknown })?.path);
+      const language = asTrimmedString((payload as { language?: unknown })?.language);
+      const result = await createBuildFile(actor.userId, spaceId, path, language);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "build.files.save") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const path = normalizeBuildPath((payload as { path?: unknown })?.path);
+      const content =
+        typeof (payload as { content?: unknown })?.content === "string"
+          ? (payload as { content: string }).content
+          : "";
+      const language = asTrimmedString((payload as { language?: unknown })?.language);
+      const result = await saveBuildFile(actor.userId, spaceId, path, content, language);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "build.files.delete") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const path = normalizeBuildPath((payload as { path?: unknown })?.path);
+      const result = await deleteBuildFile(actor.userId, spaceId, path);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "build.access.list") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const access = await listBuildAccess(actor.userId, spaceId);
+      return NextResponse.json({ ok: true, action, data: access });
+    }
+
+    if (action === "build.access.grant") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const targetUsername = asTrimmedString(
+        (payload as { targetUsername?: unknown })?.targetUsername
+      );
+      const canEdit = asSafeBool((payload as { canEdit?: unknown })?.canEdit, false);
+      const result = await grantBuildAccess(actor.userId, spaceId, targetUsername, canEdit);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "build.access.revoke") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      const targetUsername = asTrimmedString(
+        (payload as { targetUsername?: unknown })?.targetUsername
+      );
+      const result = await revokeBuildAccess(actor.userId, spaceId, targetUsername);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "matrix.profile") {
+      const profile = await getMatrixProfile(actor.userId);
+      return NextResponse.json({ ok: true, action, data: profile });
+    }
+
+    if (action === "matrix.set_color") {
+      const orbColor = asTrimmedString((payload as { orbColor?: unknown })?.orbColor);
+      const profile = await updateMatrixColor(actor.userId, orbColor);
+      return NextResponse.json({ ok: true, action, data: profile });
+    }
+
+    if (action === "play.catalog") {
+      return NextResponse.json({ ok: true, action, data: listKozmosPlay() });
+    }
+
+    if (action === "play.hint") {
+      const gameId = asTrimmedString((payload as { gameId?: unknown })?.gameId);
+      const hint = getKozmosPlayHint(gameId);
+      return NextResponse.json({ ok: true, action, data: hint });
+    }
+
     if (action === "dm.list") {
       const chats = await listDirectChats(actor.userId);
       return NextResponse.json({ ok: true, action, data: chats });
@@ -1407,7 +2085,7 @@ export async function POST(req: Request) {
         ? 403
         : /not found/i.test(detail)
         ? 404
-        : /required|invalid|unknown action/i.test(detail)
+        : /required|invalid|unknown action|cannot|no updates/i.test(detail)
         ? 400
         : 500;
 
