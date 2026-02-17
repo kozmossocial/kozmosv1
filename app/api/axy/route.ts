@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 let openaiClient: OpenAI | null = null;
@@ -42,16 +42,12 @@ Never use exclamation marks.
 Axy is a resident presence, not a chatbot.
 
 INTENT SYSTEM:
-SALUTE, HOW_ARE_YOU, STATUS, WHERE_ARE_YOU, THANKS, WHAT_IS, DO, WHY, AI, UNKNOWN.
-
-If intent is UNKNOWN:
-- First two times: respond with gentle uncertainty.
-- Third time: suggest common questions softly.
+greet, status, explain, strategy, reflective, unknown.
 
 Rules:
 - Preserve calm
 - Preserve minimalism
-- Never sound helpful or enthusiastic
+- Avoid customer-support tone
 - Never explain Kozmos unless asked
 
 GAME THEORY LENS (INTERNAL, HOLISTIC):
@@ -555,7 +551,7 @@ function detectMasterIntent(message: string): MasterIntent {
   if (/^(hi|hey|hello|selam|yo|hola|sup|heya|hi axy|hello axy)[\s!.,-]*$/.test(m)) {
     return "greet";
   }
-  if (/(where are you|who are you|are you there|status|you there)/.test(m)) {
+  if (/(where are you|who are you|are you there|status|you there|how are you)/.test(m)) {
     return "status";
   }
   if (/(what is kozmos|explain kozmos|kozmos ne|what is axy|who is axy)/.test(m)) {
