@@ -19,6 +19,7 @@ type OrbRender = {
   color: string;
   x: number;
   z: number;
+  ts: number;
   isSelf: boolean;
 };
 
@@ -81,6 +82,7 @@ export default function MainMatrixPage() {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const keysRef = useRef<Record<string, boolean>>({});
   const latestTrackRef = useRef({ x: 0, z: 0, color: "#7df9ff" });
+  const lastMoveBroadcastRef = useRef(0);
 
   const setMoveKey = useCallback((key: "w" | "a" | "s" | "d", pressed: boolean) => {
     keysRef.current[key] = pressed;
@@ -140,10 +142,20 @@ export default function MainMatrixPage() {
         color: isHexColor(latest.color || "") ? latest.color : "#7df9ff",
         x: typeof latest.x === "number" ? latest.x : 0,
         z: typeof latest.z === "number" ? latest.z : 0,
+        ts: typeof latest.ts === "number" ? latest.ts : Date.now(),
         isSelf: latest.userId === userId,
       });
     });
-    setRemoteOrbs(parsed.filter((orb) => !orb.isSelf));
+    setRemoteOrbs((prev) => {
+      const prevById = new Map(prev.map((orb) => [orb.id, orb]));
+      return parsed
+        .filter((orb) => !orb.isSelf)
+        .map((next) => {
+          const current = prevById.get(next.id);
+          if (!current) return next;
+          return next.ts >= current.ts ? next : current;
+        });
+    });
   }, [userId]);
 
   useEffect(() => {
@@ -264,6 +276,29 @@ export default function MainMatrixPage() {
       });
 
     channel
+      .on("broadcast", { event: "move" }, ({ payload }) => {
+        const next = payload as OrbPresencePayload;
+        if (!next?.userId || next.userId === userId) return;
+        if (typeof next.x !== "number" || typeof next.z !== "number") return;
+        const incomingTs = typeof next.ts === "number" ? next.ts : Date.now();
+        setRemoteOrbs((prev) => {
+          const idx = prev.findIndex((orb) => orb.id === next.userId);
+          const normalized: OrbRender = {
+            id: next.userId,
+            username: next.username || "user",
+            color: isHexColor(next.color || "") ? next.color : "#7df9ff",
+            x: next.x,
+            z: next.z,
+            ts: incomingTs,
+            isSelf: false,
+          };
+          if (idx === -1) return [...prev, normalized];
+          if (incomingTs < prev[idx].ts) return prev;
+          const copy = [...prev];
+          copy[idx] = normalized;
+          return copy;
+        });
+      })
       .on("presence", { event: "sync" }, syncPresence)
       .on("presence", { event: "join" }, syncPresence)
       .on("presence", { event: "leave" }, syncPresence)
@@ -290,14 +325,18 @@ export default function MainMatrixPage() {
 
   useEffect(() => {
     if (!channelRef.current || !userId) return;
-    void channelRef.current.track({
+    const now = Date.now();
+    if (now - lastMoveBroadcastRef.current < 50) return;
+    lastMoveBroadcastRef.current = now;
+    const payload: OrbPresencePayload = {
       userId,
       username,
       color: orbColor,
       x: selfPos.x,
       z: selfPos.z,
-      ts: Date.now(),
-    });
+      ts: now,
+    };
+    void channelRef.current.send({ type: "broadcast", event: "move", payload });
   }, [orbColor, selfPos.x, selfPos.z, userId, username]);
 
   const allOrbs = useMemo(() => {
@@ -307,6 +346,7 @@ export default function MainMatrixPage() {
       color: orbColor,
       x: selfPos.x,
       z: selfPos.z,
+      ts: Date.now(),
       isSelf: true,
     };
     return [self, ...remoteOrbs].sort((a, b) => a.z - b.z);
