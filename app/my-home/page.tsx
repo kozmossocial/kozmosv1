@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -74,6 +74,8 @@ export default function MyHome() {
   const [directChatSavingOrder, setDirectChatSavingOrder] = useState(false);
   const [directChatRemovingId, setDirectChatRemovingId] = useState<string | null>(null);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const directMessagesViewportRef = useRef<HTMLDivElement | null>(null);
+  const lastDirectScrollKeyRef = useRef<string>("");
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
@@ -493,6 +495,31 @@ useEffect(() => {
   }, [selectedDirectChatId]);
 
   useEffect(() => {
+    lastDirectScrollKeyRef.current = "";
+  }, [selectedDirectChatId]);
+
+  useEffect(() => {
+    if (!selectedDirectChatId) return;
+
+    const lastMessage = directMessages[directMessages.length - 1];
+    const scrollKey = `${selectedDirectChatId}:${lastMessage?.id ?? "none"}:${directMessages.length}`;
+
+    if (scrollKey === lastDirectScrollKeyRef.current) return;
+    lastDirectScrollKeyRef.current = scrollKey;
+
+    const el = directMessagesViewportRef.current;
+    if (!el) return;
+
+    const raf = window.requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
+  }, [selectedDirectChatId, directMessages]);
+
+  useEffect(() => {
     const sync = () => setIsMobileLayout(window.innerWidth <= 1080);
     sync();
     window.addEventListener("resize", sync);
@@ -865,7 +892,7 @@ useEffect(() => {
               </div>
             </div>
 
-            <div style={directThreadMessagesStyle}>
+            <div ref={directMessagesViewportRef} style={directThreadMessagesStyle}>
               {directLoading && directMessages.length === 0 ? (
                 <div style={touchMutedStyle}>loading chat...</div>
               ) : directMessages.length === 0 ? (

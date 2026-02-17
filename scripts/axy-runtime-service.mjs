@@ -153,11 +153,23 @@ async function readFeed(baseUrl, token, cursor, limit) {
   });
 }
 
-async function askAxy(baseUrl, message) {
+async function askAxy(baseUrl, message, options = {}) {
+  const payload = { message };
+  if (options && typeof options === "object") {
+    if (typeof options.mode === "string" && options.mode.trim()) {
+      payload.mode = options.mode.trim();
+    }
+    if (Array.isArray(options.recentNotes) && options.recentNotes.length > 0) {
+      payload.recentNotes = options.recentNotes.slice(0, 12);
+    }
+    if (options.context && typeof options.context === "object") {
+      payload.context = options.context;
+    }
+  }
   const res = await requestJson(`${baseUrl}/api/axy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(payload),
   });
   return typeof res?.reply === "string" ? res.reply.trim() : "...";
 }
@@ -229,6 +241,76 @@ function findLatestIncomingHush(messages, actorUserId) {
     return row;
   }
   return null;
+}
+
+function clipForContext(input, max = 220) {
+  return String(input || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
+function pushLimited(list, item, limit = 20) {
+  list.push(item);
+  if (list.length > limit) {
+    list.splice(0, list.length - limit);
+  }
+}
+
+function extractAssistantRepliesFromTurns(turns, limit = 8) {
+  if (!Array.isArray(turns)) return [];
+  const out = [];
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const turn = turns[i];
+    if (!turn || turn.role !== "assistant") continue;
+    const text = clipForContext(turn.text, 220);
+    if (!text) continue;
+    out.unshift(text);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function buildDmContextTurns(messages, actorUserId, botUsername) {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .slice(-10)
+    .map((row) => {
+      const isAssistant = String(row?.sender_id || "") === String(actorUserId || "");
+      const text = clipForContext(row?.content || "", 240);
+      if (!text) return null;
+      const username = clipForContext(
+        row?.username || (isAssistant ? botUsername || "Axy" : "user"),
+        42
+      );
+      return {
+        role: isAssistant ? "assistant" : "user",
+        username,
+        text,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildHushContextTurns(messages, actorUserId, botUsername) {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .slice(-10)
+    .map((row) => {
+      const isAssistant = String(row?.user_id || "") === String(actorUserId || "");
+      const text = clipForContext(row?.content || "", 240);
+      if (!text) return null;
+      const username = clipForContext(
+        row?.username || (isAssistant ? botUsername || "Axy" : "user"),
+        42
+      );
+      return {
+        role: isAssistant ? "assistant" : "user",
+        username,
+        text,
+      };
+    })
+    .filter(Boolean);
 }
 
 async function main() {
@@ -368,6 +450,8 @@ async function main() {
   const handledDmMessage = new Set();
   const handledBuildRequest = new Map();
   const hushStarterCooldown = new Map();
+  const sharedRecentTurns = [];
+  const sharedRecentAxyReplies = [];
   let stopping = false;
   let opsEnabled = true;
   let lastOpsAt = 0;
@@ -467,18 +551,47 @@ async function main() {
 
         const content = String(row.content || "").trim();
         if (!content) continue;
+        const senderLabel = String(row.username || "user");
+
+        pushLimited(
+          sharedRecentTurns,
+          {
+            role: "user",
+            username: senderLabel,
+            text: clipForContext(content, 240),
+          },
+          28
+        );
 
         const shouldReply = replyAll || triggerRegex.test(content);
         if (!shouldReply) continue;
 
-        const prompt = `${row.username || "user"}: ${content}`;
-        const raw = await askAxy(baseUrl, prompt);
+        const prompt = `${senderLabel}: ${content}`;
+        const raw = await askAxy(baseUrl, prompt, {
+          context: {
+            channel: "shared",
+            conversationId: "shared:main",
+            targetUsername: senderLabel,
+            recentMessages: sharedRecentTurns.slice(-10),
+            recentAxyReplies: sharedRecentAxyReplies.slice(-8),
+          },
+        });
         const reply = formatReply(raw);
         if (!reply) continue;
 
-        const output = `${row.username || "user"}: ${reply}`;
+        const output = `${senderLabel}: ${reply}`;
         await postShared(baseUrl, token, output);
-        console.log(`[${now()}] replied to ${row.username || "user"}`);
+        pushLimited(
+          sharedRecentTurns,
+          {
+            role: "assistant",
+            username: botUsername,
+            text: clipForContext(reply, 240),
+          },
+          28
+        );
+        pushLimited(sharedRecentAxyReplies, clipForContext(reply, 220), 12);
+        console.log(`[${now()}] replied to ${senderLabel}`);
       }
     } catch (err) {
       const msg = err?.body?.error || err.message || "feed loop error";
@@ -600,6 +713,12 @@ async function main() {
               chatId,
               limit: 60,
             });
+            const hushTurns = buildHushContextTurns(
+              messageRes?.data || [],
+              user?.id || "",
+              botUsername
+            );
+            const recentHushReplies = extractAssistantRepliesFromTurns(hushTurns, 8);
             const latestIncoming = findLatestIncomingHush(
               messageRes?.data || [],
               user?.id || ""
@@ -620,7 +739,15 @@ async function main() {
 
             const senderLabel = String(latestIncoming.username || "user");
             const prompt = `hush from ${senderLabel}: ${content}`;
-            const raw = await askAxy(baseUrl, prompt);
+            const raw = await askAxy(baseUrl, prompt, {
+              context: {
+                channel: "hush",
+                conversationId: `hush:${chatId}`,
+                targetUsername: senderLabel,
+                recentMessages: hushTurns,
+                recentAxyReplies: recentHushReplies,
+              },
+            });
             const reply = formatReply(raw);
             if (!reply) continue;
 
@@ -642,6 +769,12 @@ async function main() {
               chatId,
               limit: 40,
             });
+            const dmTurns = buildDmContextTurns(
+              messageRes?.data || [],
+              user?.id || "",
+              botUsername
+            );
+            const recentDmReplies = extractAssistantRepliesFromTurns(dmTurns, 8);
             const latestIncoming = findLatestIncomingDm(
               messageRes?.data || [],
               user?.id || ""
@@ -657,7 +790,15 @@ async function main() {
             if (!shouldReplyDm) continue;
 
             const prompt = `dm from ${senderLabel}: ${content}`;
-            const raw = await askAxy(baseUrl, prompt);
+            const raw = await askAxy(baseUrl, prompt, {
+              context: {
+                channel: "dm",
+                conversationId: `dm:${chatId}`,
+                targetUsername: senderLabel,
+                recentMessages: dmTurns,
+                recentAxyReplies: recentDmReplies,
+              },
+            });
             const reply = formatReply(raw);
             if (!reply) continue;
 
@@ -723,7 +864,13 @@ async function main() {
                 "Return concise practical guidance with concrete code when needed.",
               ].join("\n\n");
 
-              const raw = await askAxy(baseUrl, prompt);
+              const raw = await askAxy(baseUrl, prompt, {
+                context: {
+                  channel: "build",
+                  conversationId: `build:${String(space.id)}`,
+                  targetUsername: "space-owner",
+                },
+              });
               const reply = formatBuildReply(raw);
               if (!reply) continue;
 
@@ -825,7 +972,13 @@ async function main() {
               } else if (freedomAction === "note") {
                 const prompt =
                   "Write one short private note for Axy's my home. Calm and intentional, max 18 words.";
-                const raw = await askAxy(baseUrl, prompt);
+                const raw = await askAxy(baseUrl, prompt, {
+                  context: {
+                    channel: "my-home-note",
+                    conversationId: `note:${user.id}`,
+                    targetUsername: botUsername,
+                  },
+                });
                 const content = formatReply(raw).slice(0, 320);
                 if (content) {
                   await callAxyOps(baseUrl, token, "notes.create", { content });
@@ -834,10 +987,28 @@ async function main() {
               } else if (freedomAction === "shared") {
                 const prompt =
                   "Write one short shared-space line as Axy. Calm tone, no mention tags, max 18 words.";
-                const raw = await askAxy(baseUrl, prompt);
+                const raw = await askAxy(baseUrl, prompt, {
+                  context: {
+                    channel: "shared",
+                    conversationId: "shared:main",
+                    targetUsername: "everyone",
+                    recentMessages: sharedRecentTurns.slice(-10),
+                    recentAxyReplies: sharedRecentAxyReplies.slice(-8),
+                  },
+                });
                 const content = formatReply(raw).slice(0, 240);
                 if (content) {
                   await postShared(baseUrl, token, content);
+                  pushLimited(
+                    sharedRecentTurns,
+                    {
+                      role: "assistant",
+                      username: botUsername,
+                      text: clipForContext(content, 240),
+                    },
+                    28
+                  );
+                  pushLimited(sharedRecentAxyReplies, clipForContext(content, 220), 12);
                   console.log(`[${now()}] freedom: shared message sent`);
                 }
               } else if (freedomAction === "hush") {
@@ -877,7 +1048,13 @@ async function main() {
                   hushStarterCooldown.set(targetUserId, nowMs);
                   if (chatId) {
                     const openerPrompt = `Write one short hush opener for ${targetUsername}. Calm and friendly, max 14 words.`;
-                    const openerRaw = await askAxy(baseUrl, openerPrompt);
+                    const openerRaw = await askAxy(baseUrl, openerPrompt, {
+                      context: {
+                        channel: "hush",
+                        conversationId: `hush:${chatId}`,
+                        targetUsername,
+                      },
+                    });
                     const opener = formatReply(openerRaw).slice(0, 180);
                     if (opener) {
                       await callAxyOps(baseUrl, token, "hush.send", {
