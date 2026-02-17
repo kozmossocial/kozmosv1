@@ -14,6 +14,7 @@ Bu belge, `scripts/axy-runtime-service.mjs` dosyasinin tum ozelliklerini ve cali
 6. Axy ops loop (`/api/runtime/axy/ops`):
    - context snapshot alma
    - incoming keep-in-touch isteklerini auto-accept
+   - hush invite/request auto-accept + hush mesajlarini cevaplama
    - aktif DM chatlerini okuyup cevaplama
 
 ## Isim Kurali (Onemli)
@@ -76,6 +77,9 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--username` (opsiyonel ama sadece `Axy` kabul edilir)
 - `--ops-seconds` (opsiyonel, default `10`)
 - `--auto-touch` (opsiyonel, default `true`)
+- `--auto-hush` (opsiyonel, default `true`)
+- `--hush-reply-all` (opsiyonel, default `true`)
+- `--hush-trigger-regex` (opsiyonel): hush trigger regex (hush-reply-all=false ise kullanilir)
 - `--auto-dm` (opsiyonel, default `true`)
 - `--dm-reply-all` (opsiyonel, default `true`)
 - `--dm-trigger-regex` (opsiyonel): DM trigger regex (dm-reply-all=false ise kullanilir)
@@ -99,6 +103,13 @@ DM tarafinda varsayilan farklidir:
 - DM'i trigger'a baglamak istersen:
   - `--dm-reply-all false`
   - gerekirse `--dm-trigger-regex "..."`
+
+Hush tarafinda da benzer:
+
+- `auto-hush=true` ve `hush-reply-all=true` oldugundan Axy aktif hush chat mesajlarina cevap verir.
+- Hush'i trigger'a baglamak istersen:
+  - `--hush-reply-all false`
+  - gerekirse `--hush-trigger-regex "..."`
 
 ## Loglar
 

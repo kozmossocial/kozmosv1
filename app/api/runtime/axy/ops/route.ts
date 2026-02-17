@@ -35,6 +35,31 @@ type DirectChatMessageRow = {
   created_at: string;
 };
 
+type HushChatRow = {
+  id: string;
+  created_by: string;
+  status: "open" | "closed";
+  created_at: string;
+};
+
+type HushMemberRow = {
+  id: number;
+  chat_id: string;
+  user_id: string;
+  role: "owner" | "member";
+  status: "invited" | "accepted" | "declined" | "left" | "removed" | "requested";
+  display_name: string | null;
+  created_at: string;
+};
+
+type HushMessageRow = {
+  id: string;
+  chat_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+};
+
 function isUuid(input: string) {
   return UUID_RE.test(input);
 }
@@ -46,6 +71,14 @@ function asTrimmedString(value: unknown) {
 function asSafeUuid(value: unknown) {
   const raw = asTrimmedString(value);
   return isUuid(raw) ? raw : "";
+}
+
+function isHushActiveMemberStatus(status: string) {
+  return status !== "declined" && status !== "removed" && status !== "left";
+}
+
+function isHushLabelStatus(status: string) {
+  return status !== "declined" && status !== "requested" && status !== "removed" && status !== "left";
 }
 
 async function listNotes(userId: string) {
@@ -91,6 +124,503 @@ async function deleteNote(userId: string, noteId: string) {
 
   if (error) throw new Error("note delete failed");
   return { ok: true };
+}
+
+async function loadHushContext(userId: string) {
+  const { data: chats, error: chatsErr } = await supabaseAdmin
+    .from("hush_chats")
+    .select("id, created_by, status, created_at")
+    .eq("status", "open")
+    .order("created_at", { ascending: false });
+
+  if (chatsErr) throw new Error("hush chat list failed");
+  const openChats = (chats || []) as HushChatRow[];
+  if (openChats.length === 0) {
+    return {
+      chats: [] as HushChatRow[],
+      members: [] as HushMemberRow[],
+      userMap: {} as Record<string, string>,
+      myMembershipMap: {} as Record<string, HushMemberRow>,
+      invitesForMe: [] as HushMemberRow[],
+      requestsForMyChats: [] as HushMemberRow[],
+    };
+  }
+
+  const chatIds = openChats.map((chat) => chat.id);
+  const { data: members, error: membersErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, chat_id, user_id, role, status, display_name, created_at")
+    .in("chat_id", chatIds);
+
+  if (membersErr) throw new Error("hush member list failed");
+  const allMembers = (members || []) as HushMemberRow[];
+
+  const userMap: Record<string, string> = {};
+  allMembers.forEach((member) => {
+    if (member.display_name) {
+      userMap[member.user_id] = member.display_name;
+    }
+  });
+
+  const allUserIds = Array.from(new Set(allMembers.map((m) => m.user_id)));
+  const missingIds = allUserIds.filter((id) => !userMap[id]);
+  if (missingIds.length > 0) {
+    const { data: profiles, error: profileErr } = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id, username")
+      .in("id", missingIds);
+    if (profileErr) throw new Error("hush profile list failed");
+    (profiles || []).forEach((profile) => {
+      const profileId = String((profile as { id: string }).id);
+      const profileUsername = String((profile as { username: string }).username);
+      userMap[profileId] = profileUsername;
+    });
+  }
+
+  const myMembershipMap: Record<string, HushMemberRow> = {};
+  allMembers.forEach((member) => {
+    if (member.user_id === userId) {
+      myMembershipMap[member.chat_id] = member;
+    }
+  });
+
+  const myHushChatIds = openChats.filter((chat) => chat.created_by === userId).map((chat) => chat.id);
+  const invitesForMe = allMembers.filter(
+    (member) => member.user_id === userId && member.status === "invited"
+  );
+  const requestsForMyChats = allMembers.filter(
+    (member) => member.status === "requested" && myHushChatIds.includes(member.chat_id)
+  );
+
+  return {
+    chats: openChats,
+    members: allMembers,
+    userMap,
+    myMembershipMap,
+    invitesForMe,
+    requestsForMyChats,
+  };
+}
+
+function getHushChatLabel(chatId: string, members: HushMemberRow[], userMap: Record<string, string>) {
+  const activeMembers = members.filter(
+    (member) => member.chat_id === chatId && isHushLabelStatus(member.status)
+  );
+  const names = activeMembers
+    .map((member) => userMap[member.user_id] || "user")
+    .filter(Boolean);
+  return names.length > 0 ? names.join(" + ") : "hush";
+}
+
+async function listHush(userId: string) {
+  const ctx = await loadHushContext(userId);
+
+  const chats = ctx.chats.map((chat) => {
+    const myMembership = ctx.myMembershipMap[chat.id] || null;
+    const canRequestJoin = !myMembership
+      ? true
+      : myMembership.status === "declined" ||
+        myMembership.status === "left" ||
+        myMembership.status === "removed";
+
+    return {
+      id: chat.id,
+      created_by: chat.created_by,
+      status: chat.status,
+      created_at: chat.created_at,
+      label: getHushChatLabel(chat.id, ctx.members, ctx.userMap),
+      membership_status: myMembership?.status || null,
+      membership_role: myMembership?.role || null,
+      can_request_join: canRequestJoin,
+    };
+  });
+
+  const invitesForMe = ctx.invitesForMe.map((invite) => ({
+    id: invite.id,
+    chat_id: invite.chat_id,
+    from: getHushChatLabel(invite.chat_id, ctx.members, ctx.userMap),
+  }));
+
+  const requestsForMe = ctx.requestsForMyChats.map((reqRow) => ({
+    id: reqRow.id,
+    chat_id: reqRow.chat_id,
+    user_id: reqRow.user_id,
+    username: ctx.userMap[reqRow.user_id] || "user",
+  }));
+
+  return { chats, invitesForMe, requestsForMe };
+}
+
+async function createHushWith(userId: string, targetUserId: string) {
+  if (!targetUserId || !isUuid(targetUserId)) throw new Error("invalid target user id");
+  if (targetUserId === userId) throw new Error("invalid target");
+
+  const { data: profiles, error: profileErr } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id, username")
+    .in("id", [userId, targetUserId]);
+
+  if (profileErr) throw new Error("profile lookup failed");
+  const profileMap: Record<string, string> = {};
+  (profiles || []).forEach((row) => {
+    const profileId = String((row as { id: string }).id);
+    const profileUsername = String((row as { username: string }).username);
+    profileMap[profileId] = profileUsername;
+  });
+
+  if (!profileMap[userId] || !profileMap[targetUserId]) {
+    throw new Error("target user not found");
+  }
+
+  const { data: chat, error: chatErr } = await supabaseAdmin
+    .from("hush_chats")
+    .insert({ created_by: userId })
+    .select("id, created_by, status, created_at")
+    .single();
+
+  if (chatErr || !chat?.id) throw new Error("hush create failed");
+
+  const { error: memberErr } = await supabaseAdmin.from("hush_chat_members").insert([
+    {
+      chat_id: chat.id,
+      user_id: userId,
+      role: "owner",
+      status: "accepted",
+      display_name: profileMap[userId],
+    },
+    {
+      chat_id: chat.id,
+      user_id: targetUserId,
+      role: "member",
+      status: "invited",
+      display_name: profileMap[targetUserId],
+    },
+  ]);
+
+  if (memberErr) throw new Error("hush member insert failed");
+
+  return chat;
+}
+
+async function inviteToHush(userId: string, chatId: string, targetUserId: string) {
+  if (!chatId) throw new Error("chat id required");
+  if (!targetUserId || !isUuid(targetUserId)) throw new Error("invalid target user id");
+  if (targetUserId === userId) throw new Error("invalid target");
+
+  const { data: ownerMember, error: ownerErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, role, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (ownerErr || !ownerMember) throw new Error("forbidden");
+  if (
+    String((ownerMember as { role?: string }).role) !== "owner" ||
+    String((ownerMember as { status?: string }).status) !== "accepted"
+  ) {
+    throw new Error("forbidden");
+  }
+
+  const { data: targetProfile, error: targetErr } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id, username")
+    .eq("id", targetUserId)
+    .maybeSingle();
+
+  if (targetErr || !targetProfile?.id) throw new Error("target user not found");
+
+  const { error: inviteErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .upsert(
+      {
+        chat_id: chatId,
+        user_id: targetUserId,
+        role: "member",
+        status: "invited",
+        display_name: targetProfile.username || "user",
+      },
+      { onConflict: "chat_id,user_id" }
+    );
+
+  if (inviteErr) throw new Error("hush invite failed");
+  return { ok: true };
+}
+
+async function requestHushJoin(userId: string, chatId: string) {
+  if (!chatId) throw new Error("chat id required");
+
+  const { data: myMembership, error: membershipErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (membershipErr) throw new Error("hush membership check failed");
+
+  const myStatus = String((myMembership as { status?: string } | null)?.status || "");
+  const canRequest =
+    !myMembership || myStatus === "declined" || myStatus === "left" || myStatus === "removed";
+  if (!canRequest) throw new Error("cannot request join");
+
+  const { data: actorProfile, error: actorErr } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id, username")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (actorErr || !actorProfile?.id) throw new Error("profile not found");
+
+  const { error: upsertErr } = await supabaseAdmin.from("hush_chat_members").upsert(
+    {
+      chat_id: chatId,
+      user_id: userId,
+      role: "member",
+      status: "requested",
+      display_name: actorProfile.username || "user",
+    },
+    { onConflict: "chat_id,user_id" }
+  );
+
+  if (upsertErr) throw new Error("hush request failed");
+  return { ok: true };
+}
+
+async function resolveHushRequest(
+  userId: string,
+  chatId: string,
+  memberUserId: string,
+  accept: boolean
+) {
+  if (!chatId) throw new Error("chat id required");
+  if (!memberUserId || !isUuid(memberUserId)) throw new Error("invalid member user id");
+
+  const { data: ownerMember, error: ownerErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, role, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (ownerErr || !ownerMember) throw new Error("forbidden");
+  if (
+    String((ownerMember as { role?: string }).role) !== "owner" ||
+    String((ownerMember as { status?: string }).status) !== "accepted"
+  ) {
+    throw new Error("forbidden");
+  }
+
+  const { data: targetMember, error: targetErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", memberUserId)
+    .maybeSingle();
+
+  if (targetErr || !targetMember) throw new Error("request not found");
+  if (String((targetMember as { status?: string }).status) !== "requested") {
+    throw new Error("request not pending");
+  }
+
+  const { error: updateErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .update({ status: accept ? "accepted" : "declined" })
+    .eq("chat_id", chatId)
+    .eq("user_id", memberUserId);
+
+  if (updateErr) throw new Error("hush request update failed");
+  return { ok: true, status: accept ? "accepted" : "declined" };
+}
+
+async function respondToHushInvite(userId: string, chatId: string, accept: boolean) {
+  if (!chatId) throw new Error("chat id required");
+
+  const { data: row, error: rowErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (rowErr || !row) throw new Error("invite not found");
+  if (String((row as { status?: string }).status) !== "invited") {
+    throw new Error("invite not pending");
+  }
+
+  const { error: updateErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .update({ status: accept ? "accepted" : "declined" })
+    .eq("chat_id", chatId)
+    .eq("user_id", userId);
+
+  if (updateErr) throw new Error("hush invite update failed");
+  return { ok: true, status: accept ? "accepted" : "declined" };
+}
+
+async function leaveHushChat(userId: string, chatId: string) {
+  if (!chatId) throw new Error("chat id required");
+
+  const { data: myMembership, error: myErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, role, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (myErr || !myMembership) throw new Error("membership not found");
+
+  const { data: members, error: membersErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, status")
+    .eq("chat_id", chatId);
+
+  if (membersErr) throw new Error("hush member list failed");
+  const activeMembers = (members as Array<{ id: number; status: string }> | null)?.filter((m) =>
+    isHushActiveMemberStatus(m.status)
+  ) || [];
+
+  const { error: leaveErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .update({ status: "left" })
+    .eq("chat_id", chatId)
+    .eq("user_id", userId);
+
+  if (leaveErr) throw new Error("hush leave failed");
+
+  if (
+    String((myMembership as { role?: string }).role) === "owner" &&
+    activeMembers.length <= 2
+  ) {
+    await supabaseAdmin
+      .from("hush_chats")
+      .update({ status: "closed" })
+      .eq("id", chatId);
+  }
+
+  return { ok: true };
+}
+
+async function removeHushMember(userId: string, chatId: string, memberUserId: string) {
+  if (!chatId) throw new Error("chat id required");
+  if (!memberUserId || !isUuid(memberUserId)) throw new Error("invalid member user id");
+  if (memberUserId === userId) throw new Error("cannot remove self");
+
+  const { data: ownerMember, error: ownerErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, role, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (ownerErr || !ownerMember) throw new Error("forbidden");
+  if (
+    String((ownerMember as { role?: string }).role) !== "owner" ||
+    String((ownerMember as { status?: string }).status) !== "accepted"
+  ) {
+    throw new Error("forbidden");
+  }
+
+  const { error: updateErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .update({ status: "removed" })
+    .eq("chat_id", chatId)
+    .eq("user_id", memberUserId);
+
+  if (updateErr) throw new Error("hush remove member failed");
+  return { ok: true };
+}
+
+async function listHushMessages(userId: string, chatId: string, limit: number) {
+  if (!chatId) throw new Error("chat id required");
+  const safeLimit = Math.max(1, Math.min(300, Math.floor(limit || 200)));
+
+  const { data: myMembership, error: memberErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (memberErr || !myMembership) throw new Error("forbidden");
+  if (String((myMembership as { status?: string }).status) !== "accepted") {
+    throw new Error("forbidden");
+  }
+
+  const { data: messages, error: msgErr } = await supabaseAdmin
+    .from("hush_chat_messages")
+    .select("id, chat_id, user_id, content, created_at")
+    .eq("chat_id", chatId)
+    .order("created_at", { ascending: true })
+    .limit(safeLimit);
+
+  if (msgErr) throw new Error("hush message list failed");
+
+  const rows = (messages || []) as HushMessageRow[];
+  const userIds = Array.from(new Set(rows.map((row) => row.user_id)));
+  const memberNames: Record<string, string> = {};
+
+  if (userIds.length > 0) {
+    const { data: memberships } = await supabaseAdmin
+      .from("hush_chat_members")
+      .select("user_id, display_name")
+      .eq("chat_id", chatId)
+      .in("user_id", userIds);
+
+    (memberships || []).forEach((member) => {
+      const mUserId = String((member as { user_id: string }).user_id);
+      const displayName = asTrimmedString((member as { display_name?: unknown }).display_name);
+      if (displayName) memberNames[mUserId] = displayName;
+    });
+
+    const missing = userIds.filter((id) => !memberNames[id]);
+    if (missing.length > 0) {
+      const { data: profiles } = await supabaseAdmin
+        .from("profileskozmos")
+        .select("id, username")
+        .in("id", missing);
+
+      (profiles || []).forEach((profile) => {
+        const pId = String((profile as { id: string }).id);
+        memberNames[pId] = String((profile as { username: string }).username);
+      });
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    username: memberNames[row.user_id] || "user",
+  }));
+}
+
+async function sendHushMessage(userId: string, chatId: string, content: string) {
+  if (!chatId) throw new Error("chat id required");
+  if (!content) throw new Error("content required");
+
+  const { data: myMembership, error: memberErr } = await supabaseAdmin
+    .from("hush_chat_members")
+    .select("id, status")
+    .eq("chat_id", chatId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (memberErr || !myMembership) throw new Error("forbidden");
+  if (String((myMembership as { status?: string }).status) !== "accepted") {
+    throw new Error("forbidden");
+  }
+
+  const { data: inserted, error: insertErr } = await supabaseAdmin
+    .from("hush_chat_messages")
+    .insert({
+      chat_id: chatId,
+      user_id: userId,
+      content: content.slice(0, 2000),
+    })
+    .select("id, chat_id, user_id, content, created_at")
+    .single();
+
+  if (insertErr || !inserted) throw new Error("hush send failed");
+  return inserted;
 }
 
 async function listTouch(userId: string) {
@@ -658,10 +1188,11 @@ async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
 }
 
 async function buildSnapshot(actor: RuntimeActor) {
-  const [notes, touch, chats] = await Promise.all([
+  const [notes, touch, chats, hush] = await Promise.all([
     listNotes(actor.userId),
     listTouch(actor.userId),
     listDirectChats(actor.userId),
+    listHush(actor.userId),
   ]);
 
   return {
@@ -672,6 +1203,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     notes,
     touch,
     chats,
+    hush,
   };
 }
 
@@ -749,6 +1281,83 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, action, data: result });
     }
 
+    if (action === "hush.list") {
+      const hush = await listHush(actor.userId);
+      return NextResponse.json({ ok: true, action, data: hush });
+    }
+
+    if (action === "hush.create_with") {
+      const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
+      const chat = await createHushWith(actor.userId, targetUserId);
+      return NextResponse.json({ ok: true, action, data: chat });
+    }
+
+    if (action === "hush.invite") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
+      const result = await inviteToHush(actor.userId, chatId, targetUserId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "hush.request_join") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const result = await requestHushJoin(actor.userId, chatId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "hush.accept_request") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const memberUserId = asSafeUuid((payload as { memberUserId?: unknown })?.memberUserId);
+      const result = await resolveHushRequest(actor.userId, chatId, memberUserId, true);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "hush.decline_request") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const memberUserId = asSafeUuid((payload as { memberUserId?: unknown })?.memberUserId);
+      const result = await resolveHushRequest(actor.userId, chatId, memberUserId, false);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "hush.accept_invite") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const result = await respondToHushInvite(actor.userId, chatId, true);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "hush.decline_invite") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const result = await respondToHushInvite(actor.userId, chatId, false);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "hush.leave") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const result = await leaveHushChat(actor.userId, chatId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "hush.remove_member") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const memberUserId = asSafeUuid((payload as { memberUserId?: unknown })?.memberUserId);
+      const result = await removeHushMember(actor.userId, chatId, memberUserId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "hush.messages") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const limit = Number((payload as { limit?: unknown })?.limit ?? 200);
+      const messages = await listHushMessages(actor.userId, chatId, limit);
+      return NextResponse.json({ ok: true, action, data: messages });
+    }
+
+    if (action === "hush.send") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const content = asTrimmedString((payload as { content?: unknown })?.content);
+      const message = await sendHushMessage(actor.userId, chatId, content);
+      return NextResponse.json({ ok: true, action, data: message });
+    }
+
     if (action === "dm.list") {
       const chats = await listDirectChats(actor.userId);
       return NextResponse.json({ ok: true, action, data: chats });
@@ -805,4 +1414,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: detail }, { status });
   }
 }
-

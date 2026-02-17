@@ -7,7 +7,7 @@
  * - shared feed poll loop
  * - Axy reply generation
  * - post back to shared
- * - Axy ops loop (snapshot, keep-in-touch, direct chats)
+ * - Axy ops loop (snapshot, keep-in-touch, hush chat, direct chats)
  */
 
 function parseArgs(argv) {
@@ -180,6 +180,19 @@ function findLatestIncomingDm(messages, actorUserId) {
   return null;
 }
 
+function findLatestIncomingHush(messages, actorUserId) {
+  if (!Array.isArray(messages) || !actorUserId) return null;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const row = messages[i];
+    if (!row?.id) continue;
+    if (String(row.user_id || "") === actorUserId) continue;
+    const content = String(row.content || "").trim();
+    if (!content) continue;
+    return row;
+  }
+  return null;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -203,6 +216,13 @@ async function main() {
     toInt(args["ops-seconds"] || process.env.KOZMOS_OPS_SECONDS, 10)
   );
   const autoTouch = toBool(args["auto-touch"] ?? process.env.KOZMOS_AUTO_TOUCH, true);
+  const autoHush = toBool(args["auto-hush"] ?? process.env.KOZMOS_AUTO_HUSH, true);
+  const hushReplyAll = toBool(
+    args["hush-reply-all"] ?? process.env.KOZMOS_HUSH_REPLY_ALL,
+    true
+  );
+  const hushTriggerRegexRaw =
+    args["hush-trigger-regex"] || process.env.KOZMOS_HUSH_TRIGGER_REGEX || "";
   const autoDm = toBool(args["auto-dm"] ?? process.env.KOZMOS_AUTO_DM, true);
   const dmReplyAll = toBool(
     args["dm-reply-all"] ?? process.env.KOZMOS_DM_REPLY_ALL,
@@ -223,10 +243,14 @@ async function main() {
   console.log(`[${now()}] using provided runtime token`);
 
   const triggerRegex = buildTriggerRegex(triggerRegexRaw, botUsername);
+  const hushTriggerRegex = buildTriggerRegex(hushTriggerRegexRaw, botUsername);
   const dmTriggerRegex = buildTriggerRegex(dmTriggerRegexRaw, botUsername);
   let cursor = new Date(Date.now() - lookbackSeconds * 1000).toISOString();
   const seen = new Set();
   const handledTouchReq = new Set();
+  const handledHushInvite = new Set();
+  const handledHushRequest = new Set();
+  const handledHushMessage = new Set();
   const handledDmMessage = new Set();
   let stopping = false;
   let opsEnabled = true;
@@ -241,7 +265,7 @@ async function main() {
     `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
   );
   console.log(
-    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoDm=${autoDm} dmReplyAll=${dmReplyAll}`
+    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll}`
   );
 
   const heartbeat = setInterval(async () => {
@@ -361,6 +385,88 @@ async function main() {
               accept: true,
             });
             console.log(`[${now()}] accepted keep-in-touch request id=${reqId}`);
+          }
+        }
+
+        if (autoHush) {
+          const hushData = snapshot?.data?.hush || {};
+          const invitesForMe = Array.isArray(hushData?.invitesForMe) ? hushData.invitesForMe : [];
+          for (const invite of invitesForMe) {
+            const inviteId = Number(invite?.id || 0);
+            const chatId = String(invite?.chat_id || "").trim();
+            if (!chatId) continue;
+            const inviteKey = `${inviteId}:${chatId}`;
+            if (handledHushInvite.has(inviteKey)) continue;
+            handledHushInvite.add(inviteKey);
+            if (handledHushInvite.size > 1200) {
+              const first = handledHushInvite.values().next().value;
+              if (first) handledHushInvite.delete(first);
+            }
+            await callAxyOps(baseUrl, token, "hush.accept_invite", { chatId });
+            console.log(`[${now()}] accepted hush invite chat=${chatId}`);
+          }
+
+          const requestsForMe = Array.isArray(hushData?.requestsForMe)
+            ? hushData.requestsForMe
+            : [];
+          for (const req of requestsForMe) {
+            const reqId = Number(req?.id || 0);
+            const chatId = String(req?.chat_id || "").trim();
+            const memberUserId = String(req?.user_id || "").trim();
+            if (!chatId || !memberUserId) continue;
+            const reqKey = `${reqId}:${chatId}:${memberUserId}`;
+            if (handledHushRequest.has(reqKey)) continue;
+            handledHushRequest.add(reqKey);
+            if (handledHushRequest.size > 1200) {
+              const first = handledHushRequest.values().next().value;
+              if (first) handledHushRequest.delete(first);
+            }
+            await callAxyOps(baseUrl, token, "hush.accept_request", {
+              chatId,
+              memberUserId,
+            });
+            console.log(`[${now()}] accepted hush join request user=${memberUserId}`);
+          }
+
+          const hushChats = Array.isArray(hushData?.chats) ? hushData.chats : [];
+          for (const chat of hushChats) {
+            const chatId = String(chat?.id || "").trim();
+            if (!chatId) continue;
+            if (String(chat?.membership_status || "") !== "accepted") continue;
+
+            const messageRes = await callAxyOps(baseUrl, token, "hush.messages", {
+              chatId,
+              limit: 60,
+            });
+            const latestIncoming = findLatestIncomingHush(
+              messageRes?.data || [],
+              user?.id || ""
+            );
+            if (!latestIncoming) continue;
+
+            const messageKey = `${chatId}:${latestIncoming.id}`;
+            if (handledHushMessage.has(messageKey)) continue;
+            handledHushMessage.add(messageKey);
+            if (handledHushMessage.size > 2400) {
+              const first = handledHushMessage.values().next().value;
+              if (first) handledHushMessage.delete(first);
+            }
+
+            const content = String(latestIncoming.content || "").trim();
+            const shouldReplyHush = hushReplyAll || hushTriggerRegex.test(content);
+            if (!shouldReplyHush) continue;
+
+            const senderLabel = String(latestIncoming.username || "user");
+            const prompt = `hush from ${senderLabel}: ${content}`;
+            const raw = await askAxy(baseUrl, prompt);
+            const reply = formatReply(raw);
+            if (!reply) continue;
+
+            await callAxyOps(baseUrl, token, "hush.send", {
+              chatId,
+              content: reply,
+            });
+            console.log(`[${now()}] hush replied to ${senderLabel}`);
           }
         }
 
