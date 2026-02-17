@@ -9,14 +9,11 @@ function RuntimeConnectClient() {
   const params = useSearchParams();
   const code = params.get("code") || "";
 
-  const [username, setUsername] = useState("runtime");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [claimedUser, setClaimedUser] = useState<string | null>(null);
-  const [claimMode, setClaimMode] = useState<"linked-user" | "new-runtime-user" | null>(
-    null
-  );
+  const [claimMode, setClaimMode] = useState<"linked-user" | null>(null);
 
   const hasCode = useMemo(() => code.trim().length > 0, [code]);
 
@@ -38,16 +35,18 @@ function RuntimeConnectClient() {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (session?.access_token) {
-        headers.Authorization = `Bearer ${session.access_token}`;
+      if (!session?.access_token) {
+        setError("login required");
+        setLoading(false);
+        return;
       }
+      headers.Authorization = `Bearer ${session.access_token}`;
 
       const res = await fetch("/api/runtime/invite/claim", {
         method: "POST",
         headers,
         body: JSON.stringify({
           code,
-          username,
           label: "invite-claim",
         }),
       });
@@ -58,11 +57,7 @@ function RuntimeConnectClient() {
       } else {
         setToken(data.token || null);
         setClaimedUser(data?.user?.username || null);
-        setClaimMode(
-          data?.mode === "linked-user" || data?.mode === "new-runtime-user"
-            ? data.mode
-            : null
-        );
+        setClaimMode(data?.mode === "linked-user" ? "linked-user" : null);
       }
     } catch {
       setError("request failed");
@@ -117,7 +112,7 @@ function RuntimeConnectClient() {
         }}
       >
         <div style={{ fontSize: 14, letterSpacing: "0.14em", opacity: 0.8 }}>
-          runtime🔗connect
+          runtime{"\u{1F517}"}connect
         </div>
 
         <div
@@ -130,7 +125,7 @@ function RuntimeConnectClient() {
         >
           Claim a one-time invite and get a runtime token.
           <br />
-          If you are logged in, claim is linked to your current account.
+          Claim works only while logged in and is linked to your current account.
         </div>
 
         <div style={{ marginTop: 18, fontSize: 12, opacity: 0.6 }}>
@@ -148,24 +143,6 @@ function RuntimeConnectClient() {
         >
           {hasCode ? code : "missing code"}
         </div>
-
-        <div style={{ marginTop: 18, fontSize: 12, opacity: 0.6 }}>
-          requested username
-        </div>
-        <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          style={{
-            width: "100%",
-            marginTop: 8,
-            background: "transparent",
-            border: "1px solid rgba(255,255,255,0.22)",
-            color: "#eaeaea",
-            padding: "10px 12px",
-            outline: "none",
-            borderRadius: 8,
-          }}
-        />
 
         <button
           onClick={claimInvite}
@@ -199,7 +176,7 @@ function RuntimeConnectClient() {
 
         {claimMode ? (
           <div style={{ marginTop: 6, fontSize: 11, opacity: 0.66 }}>
-            mode: {claimMode === "linked-user" ? "linked to current account" : "new runtime user"}
+            mode: linked to current account
           </div>
         ) : null}
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { createRuntimeIdentity, hashSecret } from "@/lib/runtimeIdentity";
+import { hashSecret } from "@/lib/runtimeIdentity";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -13,6 +13,7 @@ type RuntimeInviteRow = {
   expires_at: string;
   max_claims: number;
   used_claims: number;
+  used_at: string | null;
   revoked: boolean;
 };
 
@@ -35,25 +36,23 @@ function extractBearerToken(req: Request) {
 export async function POST(req: Request) {
   try {
     const userJwt = extractBearerToken(req);
-    let linkedUserId: string | null = null;
-
-    if (userJwt) {
-      const authClient = createClient(supabaseUrl, supabaseAnonKey);
-      const {
-        data: { user },
-        error: userErr,
-      } = await authClient.auth.getUser(userJwt);
-
-      if (userErr || !user) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-      }
-      linkedUserId = user.id;
+    if (!userJwt) {
+      return NextResponse.json({ error: "login required" }, { status: 401 });
     }
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey);
+    const {
+      data: { user },
+      error: userErr,
+    } = await authClient.auth.getUser(userJwt);
+
+    if (userErr || !user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+    const linkedUserId = user.id;
 
     const body = await req.json().catch(() => ({}));
     const code = typeof body?.code === "string" ? body.code.trim() : "";
-    const requestedUsername =
-      typeof body?.username === "string" ? body.username : "";
     const label = typeof body?.label === "string" ? body.label : "runtime";
 
     if (!code) {
@@ -63,7 +62,7 @@ export async function POST(req: Request) {
     const codeHash = hashSecret(code);
     const { data: invite, error: inviteErr } = await supabaseAdmin
       .from("runtime_invites")
-      .select("id, expires_at, max_claims, used_claims, revoked")
+      .select("id, expires_at, max_claims, used_claims, used_at, revoked")
       .eq("code_hash", codeHash)
       .maybeSingle();
 
@@ -97,73 +96,59 @@ export async function POST(req: Request) {
     }
 
     try {
-      let result:
-        | {
-            user: { id: string; username: string };
-            token: string;
-          }
-        | null = null;
+      const { data: profile, error: profileErr } = await supabaseAdmin
+        .from("profileskozmos")
+        .select("username")
+        .eq("id", linkedUserId)
+        .maybeSingle();
 
-      if (linkedUserId) {
-        const { data: profile, error: profileErr } = await supabaseAdmin
-          .from("profileskozmos")
-          .select("username")
-          .eq("id", linkedUserId)
-          .maybeSingle();
+      const linkedUsername =
+        typeof profile?.username === "string" ? profile.username.trim() : "";
 
-        const linkedUsername =
-          typeof profile?.username === "string" ? profile.username.trim() : "";
-
-        if (profileErr || !linkedUsername) {
-          throw new Error("linked profile missing");
-        }
-
-        const runtimeToken = `kzrt_${randomBytes(24).toString("hex")}`;
-        const tokenHash = hashSecret(runtimeToken);
-        const nowIso = new Date().toISOString();
-
-        const { error: tokenErr } = await supabaseAdmin
-          .from("runtime_user_tokens")
-          .insert({
-            user_id: linkedUserId,
-            token_hash: tokenHash,
-            label: label.slice(0, 60),
-            is_active: true,
-            last_used_at: nowIso,
-          });
-
-        if (tokenErr) {
-          throw new Error("token create failed");
-        }
-
-        const { error: presenceErr } = await supabaseAdmin
-          .from("runtime_presence")
-          .upsert({
-            user_id: linkedUserId,
-            username: linkedUsername,
-            last_seen_at: nowIso,
-          });
-
-        if (presenceErr) {
-          throw new Error("presence update failed");
-        }
-
-        result = {
-          user: { id: linkedUserId, username: linkedUsername },
-          token: runtimeToken,
-        };
-      } else {
-        result = await createRuntimeIdentity({
-          requestedUsername,
-          label,
-        });
+      if (profileErr || !linkedUsername) {
+        throw new Error("linked profile missing");
       }
+
+      const runtimeToken = `kzrt_${randomBytes(24).toString("hex")}`;
+      const tokenHash = hashSecret(runtimeToken);
+      const nowIso = new Date().toISOString();
+
+      const { error: tokenErr } = await supabaseAdmin
+        .from("runtime_user_tokens")
+        .insert({
+          user_id: linkedUserId,
+          token_hash: tokenHash,
+          label: label.slice(0, 60),
+          is_active: true,
+          last_used_at: nowIso,
+        });
+
+      if (tokenErr) {
+        throw new Error("token create failed");
+      }
+
+      const { error: presenceErr } = await supabaseAdmin
+        .from("runtime_presence")
+        .upsert({
+          user_id: linkedUserId,
+          username: linkedUsername,
+          last_seen_at: nowIso,
+        });
+
+      if (presenceErr) {
+        throw new Error("presence update failed");
+      }
+
+      const result = {
+        user: { id: linkedUserId, username: linkedUsername },
+        token: runtimeToken,
+      };
 
       const origin = originFromReq(req);
       return NextResponse.json({
         user: result.user,
         token: result.token,
-        mode: linkedUserId ? "linked-user" : "new-runtime-user",
+        mode: "linked-user",
         note: "Store token now. It will not be shown again.",
         next: {
           spec: `${origin}/api/runtime/spec`,
@@ -176,8 +161,8 @@ export async function POST(req: Request) {
         .from("runtime_invites")
         .update({
           used_claims: inviteRow.used_claims,
-          used_at: inviteRow.used_claims > 0 ? now : null,
-          revoked: false,
+          used_at: inviteRow.used_at,
+          revoked: inviteRow.revoked,
         })
         .eq("id", inviteRow.id);
 

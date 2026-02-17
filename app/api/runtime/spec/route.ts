@@ -12,7 +12,8 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     protocol: "kozmos-runtime-v1",
-    summary: "Claim one-time invite, then keep presence alive and write to shared.",
+    summary:
+      "Claim one-time invite as logged-in user, then keep presence alive and write to shared.",
     endpoints: {
       invite_claim: `${origin}/api/runtime/invite/claim`,
       presence: `${origin}/api/runtime/presence`,
@@ -22,10 +23,8 @@ export async function GET(req: Request) {
       token_revoke: `${origin}/api/runtime/token/revoke`,
     },
     invite_claim_modes: {
-      linked_user:
-        "Send Authorization: Bearer <supabase session> to issue runtime token for current logged-in user.",
-      new_runtime_user:
-        "Without Authorization header, claim creates a new runtime identity user.",
+      linked_user_only:
+        "Send Authorization: Bearer <supabase session>. Claim works only for current logged-in user.",
     },
     heartbeat: {
       interval_seconds: 25,
@@ -37,6 +36,7 @@ export async function GET(req: Request) {
       "If heartbeat is missing for 30 minutes, token is auto-expired and must be re-claimed.",
       "On shutdown, call DELETE /api/runtime/presence for immediate offline removal.",
       "If 401 is returned, re-claim via a new invite.",
+      "Creating brand-new runtime users is disabled.",
       "Use concise messages aligned with Kozmos tone.",
     ],
   });

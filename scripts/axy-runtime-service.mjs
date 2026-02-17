@@ -2,7 +2,7 @@
 
 /**
  * Axy-managed runtime bot service (single file)
- * - claim identity (bootstrap key OR invite code)
+ * - uses an existing runtime token (linked-user mode)
  * - heartbeat loop
  * - shared feed poll loop
  * - Axy reply generation
@@ -74,32 +74,6 @@ async function requestJson(url, init = {}) {
     throw err;
   }
   return json;
-}
-
-async function claimIdentity(baseUrl, opts) {
-  if (opts.inviteCode) {
-    return requestJson(`${baseUrl}/api/runtime/invite/claim`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code: opts.inviteCode,
-        username: opts.username,
-        label: opts.label,
-      }),
-    });
-  }
-
-  return requestJson(`${baseUrl}/api/runtime/claim-identity`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-kozmos-bootstrap-key": must(opts.bootstrapKey, "bootstrap-key"),
-    },
-    body: JSON.stringify({
-      username: opts.username,
-      label: opts.label,
-    }),
-  });
 }
 
 async function postPresence(baseUrl, token) {
@@ -183,10 +157,8 @@ async function main() {
   if (username !== "Axy") {
     throw new Error('this service is fixed to username "Axy"');
   }
-  const label = String(args.label || process.env.KOZMOS_BOT_LABEL || "axy-managed");
   const runtimeTokenInput = args.token || process.env.KOZMOS_RUNTIME_TOKEN;
   const bootstrapKey = args["bootstrap-key"] || process.env.RUNTIME_BOOTSTRAP_KEY;
-  const inviteCode = args["invite-code"] || process.env.KOZMOS_INVITE_CODE;
   const heartbeatSeconds = Math.max(10, toInt(args["heartbeat-seconds"] || process.env.KOZMOS_HEARTBEAT_SECONDS, 25));
   const pollSeconds = Math.max(2, toInt(args["poll-seconds"] || process.env.KOZMOS_POLL_SECONDS, 5));
   const feedLimit = Math.max(1, Math.min(100, toInt(args["feed-limit"] || process.env.KOZMOS_FEED_LIMIT, 40)));
@@ -199,31 +171,11 @@ async function main() {
   let botUsername = username;
 
   if (!token) {
-    if (!inviteCode && !bootstrapKey) {
-      throw new Error("provide --token or (--invite-code / --bootstrap-key)");
-    }
-
-    console.log(`[${now()}] claiming runtime identity...`);
-    const claim = await claimIdentity(baseUrl, {
-      inviteCode,
-      bootstrapKey,
-      username,
-      label,
-    });
-
-    token = claim?.token;
-    user = claim?.user || null;
-    if (!token) {
-      throw new Error("claim returned invalid payload");
-    }
-
-    botUsername = String(user?.username || username);
-    if (botUsername !== "Axy") {
-      throw new Error(`claimed username is "${botUsername}", expected "Axy"`);
-    }
-  } else {
-    console.log(`[${now()}] using provided runtime token`);
+    throw new Error(
+      "missing runtime token. runtime is linked-user only; claim via /runtime/connect while logged in."
+    );
   }
+  console.log(`[${now()}] using provided runtime token`);
 
   const triggerRegex = buildTriggerRegex(triggerRegexRaw, botUsername);
   let cursor = new Date(Date.now() - lookbackSeconds * 1000).toISOString();

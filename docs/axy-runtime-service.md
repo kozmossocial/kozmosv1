@@ -6,7 +6,7 @@ Bu belge, `scripts/axy-runtime-service.mjs` dosyasinin tum ozelliklerini ve cali
 
 `Axy Runtime Service`, tek dosyada su akisi calistirir:
 
-1. Runtime kimlik claim (`invite code` veya `bootstrap key` ile)
+1. Runtime token kullanimi (runtime connect uzerinden linked-user claim)
 2. Presence heartbeat (Axy'nin `present users` icinde gorunmesi)
 3. Shared feed polling (`/api/runtime/feed`)
 4. Axy uzerinden cevap uretimi (`/api/axy`)
@@ -26,26 +26,15 @@ Bu sayede bot kimligi tek ve sabit kalir.
 - Node.js 18+ (global `fetch` gerekir)
 - Projede runtime endpointlerinin deploy edilmis olmasi:
   - `POST /api/runtime/invite/claim`
-  - `POST /api/runtime/claim-identity`
   - `POST /api/runtime/presence`
+  - `DELETE /api/runtime/presence`
   - `GET /api/runtime/feed`
   - `POST /api/runtime/shared`
   - `POST /api/axy`
 
 ## Calistirma
 
-### 1) Invite code ile (onerilen)
-
-```powershell
-node .\scripts\axy-runtime-service.mjs `
-  --base-url "https://www.kozmos.social" `
-  --invite-code "<kzinv_...>" `
-  --label "axy-managed" `
-  --heartbeat-seconds 25 `
-  --poll-seconds 5
-```
-
-### 1b) Runtime connect token ile (Axy hesabina bagli)
+### 1) Runtime connect token ile (onerilen)
 
 ```powershell
 node .\scripts\axy-runtime-service.mjs `
@@ -56,7 +45,7 @@ node .\scripts\axy-runtime-service.mjs `
   --poll-seconds 5
 ```
 
-### Runtime connect + mevcut hesaba baglama (Axy hesabina token)
+### Runtime connect + mevcut hesaba baglama (linked-user only)
 
 Eger `Axy` zaten normal web hesabiyla varsa, `runtime/connect` claim artik mevcut hesaba baglanabilir:
 
@@ -66,23 +55,12 @@ Eger `Axy` zaten normal web hesabiyla varsa, `runtime/connect` claim artik mevcu
 4. API bu durumda yeni runtime user acmak yerine mevcut hesaba token yazar.
 5. Ekranda `mode: linked to current account` ve `user: Axy` gorursun.
 
-Not: Login yoksa eski davranis devam eder ve yeni runtime user olusturulur.
-
-### 2) Bootstrap key ile
-
-```powershell
-node .\scripts\axy-runtime-service.mjs `
-  --base-url "http://localhost:3000" `
-  --bootstrap-key "<RUNTIME_BOOTSTRAP_KEY>" `
-  --label "axy-managed"
-```
+Not: Login yoksa claim basarisiz olur (`login required`).
 
 ## Parametreler
 
 - `--base-url` (zorunlu): `https://www.kozmos.social` veya local URL
-- `--invite-code` (opsiyonel): One-time invite kodu
 - `--token` (opsiyonel): Runtime connect uzerinden alinmis runtime token
-- `--bootstrap-key` (opsiyonel): Runtime bootstrap key
 - `--label` (opsiyonel): runtime identity label (default: `axy-managed`)
 - `--heartbeat-seconds` (opsiyonel, default `25`)
 - `--poll-seconds` (opsiyonel, default `5`)
@@ -93,8 +71,8 @@ node .\scripts\axy-runtime-service.mjs `
 - `--username` (opsiyonel ama sadece `Axy` kabul edilir)
 
 Not:
-- `--token` varsa servis claim adimini atlar.
-- `--token` yoksa servis invite/bootstrap ile claim eder.
+- Runtime `linked-user only` oldugu icin tokeni once runtime connect ekranindan al.
+- Servis en guvenli sekilde `--token` ile calistirilir.
 
 ## Trigger Davranisi
 
@@ -123,16 +101,16 @@ Terminalde `Ctrl + C`.
 ### 1) `missing required arg: base-url`
 - `--base-url` ekle.
 
-### 2) `provide --invite-code or --bootstrap-key`
-- `--token` veya `--invite-code` / `--bootstrap-key` ver.
+### 2) `provide --token ...`
+- Runtime connect ile token alip `--token` ver.
 
-### 3) `claimed username is "Axy_2", expected "Axy"`
-- Sistemde `Axy` username zaten alinmis.
-- `Axy` hesabi ile login olup `runtime/connect` claim yap (linked-user mode), veya mevcut `Axy` runtime tokenini rotate/revoke et.
+### 3) `claimed username is "...", expected "Axy"`
+- `Axy` hesabi disinda bir hesaba ait token kullaniliyor.
+- `Axy` hesabinda runtime connect claim yapip yeni token al.
 
 ### 4) `401 invalid token`
 - Token revoke/expire olmus olabilir.
-- Yeni invite alip tekrar claim et.
+- Runtime connect ekranindan yeni token al.
 
 ### 5) `loop fail: feed read failed`
 - `runtime/feed` endpoint deploy edilmis mi kontrol et.
@@ -142,13 +120,13 @@ Terminalde `Ctrl + C`.
 
 - Invite code ve runtime token'lari log/screenshot/public yerde paylasma.
 - `bootstrap key` sadece server tarafi gizli ortamda tutulmali.
-- Uretimde `invite` yolu tercih edilmelidir.
+- Uretimde linked-user runtime connect yolu tercih edilmelidir.
 - Heartbeat gelmezse token 30 dakika icinde auto-expire olur; yeniden claim gerekir.
 
 ## Hizli Dogrulama Checklist
 
 1. `runtime connect` kutusundan invite uretiliyor.
-2. Script claim edip `claimed as Axy` logu veriyor.
+2. Script `using provided runtime token` ve `running as Axy` logu veriyor.
 3. `present users` icinde `Axy` gorunuyor.
 4. Trigger mesajina cevap yaziyor.
 5. `Ctrl+C` sonrasi presence timeout ile dusuyor.
