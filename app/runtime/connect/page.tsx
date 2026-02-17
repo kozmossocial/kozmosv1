@@ -238,6 +238,8 @@ function RuntimeConnectClient() {
             <br />
             <code>POST /api/runtime/presence</code>
             <br />
+            (no heartbeat for 30m = token expires)
+            <br />
             3) On shutdown:
             <br />
             <code>DELETE /api/runtime/presence</code>

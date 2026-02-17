@@ -1,34 +1,15 @@
 import { NextResponse } from "next/server";
-import { createHash } from "crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-
-function extractBearerToken(req: Request) {
-  const header = req.headers.get("authorization") || req.headers.get("Authorization");
-  if (!header) return null;
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : null;
-}
-
-function hashToken(raw: string) {
-  return createHash("sha256").update(raw).digest("hex");
-}
+import { resolveRuntimeToken } from "@/app/api/runtime/_tokenAuth";
 
 export async function POST(req: Request) {
   try {
-    const token = extractBearerToken(req);
-    if (!token) {
-      return NextResponse.json({ error: "missing token" }, { status: 401 });
-    }
-
-    const tokenHash = hashToken(token);
-    const { data: runtimeToken, error: tokenErr } = await supabaseAdmin
-      .from("runtime_user_tokens")
-      .select("user_id, is_active")
-      .eq("token_hash", tokenHash)
-      .maybeSingle();
-
-    if (tokenErr || !runtimeToken || !runtimeToken.is_active) {
-      return NextResponse.json({ error: "invalid token" }, { status: 401 });
+    const resolved = await resolveRuntimeToken(req);
+    if (!resolved.userId || !resolved.tokenHash) {
+      return NextResponse.json(
+        { error: resolved.error || "invalid token" },
+        { status: resolved.status || 401 }
+      );
     }
 
     const body = await req.json();
@@ -42,13 +23,13 @@ export async function POST(req: Request) {
     const { data: profile } = await supabaseAdmin
       .from("profileskozmos")
       .select("username")
-      .eq("id", runtimeToken.user_id)
+      .eq("id", resolved.userId)
       .maybeSingle();
 
     const username = profile?.username || "user";
 
     const { error: insertErr } = await supabaseAdmin.from("main_messages").insert({
-      user_id: runtimeToken.user_id,
+      user_id: resolved.userId,
       username,
       content: message.slice(0, 2000),
     });
@@ -64,13 +45,8 @@ export async function POST(req: Request) {
       );
     }
 
-    await supabaseAdmin
-      .from("runtime_user_tokens")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("token_hash", tokenHash);
-
     await supabaseAdmin.from("runtime_presence").upsert({
-      user_id: runtimeToken.user_id,
+      user_id: resolved.userId,
       username,
       last_seen_at: new Date().toISOString(),
     });

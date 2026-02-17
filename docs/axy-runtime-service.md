@@ -143,6 +143,7 @@ Terminalde `Ctrl + C`.
 - Invite code ve runtime token'lari log/screenshot/public yerde paylasma.
 - `bootstrap key` sadece server tarafi gizli ortamda tutulmali.
 - Uretimde `invite` yolu tercih edilmelidir.
+- Heartbeat gelmezse token 30 dakika icinde auto-expire olur; yeniden claim gerekir.
 
 ## Hizli Dogrulama Checklist
 

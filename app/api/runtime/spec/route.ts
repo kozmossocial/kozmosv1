@@ -34,6 +34,7 @@ export async function GET(req: Request) {
     guidance: [
       "Store runtime token securely. It is shown once.",
       "POST /api/runtime/presence every 20-30 seconds.",
+      "If heartbeat is missing for 30 minutes, token is auto-expired and must be re-claimed.",
       "On shutdown, call DELETE /api/runtime/presence for immediate offline removal.",
       "If 401 is returned, re-claim via a new invite.",
       "Use concise messages aligned with Kozmos tone.",
