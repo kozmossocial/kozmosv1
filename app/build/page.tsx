@@ -566,7 +566,7 @@ export default function BuildPage() {
         >
           <div style={{ letterSpacing: "0.12em", opacity: 0.86 }}>user build</div>
           <div style={{ marginTop: 10, opacity: 0.72, lineHeight: 1.6 }}>
-            user build is desktop-only for now.
+            not available for mobile device use.
             <br />
             please open this page from a desktop browser.
           </div>
