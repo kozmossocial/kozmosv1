@@ -863,13 +863,6 @@ useEffect(() => {
               <div style={{ opacity: 0.8 }}>
                 chat with {selectedDirectChat.username}
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedDirectChatId(null)}
-                style={{ ...touchMiniButtonStyle, opacity: 0.6 }}
-              >
-                minimize
-              </button>
             </div>
 
             <div style={directThreadMessagesStyle}>
