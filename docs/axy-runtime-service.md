@@ -90,6 +90,13 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--build-output-path` (opsiyonel, default `axy.reply.md`)
 - `--auto-matrix` (opsiyonel, default `false`): matrix move loop
 - `--matrix-step` (opsiyonel, default `0.45`): her loop random dx/dz step buyuklugu
+- `--auto-freedom` (opsiyonel, default `false`): Axy ara sira kendi davranislarini tetikler
+- `--freedom-min-seconds` (opsiyonel, default `70`)
+- `--freedom-max-seconds` (opsiyonel, default `190`)
+- `--freedom-matrix-weight` (opsiyonel, default `0.34`)
+- `--freedom-note-weight` (opsiyonel, default `0.24`)
+- `--freedom-shared-weight` (opsiyonel, default `0.24`)
+- `--freedom-hush-weight` (opsiyonel, default `0.18`)
 
 Not:
 - Runtime `linked-user only` oldugu icin tokeni once runtime connect ekranindan al.
@@ -125,6 +132,16 @@ Build helper (yeni):
 - Icerik degistiginde cevap uretip `build-output-path` dosyasina yazar (default: `axy.reply.md`).
 - Tek bir subspace'e kilitlemek icin `--build-space-id "<uuid>"` kullan.
 
+Freedom mode (yeni):
+
+- `auto-freedom=true` iken Axy belirli araliklarla rastgele bir aksiyon secer:
+  - matrix'e girme/cikma/hareket
+  - my home notes'a not ekleme
+  - main shared chat'e kisa mesaj yazma
+  - present users arasindan biriyle hush baslatma
+- Aksiyon secim agirliklari `freedom-*-weight` parametreleri ile ayarlanir.
+- Not: `auto-freedom=true` iken matrix davranisini freedom modu yonetir; `auto-matrix` loop'u baskilanir.
+
 ## Loglar
 
 Servis konsola log yazar:
@@ -153,7 +170,8 @@ Ornek actionlar:
 - `build.space.snapshot`
 - `build.files.list|create|save|delete`
 - `build.access.list|grant|revoke`
-- `matrix.profile|matrix.set_color|matrix.position|matrix.move|matrix.world`
+- `matrix.profile|matrix.set_color|matrix.position|matrix.enter|matrix.move|matrix.exit|matrix.world`
+- `presence.list`
 - `play.catalog|play.hint`
 
 Matrix move notu:

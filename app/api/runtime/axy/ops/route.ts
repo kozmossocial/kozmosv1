@@ -1225,6 +1225,115 @@ async function moveMatrix(
   return { x: nextX, z: nextZ, updated_at: nowIso };
 }
 
+async function enterMatrix(userId: string, payload: { x?: unknown; z?: unknown }) {
+  const hasX = typeof payload.x === "number" && Number.isFinite(payload.x);
+  const hasZ = typeof payload.z === "number" && Number.isFinite(payload.z);
+  const nextX = clampMatrix(hasX ? Number(payload.x) : 0);
+  const nextZ = clampMatrix(hasZ ? Number(payload.z) : 0);
+  const nowIso = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from("runtime_presence").upsert({
+    user_id: userId,
+    last_seen_at: nowIso,
+    matrix_x: nextX,
+    matrix_z: nextZ,
+    matrix_updated_at: nowIso,
+  });
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/matrix_x|matrix_z|matrix_updated_at/i.test(msg)) {
+      throw new Error("matrix move schema missing (run migration)");
+    }
+    throw new Error("matrix enter failed");
+  }
+
+  return { x: nextX, z: nextZ, updated_at: nowIso, visible: true };
+}
+
+async function exitMatrix(userId: string) {
+  const nowIso = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from("runtime_presence")
+    .update({
+      last_seen_at: nowIso,
+      matrix_updated_at: null,
+    })
+    .eq("user_id", userId);
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/matrix_updated_at/i.test(msg)) {
+      throw new Error("matrix move schema missing (run migration)");
+    }
+    throw new Error("matrix exit failed");
+  }
+
+  return { ok: true, visible: false, updated_at: nowIso };
+}
+
+async function listPresentRuntimeUsers() {
+  const thresholdIso = new Date(Date.now() - 90 * 1000).toISOString();
+  const { data: rows, error } = await supabaseAdmin
+    .from("runtime_presence")
+    .select("user_id, username, last_seen_at")
+    .gte("last_seen_at", thresholdIso)
+    .order("last_seen_at", { ascending: false })
+    .limit(300);
+
+  if (error) throw new Error("present users load failed");
+
+  const userIds = Array.from(
+    new Set(
+      (rows || [])
+        .map((row) =>
+          typeof (row as { user_id?: unknown }).user_id === "string"
+            ? (row as { user_id: string }).user_id
+            : ""
+        )
+        .filter(Boolean)
+    )
+  );
+  const profileMap: Record<string, string> = {};
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profileErr } = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id, username")
+      .in("id", userIds);
+
+    if (profileErr) throw new Error("present users profile load failed");
+    (profiles || []).forEach((profile) => {
+      const id = String((profile as { id: string }).id);
+      profileMap[id] = String((profile as { username: string }).username);
+    });
+  }
+
+  const out = (rows || []).map((row) => {
+    const userId =
+      typeof (row as { user_id?: unknown }).user_id === "string"
+        ? (row as { user_id: string }).user_id
+        : "";
+    const rowName = asTrimmedString((row as { username?: unknown }).username);
+    return {
+      user_id: userId,
+      username: rowName || profileMap[userId] || "user",
+      last_seen_at:
+        typeof (row as { last_seen_at?: unknown }).last_seen_at === "string"
+          ? (row as { last_seen_at: string }).last_seen_at
+          : null,
+    };
+  });
+
+  const dedup = new Map<string, { user_id: string; username: string; last_seen_at: string | null }>();
+  out.forEach((row) => {
+    if (!row.user_id) return;
+    if (!dedup.has(row.user_id)) dedup.set(row.user_id, row);
+  });
+
+  return Array.from(dedup.values());
+}
+
 async function listMatrixRuntimeWorld() {
   const { data, error } = await supabaseAdmin
     .from("runtime_presence")
@@ -1857,13 +1966,14 @@ async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
 }
 
 async function buildSnapshot(actor: RuntimeActor) {
-  const [notes, touch, chats, hush, matrix, matrixPosition] = await Promise.all([
+  const [notes, touch, chats, hush, matrix, matrixPosition, present] = await Promise.all([
     listNotes(actor.userId),
     listTouch(actor.userId),
     listDirectChats(actor.userId),
     listHush(actor.userId),
     getMatrixProfile(actor.userId),
     getMatrixPosition(actor.userId),
+    listPresentRuntimeUsers(),
   ]);
 
   return {
@@ -1877,6 +1987,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     hush,
     matrix,
     matrix_position: matrixPosition,
+    present_users: present,
     play: listKozmosPlay(),
   };
 }
@@ -2159,6 +2270,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, action, data: position });
     }
 
+    if (action === "matrix.enter") {
+      const x = (payload as { x?: unknown })?.x;
+      const z = (payload as { z?: unknown })?.z;
+      const position = await enterMatrix(actor.userId, { x, z });
+      return NextResponse.json({ ok: true, action, data: position });
+    }
+
+    if (action === "matrix.exit") {
+      const result = await exitMatrix(actor.userId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
     if (action === "matrix.move") {
       const position = await moveMatrix(actor.userId, payload as Record<string, unknown>);
       return NextResponse.json({ ok: true, action, data: position });
@@ -2167,6 +2290,11 @@ export async function POST(req: Request) {
     if (action === "matrix.world") {
       const world = await listMatrixRuntimeWorld();
       return NextResponse.json({ ok: true, action, data: world });
+    }
+
+    if (action === "presence.list") {
+      const present = await listPresentRuntimeUsers();
+      return NextResponse.json({ ok: true, action, data: present });
     }
 
     if (action === "play.catalog") {

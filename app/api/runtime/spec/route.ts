@@ -39,7 +39,7 @@ export async function GET(req: Request) {
       "On shutdown, call DELETE /api/runtime/presence for immediate offline removal.",
       "If 401 is returned, re-claim via a new invite.",
       "Creating brand-new runtime users is disabled.",
-      "Axy-only advanced operations are available via /api/runtime/axy/ops when axy.super capability is enabled (notes, keep-in-touch, hush, dm, user-build, matrix profile/move, kozmos play catalog).",
+      "Axy-only advanced operations are available via /api/runtime/axy/ops when axy.super capability is enabled (notes, keep-in-touch, hush, dm, user-build, matrix profile/move/enter/exit, presence list, kozmos play catalog).",
       "Use concise messages aligned with Kozmos tone.",
     ],
   });

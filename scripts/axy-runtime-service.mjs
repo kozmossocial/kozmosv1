@@ -40,6 +40,11 @@ function toInt(value, fallback) {
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
+function toFloat(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function trimSlash(url) {
   return String(url || "").replace(/\/+$/, "");
 }
@@ -49,6 +54,15 @@ function must(value, label) {
     throw new Error(`missing required arg: ${label}`);
   }
   return value;
+}
+
+function randomRange(min, max) {
+  if (max <= min) return min;
+  return min + Math.random() * (max - min);
+}
+
+function randomIntRange(min, max) {
+  return Math.floor(randomRange(min, max + 1));
 }
 
 function buildTriggerRegex(trigger, botUsername) {
@@ -61,6 +75,20 @@ function buildTriggerRegex(trigger, botUsername) {
 
 function normalizeBuildPath(input) {
   return String(input || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
+function pickWeightedAction(weightMap) {
+  const entries = Object.entries(weightMap)
+    .map(([key, value]) => [key, Number(value)])
+    .filter(([, value]) => Number.isFinite(value) && value > 0);
+  if (entries.length === 0) return null;
+  const total = entries.reduce((sum, [, value]) => sum + value, 0);
+  let cursor = Math.random() * total;
+  for (const [key, value] of entries) {
+    cursor -= value;
+    if (cursor <= 0) return key;
+  }
+  return entries[entries.length - 1][0];
 }
 
 async function requestJson(url, init = {}) {
@@ -246,6 +274,34 @@ async function main() {
     0.05,
     Math.min(2, Number(args["matrix-step"] || process.env.KOZMOS_MATRIX_STEP || 0.45))
   );
+  const autoFreedom = toBool(
+    args["auto-freedom"] ?? process.env.KOZMOS_AUTO_FREEDOM,
+    false
+  );
+  const freedomMinSeconds = Math.max(
+    20,
+    toInt(args["freedom-min-seconds"] || process.env.KOZMOS_FREEDOM_MIN_SECONDS, 70)
+  );
+  const freedomMaxSeconds = Math.max(
+    freedomMinSeconds,
+    toInt(args["freedom-max-seconds"] || process.env.KOZMOS_FREEDOM_MAX_SECONDS, 190)
+  );
+  const freedomMatrixWeight = Math.max(
+    0,
+    toFloat(args["freedom-matrix-weight"] || process.env.KOZMOS_FREEDOM_MATRIX_WEIGHT, 0.34)
+  );
+  const freedomNoteWeight = Math.max(
+    0,
+    toFloat(args["freedom-note-weight"] || process.env.KOZMOS_FREEDOM_NOTE_WEIGHT, 0.24)
+  );
+  const freedomSharedWeight = Math.max(
+    0,
+    toFloat(args["freedom-shared-weight"] || process.env.KOZMOS_FREEDOM_SHARED_WEIGHT, 0.24)
+  );
+  const freedomHushWeight = Math.max(
+    0,
+    toFloat(args["freedom-hush-weight"] || process.env.KOZMOS_FREEDOM_HUSH_WEIGHT, 0.18)
+  );
   const buildSpaceId = String(
     args["build-space-id"] || process.env.KOZMOS_BUILD_SPACE_ID || ""
   ).trim();
@@ -278,9 +334,12 @@ async function main() {
   const handledHushMessage = new Set();
   const handledDmMessage = new Set();
   const handledBuildRequest = new Map();
+  const hushStarterCooldown = new Map();
   let stopping = false;
   let opsEnabled = true;
   let lastOpsAt = 0;
+  let nextFreedomAt = Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
+  let matrixVisible = false;
 
   if (user?.id) {
     console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
@@ -291,11 +350,16 @@ async function main() {
     `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
   );
   console.log(
-    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoMatrix=${autoMatrix}`
+    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoMatrix=${autoMatrix} autoFreedom=${autoFreedom}`
   );
   if (autoBuild) {
     console.log(
       `[${now()}] build helper request=${buildRequestPath} output=${buildOutputPath}${buildSpaceId ? ` space=${buildSpaceId}` : ""}`
+    );
+  }
+  if (autoFreedom) {
+    console.log(
+      `[${now()}] freedom=${freedomMinSeconds}-${freedomMaxSeconds}s weights(matrix=${freedomMatrixWeight},note=${freedomNoteWeight},shared=${freedomSharedWeight},hush=${freedomHushWeight})`
     );
   }
 
@@ -402,6 +466,7 @@ async function main() {
           user = { id: actor.user_id };
           botUsername = String(actor.username);
         }
+        matrixVisible = Boolean(snapshot?.data?.matrix_position?.updated_at);
 
         const touchData = snapshot?.data?.touch || {};
         if (autoTouch) {
@@ -630,14 +695,139 @@ async function main() {
           }
         }
 
-        if (autoMatrix) {
-          const dx = (Math.random() * 2 - 1) * matrixStep;
-          const dz = (Math.random() * 2 - 1) * matrixStep;
-          const moveRes = await callAxyOps(baseUrl, token, "matrix.move", { dx, dz });
-          const pos = moveRes?.data || {};
-          console.log(
-            `[${now()}] matrix moved x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
-          );
+        if (autoMatrix && !autoFreedom) {
+          if (!matrixVisible) {
+            const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
+              x: randomRange(-6, 6),
+              z: randomRange(-6, 6),
+            });
+            matrixVisible = true;
+            const pos = enterRes?.data || {};
+            console.log(
+              `[${now()}] matrix entered x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
+            );
+          } else {
+            const dx = (Math.random() * 2 - 1) * matrixStep;
+            const dz = (Math.random() * 2 - 1) * matrixStep;
+            const moveRes = await callAxyOps(baseUrl, token, "matrix.move", { dx, dz });
+            const pos = moveRes?.data || {};
+            console.log(
+              `[${now()}] matrix moved x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
+            );
+          }
+        }
+
+        if (autoFreedom && Date.now() >= nextFreedomAt) {
+          const freedomAction = pickWeightedAction({
+            matrix: freedomMatrixWeight,
+            note: freedomNoteWeight,
+            shared: freedomSharedWeight,
+            hush: freedomHushWeight,
+          });
+
+          if (freedomAction && user?.id) {
+            try {
+              if (freedomAction === "matrix") {
+                if (matrixVisible && Math.random() < 0.52) {
+                  await callAxyOps(baseUrl, token, "matrix.exit");
+                  matrixVisible = false;
+                  console.log(`[${now()}] freedom: matrix exit`);
+                } else if (!matrixVisible) {
+                  const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
+                    x: randomRange(-7, 7),
+                    z: randomRange(-7, 7),
+                  });
+                  matrixVisible = true;
+                  const pos = enterRes?.data || {};
+                  console.log(
+                    `[${now()}] freedom: matrix enter x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
+                  );
+                } else {
+                  const moveRes = await callAxyOps(baseUrl, token, "matrix.move", {
+                    dx: (Math.random() * 2 - 1) * matrixStep * 1.8,
+                    dz: (Math.random() * 2 - 1) * matrixStep * 1.8,
+                  });
+                  const pos = moveRes?.data || {};
+                  console.log(
+                    `[${now()}] freedom: matrix drift x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
+                  );
+                }
+              } else if (freedomAction === "note") {
+                const prompt =
+                  "Write one short private note for Axy's my home. Calm and intentional, max 18 words.";
+                const raw = await askAxy(baseUrl, prompt);
+                const content = formatReply(raw).slice(0, 320);
+                if (content) {
+                  await callAxyOps(baseUrl, token, "notes.create", { content });
+                  console.log(`[${now()}] freedom: note created`);
+                }
+              } else if (freedomAction === "shared") {
+                const prompt =
+                  "Write one short shared-space line as Axy. Calm tone, no mention tags, max 18 words.";
+                const raw = await askAxy(baseUrl, prompt);
+                const content = formatReply(raw).slice(0, 240);
+                if (content) {
+                  await postShared(baseUrl, token, content);
+                  console.log(`[${now()}] freedom: shared message sent`);
+                }
+              } else if (freedomAction === "hush") {
+                const presentUsers = Array.isArray(snapshot?.data?.present_users)
+                  ? snapshot.data.present_users
+                  : [];
+                const nowMs = Date.now();
+                const cooldownMs = 30 * 60 * 1000;
+                for (const [targetUserId, ts] of hushStarterCooldown.entries()) {
+                  if (nowMs - ts > cooldownMs) hushStarterCooldown.delete(targetUserId);
+                }
+
+                const candidates = presentUsers.filter((row) => {
+                  const targetUserId = String(row?.user_id || "").trim();
+                  const targetUsername = String(row?.username || "").trim();
+                  if (!targetUserId) return false;
+                  if (targetUserId === user.id) return false;
+                  if (
+                    targetUsername &&
+                    targetUsername.toLowerCase() === String(botUsername || "").toLowerCase()
+                  ) {
+                    return false;
+                  }
+                  if (hushStarterCooldown.has(targetUserId)) return false;
+                  return true;
+                });
+
+                if (candidates.length > 0) {
+                  const target = candidates[Math.floor(Math.random() * candidates.length)];
+                  const targetUserId = String(target.user_id);
+                  const targetUsername = String(target.username || "user");
+
+                  const createRes = await callAxyOps(baseUrl, token, "hush.create_with", {
+                    targetUserId,
+                  });
+                  const chatId = String(createRes?.data?.id || "").trim();
+                  hushStarterCooldown.set(targetUserId, nowMs);
+                  if (chatId) {
+                    const openerPrompt = `Write one short hush opener for ${targetUsername}. Calm and friendly, max 14 words.`;
+                    const openerRaw = await askAxy(baseUrl, openerPrompt);
+                    const opener = formatReply(openerRaw).slice(0, 180);
+                    if (opener) {
+                      await callAxyOps(baseUrl, token, "hush.send", {
+                        chatId,
+                        content: opener,
+                      });
+                    }
+                  }
+                  console.log(`[${now()}] freedom: hush started with ${targetUsername}`);
+                }
+              }
+            } catch (freedomErr) {
+              const msg =
+                freedomErr?.body?.error || freedomErr.message || "freedom action failed";
+              console.log(`[${now()}] freedom fail: ${msg}`);
+            }
+          }
+
+          nextFreedomAt =
+            Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
         }
       } catch (err) {
         const msg = err?.body?.error || err.message || "ops loop error";
