@@ -955,7 +955,7 @@ useEffect(() => {
                       disabled={directChatRemovingId === chat.chat_id}
                       style={{ ...touchMiniButtonStyle, opacity: 0.72 }}
                     >
-                      {directChatRemovingId === chat.chat_id ? "..." : "remove"}
+                      {directChatRemovingId === chat.chat_id ? "..." : "delete"}
                     </button>
                   </div>
                 ) : null}
