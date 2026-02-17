@@ -109,6 +109,26 @@ export async function POST(req: Request) {
         throw new Error("linked profile missing");
       }
 
+      if (linkedUsername.toLowerCase() === "axy") {
+        const { error: capErr } = await supabaseAdmin
+          .from("runtime_capabilities")
+          .upsert(
+            {
+              user_id: linkedUserId,
+              capability: "axy.super",
+              enabled: true,
+            },
+            { onConflict: "user_id,capability" }
+          );
+
+        if (capErr) {
+          if (capErr.code === "42P01") {
+            throw new Error("runtime_capabilities table missing");
+          }
+          throw new Error("axy capability assign failed");
+        }
+      }
+
       const runtimeToken = `kzrt_${randomBytes(24).toString("hex")}`;
       const tokenHash = hashSecret(runtimeToken);
       const nowIso = new Date().toISOString();

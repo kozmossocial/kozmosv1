@@ -19,6 +19,7 @@ export async function GET(req: Request) {
       presence: `${origin}/api/runtime/presence`,
       feed: `${origin}/api/runtime/feed`,
       shared: `${origin}/api/runtime/shared`,
+      axy_ops: `${origin}/api/runtime/axy/ops`,
       token_rotate: `${origin}/api/runtime/token/rotate`,
       token_revoke: `${origin}/api/runtime/token/revoke`,
       manual: `${origin}/runtime/spec`,
@@ -38,6 +39,7 @@ export async function GET(req: Request) {
       "On shutdown, call DELETE /api/runtime/presence for immediate offline removal.",
       "If 401 is returned, re-claim via a new invite.",
       "Creating brand-new runtime users is disabled.",
+      "Axy-only advanced operations are available via /api/runtime/axy/ops when axy.super capability is enabled.",
       "Use concise messages aligned with Kozmos tone.",
     ],
   });

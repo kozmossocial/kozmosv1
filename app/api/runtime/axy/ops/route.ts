@@ -1,0 +1,808 @@
+import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireRuntimeCapability, type RuntimeActor } from "@/app/api/runtime/_capabilities";
+
+const AXY_SUPER_CAPABILITY = "axy.super";
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type TouchLinkRow = {
+  id: number;
+  requester_id: string;
+  requested_id: string;
+  status: "pending" | "accepted" | "declined";
+  updated_at?: string;
+};
+
+type ProfileRow = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+};
+
+type DirectChatRow = {
+  id: string;
+  participant_a: string;
+  participant_b: string;
+  updated_at: string;
+};
+
+type DirectChatMessageRow = {
+  id: number;
+  chat_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+};
+
+function isUuid(input: string) {
+  return UUID_RE.test(input);
+}
+
+function asTrimmedString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asSafeUuid(value: unknown) {
+  const raw = asTrimmedString(value);
+  return isUuid(raw) ? raw : "";
+}
+
+async function listNotes(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("notes")
+    .select("id, content, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) throw new Error("notes list failed");
+  return data || [];
+}
+
+async function createNote(userId: string, content: string) {
+  if (!content) {
+    throw new Error("note content required");
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("notes")
+    .insert({
+      user_id: userId,
+      content: content.slice(0, 4000),
+    })
+    .select("id, content, created_at")
+    .single();
+
+  if (error || !data) throw new Error("note create failed");
+  return data;
+}
+
+async function deleteNote(userId: string, noteId: string) {
+  if (!noteId) {
+    throw new Error("note id required");
+  }
+
+  const { error } = await supabaseAdmin
+    .from("notes")
+    .delete()
+    .eq("id", noteId)
+    .eq("user_id", userId);
+
+  if (error) throw new Error("note delete failed");
+  return { ok: true };
+}
+
+async function listTouch(userId: string) {
+  const { data: links, error: linksErr } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .select("id, requester_id, requested_id, status")
+    .or(`requester_id.eq.${userId},requested_id.eq.${userId}`)
+    .order("updated_at", { ascending: false });
+
+  if (linksErr) throw new Error("touch list failed");
+
+  const touchIds = new Set<string>();
+  const incomingRequests: Array<{ id: number; userId: string }> = [];
+
+  (links as TouchLinkRow[] | null)?.forEach((row) => {
+    if (row.status === "accepted") {
+      const other = row.requester_id === userId ? row.requested_id : row.requester_id;
+      if (other) touchIds.add(other);
+    }
+    if (row.status === "pending" && row.requested_id === userId) {
+      incomingRequests.push({ id: row.id, userId: row.requester_id });
+    }
+  });
+
+  const profileIds = Array.from(
+    new Set([...Array.from(touchIds), ...incomingRequests.map((r) => r.userId)])
+  );
+
+  const profileMap: Record<string, ProfileRow> = {};
+  if (profileIds.length > 0) {
+    const { data: profiles, error: profileErr } = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id, username, avatar_url")
+      .in("id", profileIds);
+
+    if (profileErr) throw new Error("touch profile load failed");
+    (profiles as ProfileRow[] | null)?.forEach((p) => {
+      profileMap[p.id] = p;
+    });
+  }
+
+  const touchIdList = Array.from(touchIds);
+  const orderMap: Record<string, number> = {};
+
+  if (touchIdList.length > 0) {
+    const { data: orders, error: orderErr } = await supabaseAdmin
+      .from("keep_in_touch_orders")
+      .select("contact_user_id, sort_order")
+      .eq("user_id", userId)
+      .in("contact_user_id", touchIdList);
+
+    if (orderErr) throw new Error("touch order load failed");
+    (orders || []).forEach((row) => {
+      const contactUserId =
+        typeof (row as { contact_user_id?: unknown }).contact_user_id === "string"
+          ? (row as { contact_user_id: string }).contact_user_id
+          : "";
+      const sortOrder =
+        Number((row as { sort_order?: unknown }).sort_order) || Number.MAX_SAFE_INTEGER;
+      if (contactUserId) orderMap[contactUserId] = sortOrder;
+    });
+  }
+
+  const inTouch = touchIdList
+    .map((id) => profileMap[id])
+    .filter((v): v is ProfileRow => Boolean(v))
+    .sort((a, b) => {
+      const orderA = typeof orderMap[a.id] === "number" ? orderMap[a.id] : Number.MAX_SAFE_INTEGER;
+      const orderB = typeof orderMap[b.id] === "number" ? orderMap[b.id] : Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.username.localeCompare(b.username, "en", { sensitivity: "base" });
+    })
+    .map((row) => ({
+      id: row.id,
+      username: row.username,
+      avatar_url: row.avatar_url ?? null,
+    }));
+
+  const incoming = incomingRequests
+    .map((reqRow) => {
+      const profile = profileMap[reqRow.userId];
+      if (!profile?.username) return null;
+      return {
+        id: reqRow.id,
+        user_id: reqRow.userId,
+        username: profile.username,
+        avatar_url: profile.avatar_url ?? null,
+      };
+    })
+    .filter(
+      (
+        row
+      ): row is { id: number; user_id: string; username: string; avatar_url: string | null } =>
+        Boolean(row)
+    )
+    .sort((a, b) => a.username.localeCompare(b.username, "en", { sensitivity: "base" }));
+
+  return { inTouch, incoming };
+}
+
+async function requestTouch(userId: string, targetUsername: string) {
+  if (!targetUsername) throw new Error("target username required");
+
+  let { data: target, error: targetErr } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id, username")
+    .eq("username", targetUsername)
+    .maybeSingle();
+
+  if (!target && !targetErr) {
+    const fallback = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id, username")
+      .ilike("username", targetUsername)
+      .limit(1)
+      .maybeSingle();
+    target = fallback.data;
+    targetErr = fallback.error;
+  }
+
+  if (targetErr || !target?.id) throw new Error("user not found");
+  if (target.id === userId) throw new Error("cannot keep in touch with yourself");
+
+  const pairFilter = `and(requester_id.eq.${userId},requested_id.eq.${target.id}),and(requester_id.eq.${target.id},requested_id.eq.${userId})`;
+
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .select("id, requester_id, requested_id, status")
+    .or(pairFilter)
+    .maybeSingle();
+
+  if (existingErr) throw new Error("touch lookup failed");
+  const nowIso = new Date().toISOString();
+
+  if (!existing) {
+    const { error: insertErr } = await supabaseAdmin.from("keep_in_touch_requests").insert({
+      requester_id: userId,
+      requested_id: target.id,
+      status: "pending",
+      responded_at: null,
+    });
+    if (insertErr) throw new Error("touch request failed");
+    return { ok: true, status: "pending" };
+  }
+
+  const row = existing as TouchLinkRow;
+  if (row.status === "accepted") return { ok: true, status: "accepted" };
+
+  if (row.status === "pending") {
+    if (row.requester_id === userId) return { ok: true, status: "pending" };
+
+    const { error: acceptErr } = await supabaseAdmin
+      .from("keep_in_touch_requests")
+      .update({
+        status: "accepted",
+        responded_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("id", row.id);
+
+    if (acceptErr) throw new Error("touch accept failed");
+    return { ok: true, status: "accepted" };
+  }
+
+  const { error: reopenErr } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .update({
+      requester_id: userId,
+      requested_id: target.id,
+      status: "pending",
+      responded_at: null,
+      updated_at: nowIso,
+    })
+    .eq("id", row.id);
+
+  if (reopenErr) throw new Error("touch request failed");
+  return { ok: true, status: "pending" };
+}
+
+async function respondTouch(userId: string, requestId: number, accept: boolean) {
+  if (!Number.isFinite(requestId) || requestId <= 0) {
+    throw new Error("invalid request id");
+  }
+
+  const { data: row, error: rowErr } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .select("id, requester_id, requested_id, status")
+    .eq("id", requestId)
+    .maybeSingle();
+
+  if (rowErr || !row) throw new Error("request not found");
+
+  const link = row as TouchLinkRow;
+  if (link.requested_id !== userId) throw new Error("forbidden");
+  if (link.status !== "pending") throw new Error("request already resolved");
+
+  const nextStatus = accept ? "accepted" : "declined";
+  const nowIso = new Date().toISOString();
+
+  const { error: updateErr } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .update({
+      status: nextStatus,
+      responded_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("id", requestId);
+
+  if (updateErr) throw new Error("request update failed");
+  return { ok: true, status: nextStatus };
+}
+
+async function removeTouch(userId: string, targetUserId: string) {
+  if (!targetUserId || !isUuid(targetUserId)) throw new Error("invalid target user id");
+  if (targetUserId === userId) throw new Error("invalid target");
+
+  const pairFilter = `and(requester_id.eq.${userId},requested_id.eq.${targetUserId}),and(requester_id.eq.${targetUserId},requested_id.eq.${userId})`;
+
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .select("id")
+    .or(pairFilter)
+    .maybeSingle();
+
+  if (existingErr) throw new Error("touch lookup failed");
+
+  if (existing?.id) {
+    const { error: deleteErr } = await supabaseAdmin
+      .from("keep_in_touch_requests")
+      .delete()
+      .eq("id", existing.id);
+    if (deleteErr) throw new Error("touch remove failed");
+  }
+
+  await supabaseAdmin
+    .from("keep_in_touch_orders")
+    .delete()
+    .eq("user_id", userId)
+    .eq("contact_user_id", targetUserId);
+
+  await supabaseAdmin
+    .from("keep_in_touch_orders")
+    .delete()
+    .eq("user_id", targetUserId)
+    .eq("contact_user_id", userId);
+
+  return { ok: true };
+}
+
+async function updateTouchOrder(userId: string, orderedUserIds: string[]) {
+  const uniqueIds = Array.from(
+    new Set(orderedUserIds.map((id) => id.trim()).filter((id) => isUuid(id)))
+  );
+
+  if (uniqueIds.length === 0) {
+    await supabaseAdmin.from("keep_in_touch_orders").delete().eq("user_id", userId);
+    return { ok: true };
+  }
+
+  const pairFilter = uniqueIds
+    .map((id) => `and(requester_id.eq.${userId},requested_id.eq.${id}),status.eq.accepted`)
+    .concat(
+      uniqueIds.map(
+        (id) => `and(requester_id.eq.${id},requested_id.eq.${userId}),status.eq.accepted`
+      )
+    )
+    .join(",");
+
+  const { data: links, error: linksErr } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .select("requester_id, requested_id")
+    .or(pairFilter);
+
+  if (linksErr) throw new Error("touch verification failed");
+
+  const allowed = new Set<string>();
+  (links || []).forEach((row) => {
+    const requester = String((row as { requester_id: string }).requester_id);
+    const requested = String((row as { requested_id: string }).requested_id);
+    const otherId = requester === userId ? requested : requester;
+    if (otherId && otherId !== userId) allowed.add(otherId);
+  });
+
+  const sanitized = uniqueIds.filter((id) => allowed.has(id));
+
+  await supabaseAdmin.from("keep_in_touch_orders").delete().eq("user_id", userId);
+
+  if (sanitized.length === 0) return { ok: true };
+
+  const rows = sanitized.map((contactUserId, idx) => ({
+    user_id: userId,
+    contact_user_id: contactUserId,
+    sort_order: idx,
+  }));
+
+  const { error: upsertErr } = await supabaseAdmin
+    .from("keep_in_touch_orders")
+    .upsert(rows, { onConflict: "user_id,contact_user_id" });
+
+  if (upsertErr) throw new Error("touch order update failed");
+  return { ok: true };
+}
+
+async function listDirectChats(userId: string) {
+  const { data: chats, error: chatsErr } = await supabaseAdmin
+    .from("direct_chats")
+    .select("id, participant_a, participant_b, updated_at")
+    .or(`participant_a.eq.${userId},participant_b.eq.${userId}`)
+    .order("updated_at", { ascending: false });
+
+  if (chatsErr) throw new Error("direct chats query failed");
+
+  const rows = (chats || []) as DirectChatRow[];
+  const chatIds = rows.map((row) => row.id);
+  const orderMap: Record<string, number> = {};
+
+  if (chatIds.length > 0) {
+    const { data: orders, error: orderErr } = await supabaseAdmin
+      .from("direct_chat_orders")
+      .select("chat_id, sort_order")
+      .eq("user_id", userId)
+      .in("chat_id", chatIds);
+
+    if (orderErr) throw new Error("direct chat order query failed");
+
+    (orders || []).forEach((row) => {
+      const chatId = String((row as { chat_id: string }).chat_id);
+      orderMap[chatId] = Number((row as { sort_order: number }).sort_order) || 0;
+    });
+  }
+
+  const otherIds = Array.from(
+    new Set(
+      rows
+        .map((row) => (row.participant_a === userId ? row.participant_b : row.participant_a))
+        .filter((id) => id && id !== userId)
+    )
+  );
+
+  const profileMap: Record<string, ProfileRow> = {};
+  if (otherIds.length > 0) {
+    const { data: profiles, error: profileErr } = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id, username, avatar_url")
+      .in("id", otherIds);
+
+    if (profileErr) throw new Error("direct chat profile query failed");
+    (profiles as ProfileRow[] | null)?.forEach((profile) => {
+      profileMap[profile.id] = profile;
+    });
+  }
+
+  return rows
+    .map((row) => {
+      const otherUserId = row.participant_a === userId ? row.participant_b : row.participant_a;
+      const profile = profileMap[otherUserId];
+      if (!profile?.username) return null;
+      return {
+        chat_id: row.id,
+        other_user_id: otherUserId,
+        username: profile.username,
+        avatar_url: profile.avatar_url ?? null,
+        updated_at: row.updated_at,
+      };
+    })
+    .filter(
+      (
+        row
+      ): row is {
+        chat_id: string;
+        other_user_id: string;
+        username: string;
+        avatar_url: string | null;
+        updated_at: string;
+      } => Boolean(row)
+    )
+    .sort((a, b) => {
+      const orderA =
+        typeof orderMap[a.chat_id] === "number"
+          ? orderMap[a.chat_id]
+          : Number.MAX_SAFE_INTEGER;
+      const orderB =
+        typeof orderMap[b.chat_id] === "number"
+          ? orderMap[b.chat_id]
+          : Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return Date.parse(b.updated_at) - Date.parse(a.updated_at);
+    });
+}
+
+async function openDirectChat(userId: string, targetUserId: string) {
+  if (!targetUserId || !isUuid(targetUserId)) throw new Error("invalid target user id");
+  if (targetUserId === userId) throw new Error("invalid target");
+
+  const pairFilter = `and(requester_id.eq.${userId},requested_id.eq.${targetUserId}),and(requester_id.eq.${targetUserId},requested_id.eq.${userId})`;
+
+  const { data: relation, error: relationErr } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .select("id")
+    .eq("status", "accepted")
+    .or(pairFilter)
+    .maybeSingle();
+
+  if (relationErr) throw new Error("touch check failed");
+  if (!relation?.id) throw new Error("not in touch");
+
+  const [participantA, participantB] =
+    userId.localeCompare(targetUserId) <= 0
+      ? [userId, targetUserId]
+      : [targetUserId, userId];
+
+  const nowIso = new Date().toISOString();
+
+  const { data: chatRow, error: upsertErr } = await supabaseAdmin
+    .from("direct_chats")
+    .upsert(
+      {
+        participant_a: participantA,
+        participant_b: participantB,
+        updated_at: nowIso,
+      },
+      { onConflict: "participant_a,participant_b" }
+    )
+    .select("id, participant_a, participant_b, updated_at")
+    .single();
+
+  if (upsertErr || !chatRow) throw new Error("chat create failed");
+
+  const { data: targetProfile, error: profileErr } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id, username, avatar_url")
+    .eq("id", targetUserId)
+    .maybeSingle();
+
+  if (profileErr || !targetProfile?.username) throw new Error("target profile missing");
+
+  return {
+    chat_id: (chatRow as DirectChatRow).id,
+    other_user_id: targetUserId,
+    username: targetProfile.username,
+    avatar_url: targetProfile.avatar_url ?? null,
+    updated_at: (chatRow as DirectChatRow).updated_at,
+  };
+}
+
+async function listDirectMessages(userId: string, chatId: string, limit: number) {
+  if (!chatId || !isUuid(chatId)) throw new Error("invalid chat id");
+  const safeLimit = Math.max(1, Math.min(300, Math.floor(limit || 200)));
+
+  const { data: chat, error: chatErr } = await supabaseAdmin
+    .from("direct_chats")
+    .select("id, participant_a, participant_b")
+    .eq("id", chatId)
+    .maybeSingle();
+
+  if (chatErr || !chat) throw new Error("chat not found");
+
+  const row = chat as DirectChatRow;
+  if (row.participant_a !== userId && row.participant_b !== userId) {
+    throw new Error("forbidden");
+  }
+
+  const { data: messages, error: messageErr } = await supabaseAdmin
+    .from("direct_chat_messages")
+    .select("id, chat_id, sender_id, content, created_at")
+    .eq("chat_id", chatId)
+    .order("created_at", { ascending: true })
+    .limit(safeLimit);
+
+  if (messageErr) throw new Error("message query failed");
+  return (messages || []) as DirectChatMessageRow[];
+}
+
+async function sendDirectMessage(userId: string, chatId: string, content: string) {
+  if (!chatId || !isUuid(chatId)) throw new Error("invalid chat id");
+  if (!content) throw new Error("content required");
+
+  const { data: chat, error: chatErr } = await supabaseAdmin
+    .from("direct_chats")
+    .select("id, participant_a, participant_b")
+    .eq("id", chatId)
+    .maybeSingle();
+
+  if (chatErr || !chat) throw new Error("chat not found");
+  const row = chat as DirectChatRow;
+  if (row.participant_a !== userId && row.participant_b !== userId) {
+    throw new Error("forbidden");
+  }
+
+  const nowIso = new Date().toISOString();
+  const { data: inserted, error: insertErr } = await supabaseAdmin
+    .from("direct_chat_messages")
+    .insert({
+      chat_id: chatId,
+      sender_id: userId,
+      content: content.slice(0, 2000),
+    })
+    .select("id, chat_id, sender_id, content, created_at")
+    .single();
+
+  if (insertErr || !inserted) throw new Error("send failed");
+
+  await supabaseAdmin.from("direct_chats").update({ updated_at: nowIso }).eq("id", chatId);
+
+  return inserted;
+}
+
+async function removeDirectChat(userId: string, chatId: string) {
+  if (!chatId || !isUuid(chatId)) throw new Error("invalid chat id");
+
+  const { data: chat, error: chatErr } = await supabaseAdmin
+    .from("direct_chats")
+    .select("id, participant_a, participant_b")
+    .eq("id", chatId)
+    .maybeSingle();
+
+  if (chatErr || !chat) throw new Error("chat not found");
+  const row = chat as DirectChatRow;
+  if (row.participant_a !== userId && row.participant_b !== userId) {
+    throw new Error("forbidden");
+  }
+
+  const { error: deleteErr } = await supabaseAdmin
+    .from("direct_chats")
+    .delete()
+    .eq("id", chatId);
+
+  if (deleteErr) throw new Error("chat remove failed");
+  return { ok: true };
+}
+
+async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
+  const uniqueIds = Array.from(
+    new Set(orderedChatIds.map((id) => id.trim()).filter((id) => isUuid(id)))
+  );
+
+  await supabaseAdmin.from("direct_chat_orders").delete().eq("user_id", userId);
+  if (uniqueIds.length === 0) return { ok: true };
+
+  const { data: chats, error: chatsErr } = await supabaseAdmin
+    .from("direct_chats")
+    .select("id, participant_a, participant_b")
+    .in("id", uniqueIds)
+    .or(`participant_a.eq.${userId},participant_b.eq.${userId}`);
+
+  if (chatsErr) throw new Error("chat verification failed");
+
+  const allowed = new Set<string>((chats as DirectChatRow[] | null)?.map((row) => row.id) || []);
+  const sanitized = uniqueIds.filter((id) => allowed.has(id));
+
+  if (sanitized.length === 0) return { ok: true };
+
+  const rows = sanitized.map((chatId, index) => ({
+    user_id: userId,
+    chat_id: chatId,
+    sort_order: index,
+  }));
+
+  const { error: upsertErr } = await supabaseAdmin
+    .from("direct_chat_orders")
+    .upsert(rows, { onConflict: "user_id,chat_id" });
+
+  if (upsertErr) throw new Error("chat order update failed");
+  return { ok: true };
+}
+
+async function buildSnapshot(actor: RuntimeActor) {
+  const [notes, touch, chats] = await Promise.all([
+    listNotes(actor.userId),
+    listTouch(actor.userId),
+    listDirectChats(actor.userId),
+  ]);
+
+  return {
+    actor: {
+      user_id: actor.userId,
+      username: actor.username,
+    },
+    notes,
+    touch,
+    chats,
+  };
+}
+
+export async function POST(req: Request) {
+  try {
+    const auth = await requireRuntimeCapability(req, AXY_SUPER_CAPABILITY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    const actor = auth.actor;
+    const body = await req.json().catch(() => ({}));
+    const action = asTrimmedString(body?.action);
+    const payload = body?.payload ?? {};
+
+    if (!action) {
+      return NextResponse.json({ error: "action required" }, { status: 400 });
+    }
+
+    if (action === "context.snapshot") {
+      const snapshot = await buildSnapshot(actor);
+      return NextResponse.json({ ok: true, action, data: snapshot });
+    }
+
+    if (action === "notes.list") {
+      const notes = await listNotes(actor.userId);
+      return NextResponse.json({ ok: true, action, data: notes });
+    }
+
+    if (action === "notes.create") {
+      const content = asTrimmedString((payload as { content?: unknown })?.content);
+      const note = await createNote(actor.userId, content);
+      return NextResponse.json({ ok: true, action, data: note });
+    }
+
+    if (action === "notes.delete") {
+      const noteId = asTrimmedString((payload as { noteId?: unknown })?.noteId);
+      const result = await deleteNote(actor.userId, noteId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "touch.list") {
+      const list = await listTouch(actor.userId);
+      return NextResponse.json({ ok: true, action, data: list });
+    }
+
+    if (action === "touch.request") {
+      const targetUsername = asTrimmedString(
+        (payload as { targetUsername?: unknown })?.targetUsername
+      );
+      const result = await requestTouch(actor.userId, targetUsername);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "touch.respond") {
+      const requestId = Number((payload as { requestId?: unknown })?.requestId);
+      const accept = Boolean((payload as { accept?: unknown })?.accept);
+      const result = await respondTouch(actor.userId, requestId, accept);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "touch.remove") {
+      const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
+      const result = await removeTouch(actor.userId, targetUserId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "touch.order") {
+      const orderedUserIds = Array.isArray((payload as { orderedUserIds?: unknown }).orderedUserIds)
+        ? ((payload as { orderedUserIds: unknown[] }).orderedUserIds || []).map((value) =>
+            String(value ?? "")
+          )
+        : [];
+      const result = await updateTouchOrder(actor.userId, orderedUserIds);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "dm.list") {
+      const chats = await listDirectChats(actor.userId);
+      return NextResponse.json({ ok: true, action, data: chats });
+    }
+
+    if (action === "dm.open") {
+      const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
+      const chat = await openDirectChat(actor.userId, targetUserId);
+      return NextResponse.json({ ok: true, action, data: chat });
+    }
+
+    if (action === "dm.messages") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const limit = Number((payload as { limit?: unknown })?.limit ?? 200);
+      const messages = await listDirectMessages(actor.userId, chatId, limit);
+      return NextResponse.json({ ok: true, action, data: messages });
+    }
+
+    if (action === "dm.send") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const content = asTrimmedString((payload as { content?: unknown })?.content);
+      const message = await sendDirectMessage(actor.userId, chatId, content);
+      return NextResponse.json({ ok: true, action, data: message });
+    }
+
+    if (action === "dm.remove") {
+      const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
+      const result = await removeDirectChat(actor.userId, chatId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "dm.order") {
+      const orderedChatIds = Array.isArray((payload as { orderedChatIds?: unknown }).orderedChatIds)
+        ? ((payload as { orderedChatIds: unknown[] }).orderedChatIds || []).map((value) =>
+            String(value ?? "")
+          )
+        : [];
+      const result = await updateDirectChatOrder(actor.userId, orderedChatIds);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    return NextResponse.json({ error: "unknown action" }, { status: 400 });
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : "unknown";
+    const status =
+      /forbidden/i.test(detail) || /not in touch/i.test(detail)
+        ? 403
+        : /not found/i.test(detail)
+        ? 404
+        : /required|invalid|unknown action/i.test(detail)
+        ? 400
+        : 500;
+
+    return NextResponse.json({ error: detail }, { status });
+  }
+}
+
