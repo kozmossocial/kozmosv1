@@ -22,6 +22,14 @@ type TouchRequest = {
   avatar_url: string | null;
 };
 
+type DirectChat = {
+  chat_id: string;
+  other_user_id: string;
+  username: string;
+  avatar_url: string | null;
+  updated_at: string;
+};
+
 export default function MyHome() {
   const router = useRouter();
 
@@ -46,6 +54,9 @@ export default function MyHome() {
   const [touchEditMode, setTouchEditMode] = useState(false);
   const [touchSavingOrder, setTouchSavingOrder] = useState(false);
   const [touchRemovingUserId, setTouchRemovingUserId] = useState<string | null>(null);
+  const [touchHoverUserId, setTouchHoverUserId] = useState<string | null>(null);
+  const [chatStartBusyUserId, setChatStartBusyUserId] = useState<string | null>(null);
+  const [activeChats, setActiveChats] = useState<DirectChat[]>([]);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
 
   //  AXY STATES
@@ -95,6 +106,59 @@ export default function MyHome() {
       setTouchInitialized(true);
     } finally {
       setTouchLoading(false);
+    }
+  }
+
+  async function loadDirectChats() {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setActiveChats([]);
+        return;
+      }
+
+      const res = await fetch("/api/direct-chats", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        chats?: DirectChat[];
+      };
+
+      if (!res.ok) return;
+      setActiveChats(Array.isArray(body.chats) ? body.chats : []);
+    } catch {
+      // ignore transient fetch failures
+    }
+  }
+
+  async function startDirectChat(targetUserId: string) {
+    if (!targetUserId || chatStartBusyUserId) return;
+    setChatStartBusyUserId(targetUserId);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      const res = await fetch("/api/direct-chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ targetUserId }),
+      });
+
+      if (!res.ok) return;
+      await loadDirectChats();
+    } finally {
+      setChatStartBusyUserId(null);
     }
   }
 
@@ -216,7 +280,7 @@ export default function MyHome() {
         .order("created_at", { ascending: false });
 
       setNotes(notesData || []);
-      await loadKeepInTouch();
+      await Promise.all([loadKeepInTouch(), loadDirectChats()]);
     }
 
     loadUserAndNotes();
@@ -240,6 +304,7 @@ useEffect(() => {
 
     const poll = window.setInterval(() => {
       void loadKeepInTouch();
+      void loadDirectChats();
     }, 15000);
 
     return () => {
@@ -255,6 +320,12 @@ useEffect(() => {
       window.removeEventListener("resize", sync);
     };
   }, []);
+
+  useEffect(() => {
+    if (touchEditMode) {
+      setTouchHoverUserId(null);
+    }
+  }, [touchEditMode]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -382,7 +453,20 @@ useEffect(() => {
         ) : (
           <div style={touchListStyle}>
             {touchUsers.map((user, idx) => (
-              <div key={user.id} style={touchUserRowStyle}>
+              <div
+                key={user.id}
+                style={touchUserRowStyle}
+                onMouseEnter={() => {
+                  if (!touchEditMode) {
+                    setTouchHoverUserId(user.id);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (!touchEditMode) {
+                    setTouchHoverUserId((prev) => (prev === user.id ? null : prev));
+                  }
+                }}
+              >
                 <div style={touchAvatarStyle}>
                   {user.avatar_url ? (
                     <img
@@ -397,6 +481,18 @@ useEffect(() => {
                   )}
                 </div>
                 <span style={{ opacity: 0.82 }}>{user.username}</span>
+                {!touchEditMode && touchHoverUserId === user.id ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void startDirectChat(user.id);
+                    }}
+                    disabled={chatStartBusyUserId === user.id}
+                    style={touchOneToOneButtonStyle}
+                  >
+                    {chatStartBusyUserId === user.id ? "..." : "1:1"}
+                  </button>
+                ) : null}
                 {touchEditMode ? (
                   <div style={touchEditActionsStyle}>
                     <button
@@ -488,6 +584,44 @@ useEffect(() => {
     );
   }
 
+  function renderDirectChatPanel() {
+    return (
+      <div style={touchPanelStyle}>
+        <div style={touchPanelHeadStyle}>
+          <div style={{ ...labelStyle, marginBottom: 0 }}>1:1 chat</div>
+          <button type="button" style={touchEditButtonStyle}>
+            edit
+          </button>
+        </div>
+
+        {activeChats.length === 0 ? (
+          <div style={touchMutedStyle}>no active chats</div>
+        ) : (
+          <div style={touchListStyle}>
+            {activeChats.map((chat) => (
+              <div key={chat.chat_id} style={touchUserRowStyle}>
+                <div style={touchAvatarStyle}>
+                  {chat.avatar_url ? (
+                    <img
+                      src={chat.avatar_url}
+                      alt={`${chat.username} avatar`}
+                      style={touchAvatarImageStyle}
+                    />
+                  ) : (
+                    <span style={{ fontSize: 12, opacity: 0.72 }}>
+                      {(chat.username[0] ?? "?").toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <span style={{ opacity: 0.82 }}>{chat.username}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <main style={pageStyle}>
 {/*  KOZMOS LOGO */}
@@ -563,6 +697,7 @@ useEffect(() => {
       </div>
 
       {!isMobileLayout ? <div style={touchDockStyle}>{renderTouchPanel()}</div> : null}
+      {!isMobileLayout ? <div style={directChatDockStyle}>{renderDirectChatPanel()}</div> : null}
 
       {/* CONTENT */}
       <div style={contentStyle}>
@@ -683,7 +818,12 @@ useEffect(() => {
           ))}
         </div>
 
-        {isMobileLayout ? <div style={touchMobileWrapStyle}>{renderTouchPanel()}</div> : null}
+        {isMobileLayout ? (
+          <div style={touchMobileWrapStyle}>
+            {renderTouchPanel()}
+            <div style={touchMobileSecondaryWrapStyle}>{renderDirectChatPanel()}</div>
+          </div>
+        ) : null}
 
         <div style={personalAxyWrapStyle}>
           <div
@@ -863,9 +1003,20 @@ const touchDockStyle: React.CSSProperties = {
   width: "min(360px, calc(100vw - 88px))",
 };
 
+const directChatDockStyle: React.CSSProperties = {
+  position: "absolute",
+  right: 44,
+  top: 214,
+  width: "min(360px, calc(100vw - 88px))",
+};
+
 const touchMobileWrapStyle: React.CSSProperties = {
   marginTop: 14,
   marginBottom: 12,
+};
+
+const touchMobileSecondaryWrapStyle: React.CSSProperties = {
+  marginTop: 10,
 };
 
 const touchPanelStyle: React.CSSProperties = {
@@ -917,6 +1068,19 @@ const touchEditActionsStyle: React.CSSProperties = {
   marginLeft: "auto",
   display: "flex",
   gap: 6,
+};
+
+const touchOneToOneButtonStyle: React.CSSProperties = {
+  marginLeft: "auto",
+  border: "1px solid rgba(255,255,255,0.2)",
+  borderRadius: 999,
+  background: "transparent",
+  color: "#eaeaea",
+  fontSize: 10,
+  letterSpacing: "0.08em",
+  padding: "2px 8px",
+  cursor: "pointer",
+  opacity: 0.8,
 };
 
 const touchMiniButtonStyle: React.CSSProperties = {
