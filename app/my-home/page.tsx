@@ -41,6 +41,7 @@ export default function MyHome() {
     []
   );
   const [touchLoading, setTouchLoading] = useState(false);
+  const [touchInitialized, setTouchInitialized] = useState(false);
   const [touchBusyId, setTouchBusyId] = useState<number | null>(null);
   const [touchEditMode, setTouchEditMode] = useState(false);
   const [touchSavingOrder, setTouchSavingOrder] = useState(false);
@@ -66,8 +67,11 @@ export default function MyHome() {
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
-        setTouchUsers([]);
-        setIncomingTouchRequests([]);
+        if (!touchInitialized) {
+          setTouchUsers([]);
+          setIncomingTouchRequests([]);
+        }
+        setTouchInitialized(true);
         return;
       }
 
@@ -82,13 +86,13 @@ export default function MyHome() {
       };
 
       if (!res.ok) {
-        setTouchUsers([]);
-        setIncomingTouchRequests([]);
+        setTouchInitialized(true);
         return;
       }
 
       setTouchUsers(Array.isArray(body.inTouch) ? body.inTouch : []);
       setIncomingTouchRequests(Array.isArray(body.incoming) ? body.incoming : []);
+      setTouchInitialized(true);
     } finally {
       setTouchLoading(false);
     }
@@ -371,7 +375,7 @@ useEffect(() => {
           </button>
         </div>
 
-        {touchLoading ? (
+        {!touchInitialized && touchLoading ? (
           <div style={touchMutedStyle}>loading...</div>
         ) : touchUsers.length === 0 ? (
           <div style={touchMutedStyle}>no users in touch yet</div>
