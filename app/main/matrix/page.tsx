@@ -81,7 +81,6 @@ export default function MainMatrixPage() {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const keysRef = useRef<Record<string, boolean>>({});
   const latestTrackRef = useRef({ x: 0, z: 0, color: "#7df9ff" });
-  const lastBroadcastRef = useRef({ x: 0, z: 0, color: "#7df9ff", ts: 0 });
 
   const setMoveKey = useCallback((key: "w" | "a" | "s" | "d", pressed: boolean) => {
     keysRef.current[key] = pressed;
@@ -254,32 +253,15 @@ export default function MainMatrixPage() {
     });
     channelRef.current = channel;
 
-    const track = (force = false) => {
-      const now = Date.now();
-      const next = latestTrackRef.current;
-      const last = lastBroadcastRef.current;
-      const moved = Math.hypot(next.x - last.x, next.z - last.z) > 0.03;
-      const colorChanged = next.color !== last.color;
-      const stale = now - last.ts > 1500;
-
-      if (!force && !moved && !colorChanged && !stale) return Promise.resolve();
-
-      lastBroadcastRef.current = {
-        x: next.x,
-        z: next.z,
-        color: next.color,
-        ts: now,
-      };
-
-      return channel.track({
+    const track = () =>
+      channel.track({
         userId,
         username,
-        color: next.color,
-        x: next.x,
-        z: next.z,
-        ts: now,
+        color: latestTrackRef.current.color,
+        x: latestTrackRef.current.x,
+        z: latestTrackRef.current.z,
+        ts: Date.now(),
       });
-    };
 
     channel
       .on("presence", { event: "sync" }, syncPresence)
@@ -287,14 +269,14 @@ export default function MainMatrixPage() {
       .on("presence", { event: "leave" }, syncPresence)
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await track(true);
+          await track();
           syncPresence();
         }
       });
 
     const trackTimer = window.setInterval(() => {
       void track();
-    }, 80);
+    }, 250);
 
     return () => {
       window.clearInterval(trackTimer);
@@ -305,6 +287,18 @@ export default function MainMatrixPage() {
       setRemoteOrbs([]);
     };
   }, [syncPresence, userId, username]);
+
+  useEffect(() => {
+    if (!channelRef.current || !userId) return;
+    void channelRef.current.track({
+      userId,
+      username,
+      color: orbColor,
+      x: selfPos.x,
+      z: selfPos.z,
+      ts: Date.now(),
+    });
+  }, [orbColor, selfPos.x, selfPos.z, userId, username]);
 
   const allOrbs = useMemo(() => {
     const self: OrbRender = {
@@ -501,7 +495,7 @@ export default function MainMatrixPage() {
                   filter: "blur(5px)",
                   opacity: 0.75 - depth * 0.35,
                   zIndex,
-                  transition: "left 120ms linear, top 120ms linear, width 120ms linear, height 120ms linear",
+                  transition: "left 60ms linear, top 60ms linear, width 60ms linear, height 60ms linear",
                 }}
               />
 
@@ -521,7 +515,7 @@ export default function MainMatrixPage() {
                   boxShadow: `0 0 ${Math.round(size * 0.9)}px ${hexToRgba(orb.color, glow)}`,
                   border: orb.isSelf ? "1px solid rgba(255,255,255,0.85)" : "1px solid rgba(255,255,255,0.45)",
                   zIndex: zIndex + 10,
-                  transition: "left 120ms linear, top 120ms linear, width 120ms linear, height 120ms linear",
+                  transition: "left 60ms linear, top 60ms linear, width 60ms linear, height 60ms linear",
                 }}
               />
 
@@ -537,7 +531,7 @@ export default function MainMatrixPage() {
                   whiteSpace: "nowrap",
                   zIndex: zIndex + 20,
                   pointerEvents: "none",
-                  transition: "left 120ms linear, top 120ms linear",
+                  transition: "left 60ms linear, top 60ms linear",
                 }}
               >
                 {orb.isSelf ? `${orb.username} (you)` : orb.username}
