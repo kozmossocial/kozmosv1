@@ -20,20 +20,61 @@ export default function LoginClient() {
 
   /* LOGIN GUARD */
   useEffect(() => {
+    let cancelled = false;
+    const unlockTimer = window.setTimeout(() => {
+      if (!cancelled) setCheckingSession(false);
+    }, 2500);
+
     async function checkSession() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-      if (user) {
-        router.replace(redirectTo);
-        return;
+        if (cancelled) return;
+
+        if (sessionError?.message?.includes("Refresh Token Not Found")) {
+          await supabase.auth.signOut({ scope: "local" });
+          if (!cancelled) setCheckingSession(false);
+          return;
+        }
+
+        if (session?.user) {
+          router.replace(redirectTo);
+          return;
+        }
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (cancelled) return;
+
+        if (userError?.message?.includes("Refresh Token Not Found")) {
+          await supabase.auth.signOut({ scope: "local" });
+          if (!cancelled) setCheckingSession(false);
+          return;
+        }
+
+        if (user) {
+          router.replace(redirectTo);
+          return;
+        }
+
+        setCheckingSession(false);
+      } catch {
+        if (!cancelled) setCheckingSession(false);
       }
-
-      setCheckingSession(false);
     }
 
-    checkSession();
+    void checkSession();
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(unlockTimer);
+    };
   }, [router, redirectTo]);
 
   async function handleLogin(e: React.FormEvent) {
@@ -86,7 +127,25 @@ export default function LoginClient() {
     setResetLoading(false);
   }
 
-  if (checkingSession) return null;
+  if (checkingSession) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "#0b0b0b",
+          color: "#eaeaea",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: 0.6,
+          letterSpacing: "0.12em",
+          fontSize: 12,
+        }}
+      >
+        loading...
+      </main>
+    );
+  }
 
   return (
     <main

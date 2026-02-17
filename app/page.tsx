@@ -182,27 +182,35 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadUser = async () => {
       try {
         const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-        if (error?.message?.includes("Refresh Token Not Found")) {
+        if (cancelled) return;
+
+        if (sessionError?.message?.includes("Refresh Token Not Found")) {
           await supabase.auth.signOut({ scope: "local" });
           setUser(null);
           setUsername(null);
+          setAuthReady(true);
           return;
         }
 
+        const user = session?.user ?? null;
         if (!user) {
           setUser(null);
           setUsername(null);
+          setAuthReady(true);
           return;
         }
 
         setUser(user);
+        setAuthReady(true);
 
         const { data } = await supabase
           .from("profileskozmos")
@@ -210,17 +218,27 @@ export default function Home() {
           .eq("id", user.id)
           .maybeSingle();
 
+        if (cancelled) return;
+
         if (data?.username) {
           setUsername(data.username.trim());
         } else {
           setUsername("user");
         }
+      } catch {
+        if (cancelled) return;
+        setUser(null);
+        setUsername(null);
       } finally {
-        setAuthReady(true);
+        if (!cancelled) setAuthReady(true);
       }
     };
 
-    loadUser();
+    void loadUser();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
