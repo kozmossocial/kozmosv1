@@ -32,7 +32,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    const activeSince = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const activeSince = new Date(Date.now() - 45 * 1000).toISOString();
 
     const { data: presenceRows, error: presenceErr } = await supabaseAdmin
       .from("runtime_presence")
@@ -97,4 +97,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
 }
-

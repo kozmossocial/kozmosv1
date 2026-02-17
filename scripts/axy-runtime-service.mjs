@@ -92,7 +92,41 @@ function pickWeightedAction(weightMap) {
 }
 
 async function requestJson(url, init = {}) {
-  const res = await fetch(url, init);
+  const runtimeState = globalThis.__kozmosRuntimeRequestState || {
+    aborting: false,
+    controllers: new Set(),
+  };
+  globalThis.__kozmosRuntimeRequestState = runtimeState;
+
+  if (runtimeState.aborting && !init.__allowDuringAbort) {
+    const abortErr = new Error("request aborted");
+    abortErr.name = "AbortError";
+    throw abortErr;
+  }
+
+  const controller = new AbortController();
+  runtimeState.controllers.add(controller);
+
+  const externalSignal = init.signal;
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+    }
+  }
+
+  const { signal: _signal, __allowDuringAbort: _allowDuringAbort, ...restInit } = init;
+  let res;
+  try {
+    res = await fetch(url, { ...restInit, signal: controller.signal });
+  } finally {
+    runtimeState.controllers.delete(controller);
+    if (externalSignal) {
+      externalSignal.removeEventListener("abort", onExternalAbort);
+    }
+  }
   const text = await res.text();
   let json = null;
   try {
@@ -126,6 +160,7 @@ async function clearPresence(baseUrl, token, signal) {
       Authorization: `Bearer ${token}`,
     },
     signal,
+    __allowDuringAbort: true,
   });
 }
 
@@ -140,6 +175,7 @@ async function revokeRuntimeUser(baseUrl, bootstrapKey, username) {
       revokeAllForUser: true,
       username,
     }),
+    __allowDuringAbort: true,
   });
 }
 
@@ -525,6 +561,13 @@ async function main() {
   const freedomSharedSentAt = [];
   let freedomMatrixStreak = 0;
   const inFlightHeartbeatControllers = new Set();
+  const runtimeRequestState =
+    globalThis.__kozmosRuntimeRequestState ||
+    ({
+      aborting: false,
+      controllers: new Set(),
+    });
+  globalThis.__kozmosRuntimeRequestState = runtimeRequestState;
 
   if (user?.id) {
     console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
@@ -574,10 +617,15 @@ async function main() {
     stopping = true;
     clearInterval(heartbeat);
     console.log(`[${now()}] ${signal} received, clearing presence...`);
+    runtimeRequestState.aborting = true;
     for (const controller of inFlightHeartbeatControllers) {
       controller.abort();
     }
     inFlightHeartbeatControllers.clear();
+    for (const controller of runtimeRequestState.controllers) {
+      controller.abort();
+    }
+    runtimeRequestState.controllers.clear();
     await sleep(120);
     try {
       const clearCtlA = new AbortController();

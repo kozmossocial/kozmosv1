@@ -421,7 +421,7 @@ export default function Main() {
 
   const loadRuntimePresentUsers = useCallback(async () => {
     try {
-      const thresholdIso = new Date(Date.now() - 90 * 1000).toISOString();
+      const thresholdIso = new Date(Date.now() - 35 * 1000).toISOString();
 
       const { data: runtimeRows, error: runtimeErr } = await supabase
         .from("runtime_presence")
