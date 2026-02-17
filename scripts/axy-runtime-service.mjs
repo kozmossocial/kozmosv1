@@ -313,6 +313,44 @@ function buildHushContextTurns(messages, actorUserId, botUsername) {
     .filter(Boolean);
 }
 
+function normalizeForSimilarity(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenSet(text) {
+  const normalized = normalizeForSimilarity(text);
+  if (!normalized) return new Set();
+  return new Set(normalized.split(" ").filter((x) => x.length > 1));
+}
+
+function jaccardSimilarity(a, b) {
+  const aSet = tokenSet(a);
+  const bSet = tokenSet(b);
+  if (aSet.size === 0 || bSet.size === 0) return 0;
+  let intersection = 0;
+  for (const token of aSet) {
+    if (bSet.has(token)) intersection += 1;
+  }
+  const union = aSet.size + bSet.size - intersection;
+  return union <= 0 ? 0 : intersection / union;
+}
+
+function isNearDuplicateLocal(candidate, recentList) {
+  const candidateNorm = normalizeForSimilarity(candidate);
+  if (!candidateNorm) return false;
+  for (const recent of recentList || []) {
+    const recentNorm = normalizeForSimilarity(recent);
+    if (!recentNorm) continue;
+    if (candidateNorm === recentNorm) return true;
+    if (jaccardSimilarity(candidateNorm, recentNorm) > 0.82) return true;
+  }
+  return false;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -362,27 +400,27 @@ async function main() {
   );
   const freedomMinSeconds = Math.max(
     20,
-    toInt(args["freedom-min-seconds"] || process.env.KOZMOS_FREEDOM_MIN_SECONDS, 35)
+    toInt(args["freedom-min-seconds"] || process.env.KOZMOS_FREEDOM_MIN_SECONDS, 55)
   );
   const freedomMaxSeconds = Math.max(
     freedomMinSeconds,
-    toInt(args["freedom-max-seconds"] || process.env.KOZMOS_FREEDOM_MAX_SECONDS, 105)
+    toInt(args["freedom-max-seconds"] || process.env.KOZMOS_FREEDOM_MAX_SECONDS, 165)
   );
   const freedomMatrixWeight = Math.max(
     0,
-    toFloat(args["freedom-matrix-weight"] || process.env.KOZMOS_FREEDOM_MATRIX_WEIGHT, 0.52)
+    toFloat(args["freedom-matrix-weight"] || process.env.KOZMOS_FREEDOM_MATRIX_WEIGHT, 0.25)
   );
   const freedomNoteWeight = Math.max(
     0,
-    toFloat(args["freedom-note-weight"] || process.env.KOZMOS_FREEDOM_NOTE_WEIGHT, 0.18)
+    toFloat(args["freedom-note-weight"] || process.env.KOZMOS_FREEDOM_NOTE_WEIGHT, 0.31)
   );
   const freedomSharedWeight = Math.max(
     0,
-    toFloat(args["freedom-shared-weight"] || process.env.KOZMOS_FREEDOM_SHARED_WEIGHT, 0.18)
+    toFloat(args["freedom-shared-weight"] || process.env.KOZMOS_FREEDOM_SHARED_WEIGHT, 0.08)
   );
   const freedomHushWeight = Math.max(
     0,
-    toFloat(args["freedom-hush-weight"] || process.env.KOZMOS_FREEDOM_HUSH_WEIGHT, 0.12)
+    toFloat(args["freedom-hush-weight"] || process.env.KOZMOS_FREEDOM_HUSH_WEIGHT, 0.36)
   );
   const freedomMatrixExitChance = Math.max(
     0.01,
@@ -391,7 +429,7 @@ async function main() {
       toFloat(
         args["freedom-matrix-exit-chance"] ||
           process.env.KOZMOS_FREEDOM_MATRIX_EXIT_CHANCE,
-        0.12
+        0.38
       )
     )
   );
@@ -402,7 +440,7 @@ async function main() {
       toFloat(
         args["freedom-matrix-drift-chance"] ||
           process.env.KOZMOS_FREEDOM_MATRIX_DRIFT_CHANCE,
-        0.93
+        0.58
       )
     )
   );
@@ -413,8 +451,31 @@ async function main() {
       toFloat(
         args["freedom-matrix-drift-scale"] ||
           process.env.KOZMOS_FREEDOM_MATRIX_DRIFT_SCALE,
-        4.2
+        2.3
       )
+    )
+  );
+  const freedomSharedMinGapSeconds = Math.max(
+    60,
+    toInt(
+      args["freedom-shared-min-gap-seconds"] ||
+        process.env.KOZMOS_FREEDOM_SHARED_MIN_GAP_SECONDS,
+      900
+    )
+  );
+  const freedomSharedMaxPerHour = Math.max(
+    0,
+    toInt(
+      args["freedom-shared-max-per-hour"] ||
+        process.env.KOZMOS_FREEDOM_SHARED_MAX_PER_HOUR,
+      3
+    )
+  );
+  const hushMaxChatsPerCycle = Math.max(
+    1,
+    toInt(
+      args["hush-max-chats-per-cycle"] || process.env.KOZMOS_HUSH_MAX_CHATS_PER_CYCLE,
+      3
     )
   );
   const buildSpaceId = String(
@@ -458,6 +519,9 @@ async function main() {
   let nextFreedomAt = Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
   let matrixVisible = false;
   let autoFreedomMatrixBooted = false;
+  let lastFreedomSharedAt = 0;
+  const freedomSharedSentAt = [];
+  let freedomMatrixStreak = 0;
 
   if (user?.id) {
     console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
@@ -478,6 +542,9 @@ async function main() {
   if (autoFreedom) {
     console.log(
       `[${now()}] freedom=${freedomMinSeconds}-${freedomMaxSeconds}s weights(matrix=${freedomMatrixWeight},note=${freedomNoteWeight},shared=${freedomSharedWeight},hush=${freedomHushWeight}) matrix(exit=${freedomMatrixExitChance},drift=${freedomMatrixDriftChance},scale=${freedomMatrixDriftScale})`
+    );
+    console.log(
+      `[${now()}] freedom shared limits minGap=${freedomSharedMinGapSeconds}s maxPerHour=${freedomSharedMaxPerHour} hushMaxChatsPerCycle=${hushMaxChatsPerCycle}`
     );
   }
 
@@ -704,14 +771,17 @@ async function main() {
           }
 
           const hushChats = Array.isArray(hushData?.chats) ? hushData.chats : [];
+          let hushChecked = 0;
           for (const chat of hushChats) {
+            if (hushChecked >= hushMaxChatsPerCycle) break;
             const chatId = String(chat?.id || "").trim();
             if (!chatId) continue;
             if (String(chat?.membership_status || "") !== "accepted") continue;
+            hushChecked += 1;
 
             const messageRes = await callAxyOps(baseUrl, token, "hush.messages", {
               chatId,
-              limit: 60,
+              limit: 35,
             });
             const hushTurns = buildHushContextTurns(
               messageRes?.data || [],
@@ -941,10 +1011,17 @@ async function main() {
           if (freedomAction && user?.id) {
             try {
               if (freedomAction === "matrix") {
+                freedomMatrixStreak += 1;
                 if (matrixVisible && Math.random() < freedomMatrixExitChance) {
                   await callAxyOps(baseUrl, token, "matrix.exit");
                   matrixVisible = false;
+                  freedomMatrixStreak = 0;
                   console.log(`[${now()}] freedom: matrix exit`);
+                } else if (matrixVisible && freedomMatrixStreak >= 3 && Math.random() < 0.7) {
+                  await callAxyOps(baseUrl, token, "matrix.exit");
+                  matrixVisible = false;
+                  freedomMatrixStreak = 0;
+                  console.log(`[${now()}] freedom: matrix cooldown exit`);
                 } else if (!matrixVisible) {
                   const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
                     x: randomRange(-7, 7),
@@ -970,6 +1047,7 @@ async function main() {
                   );
                 }
               } else if (freedomAction === "note") {
+                freedomMatrixStreak = 0;
                 const prompt =
                   "Write one short private note for Axy's my home. Calm and intentional, max 18 words.";
                 const raw = await askAxy(baseUrl, prompt, {
@@ -985,8 +1063,29 @@ async function main() {
                   console.log(`[${now()}] freedom: note created`);
                 }
               } else if (freedomAction === "shared") {
+                freedomMatrixStreak = 0;
+                const nowMs = Date.now();
+                const hourMs = 60 * 60 * 1000;
+                while (freedomSharedSentAt.length > 0 && nowMs - freedomSharedSentAt[0] > hourMs) {
+                  freedomSharedSentAt.shift();
+                }
+                const withinGap =
+                  lastFreedomSharedAt > 0 &&
+                  nowMs - lastFreedomSharedAt < freedomSharedMinGapSeconds * 1000;
+                const reachedHourlyCap =
+                  freedomSharedMaxPerHour > 0 &&
+                  freedomSharedSentAt.length >= freedomSharedMaxPerHour;
+                if (withinGap || reachedHourlyCap) {
+                  console.log(
+                    `[${now()}] freedom: shared skipped (rate-limit gap=${withinGap} hourlyCap=${reachedHourlyCap})`
+                  );
+                  nextFreedomAt =
+                    Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
+                  continue;
+                }
+
                 const prompt =
-                  "Write one short shared-space line as Axy. Calm tone, no mention tags, max 18 words.";
+                  "Write one short shared-space line as Axy. Concrete and varied, no stillness cliches, no mention tags, max 16 words.";
                 const raw = await askAxy(baseUrl, prompt, {
                   context: {
                     channel: "shared",
@@ -997,8 +1096,10 @@ async function main() {
                   },
                 });
                 const content = formatReply(raw).slice(0, 240);
-                if (content) {
+                if (content && !isNearDuplicateLocal(content, sharedRecentAxyReplies.slice(-10))) {
                   await postShared(baseUrl, token, content);
+                  lastFreedomSharedAt = nowMs;
+                  freedomSharedSentAt.push(nowMs);
                   pushLimited(
                     sharedRecentTurns,
                     {
@@ -1010,8 +1111,11 @@ async function main() {
                   );
                   pushLimited(sharedRecentAxyReplies, clipForContext(content, 220), 12);
                   console.log(`[${now()}] freedom: shared message sent`);
+                } else if (content) {
+                  console.log(`[${now()}] freedom: shared skipped (duplicate style)`);
                 }
               } else if (freedomAction === "hush") {
+                freedomMatrixStreak = 0;
                 const presentUsers = Array.isArray(snapshot?.data?.present_users)
                   ? snapshot.data.present_users
                   : [];
@@ -1100,3 +1204,4 @@ main().catch((err) => {
   console.error(`[${now()}] fatal: ${err?.message || err}`);
   process.exit(1);
 });
+

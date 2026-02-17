@@ -567,7 +567,8 @@ function buildMasterChatPrompt(
   intent: MasterIntent,
   contextBlock: string,
   noRepeatBlock: string,
-  domainBlock: string
+  domainBlock: string,
+  channel: string
 ) {
   const modeRules: Record<MasterIntent, string> = {
     greet: "Give one short acknowledgment. Do not ask a follow-up question.",
@@ -580,6 +581,29 @@ function buildMasterChatPrompt(
     unknown:
       "If unclear, keep it gentle and minimal. Do not force direction. One short sentence is preferred.",
   };
+
+  const channelRules =
+    channel === "dm"
+      ? [
+          "DM RULES:",
+          "- default to direct statements",
+          "- do not ask questions unless the user explicitly requests guidance",
+          "- at most one short question, and only when strictly needed",
+        ].join("\n")
+      : channel === "shared"
+        ? [
+            "SHARED RULES:",
+            "- avoid poetic templates and repeated stillness motifs",
+            "- keep lines concrete and varied",
+            "- do not post if content feels generic or redundant",
+          ].join("\n")
+        : channel === "hush"
+          ? [
+              "HUSH RULES:",
+              "- keep tone warm but concise",
+              "- prioritize clarity over abstract language",
+            ].join("\n")
+          : "";
 
   return `
 ${AXY_SYSTEM_PROMPT}
@@ -602,7 +626,21 @@ ${modeRules[intent]}
 ${contextBlock || ""}
 ${noRepeatBlock || ""}
 ${domainBlock || ""}
+${channelRules || ""}
 `;
+}
+
+function applyChannelPostRules(reply: string, channel: string, userMessage: string) {
+  if (!reply) return reply;
+
+  if (channel === "dm") {
+    const userAskedQuestion = /\?/.test(userMessage);
+    if (!userAskedQuestion && /\?/.test(reply)) {
+      return reply.replace(/\?/g, ".").replace(/\s+/g, " ").trim();
+    }
+  }
+
+  return reply;
 }
 
 function normalizeMasterReply(raw: string, intent: MasterIntent) {
@@ -759,6 +797,7 @@ export async function POST(req: Request) {
     const antiRepeatPool = [...memoryReplies, ...contextReplies].slice(-8);
     const recentTurns = normalizeAxyTurns(context?.recentMessages, 10);
     const contextBlock = buildContextBlock(context, recentTurns);
+    const channel = clipText(context?.channel || "", 24).toLowerCase();
     const rotatedDomains = rotateDomainForConversation(
       conversationKey,
       detectDomains(userMessage, recentTurns),
@@ -844,7 +883,8 @@ export async function POST(req: Request) {
             intent,
             contextBlock,
             noRepeatBlock,
-            domainBlock
+            domainBlock,
+            channel
           ),
         },
         { role: "user", content: userMessage },
@@ -870,7 +910,8 @@ export async function POST(req: Request) {
               intent,
               contextBlock,
               buildNoRepeatBlock([...antiRepeatPool, reply].slice(-8)),
-              domainBlock
+              domainBlock,
+              channel
             ),
           },
           { role: "user", content: userMessage },
@@ -887,6 +928,8 @@ export async function POST(req: Request) {
     if (isNearDuplicate(reply, antiRepeatPool)) {
       reply = fallbackReply(intent, userMessage, antiRepeatPool);
     }
+
+    reply = applyChannelPostRules(reply, channel, userMessage);
 
     rememberReply(conversationKey, reply);
 
