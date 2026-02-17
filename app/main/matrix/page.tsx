@@ -23,6 +23,15 @@ type OrbRender = {
   isSelf: boolean;
 };
 
+type RuntimeOrbRow = {
+  userId: string;
+  username: string;
+  color: string;
+  x: number;
+  z: number;
+  ts: number;
+};
+
 const WORLD_LIMIT = 14;
 
 function clamp(value: number, min: number, max: number) {
@@ -72,6 +81,7 @@ export default function MainMatrixPage() {
 
   const [selfPos, setSelfPos] = useState({ x: 0, z: 0 });
   const [remoteOrbs, setRemoteOrbs] = useState<OrbRender[]>([]);
+  const [runtimeOrbs, setRuntimeOrbs] = useState<OrbRender[]>([]);
   const [pulseTick, setPulseTick] = useState(0);
 
   const [savingColor, setSavingColor] = useState(false);
@@ -339,6 +349,40 @@ export default function MainMatrixPage() {
     void channelRef.current.send({ type: "broadcast", event: "move", payload });
   }, [orbColor, selfPos.x, selfPos.z, userId, username]);
 
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const loadRuntimeOrbs = async () => {
+      const { res, data } = await fetchAuthedJson("/api/world/runtime-orbs");
+      if (!res.ok || cancelled) return;
+      const rows: RuntimeOrbRow[] = Array.isArray(data?.orbs) ? data.orbs : [];
+      const parsed: OrbRender[] = rows
+        .map((row) => ({
+          id: String(row?.userId || ""),
+          username: String(row?.username || "user"),
+          color: isHexColor(String(row?.color || "")) ? String(row.color) : "#7df9ff",
+          x: typeof row?.x === "number" ? row.x : 0,
+          z: typeof row?.z === "number" ? row.z : 0,
+          ts: typeof row?.ts === "number" ? row.ts : Date.now(),
+          isSelf: String(row?.userId || "") === userId,
+        }))
+        .filter((row) => row.id && !row.isSelf);
+      setRuntimeOrbs(parsed);
+    };
+
+    void loadRuntimeOrbs();
+    const timer = window.setInterval(() => {
+      void loadRuntimeOrbs();
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      setRuntimeOrbs([]);
+    };
+  }, [fetchAuthedJson, userId]);
+
   const allOrbs = useMemo(() => {
     const self: OrbRender = {
       id: userId || "self",
@@ -349,8 +393,14 @@ export default function MainMatrixPage() {
       ts: Date.now(),
       isSelf: true,
     };
-    return [self, ...remoteOrbs].sort((a, b) => a.z - b.z);
-  }, [orbColor, remoteOrbs, selfPos.x, selfPos.z, userId, username]);
+    const merged = new Map<string, OrbRender>();
+    [...remoteOrbs, ...runtimeOrbs].forEach((orb) => {
+      const current = merged.get(orb.id);
+      if (!current || orb.ts >= current.ts) merged.set(orb.id, orb);
+    });
+
+    return [self, ...Array.from(merged.values())].sort((a, b) => a.z - b.z);
+  }, [orbColor, remoteOrbs, runtimeOrbs, selfPos.x, selfPos.z, userId, username]);
 
   async function saveOrbColor() {
     if (!isHexColor(draftColor)) {
