@@ -10,6 +10,18 @@ type Note = {
   content: string;
 };
 
+type TouchUser = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+};
+
+type TouchRequest = {
+  id: number;
+  username: string;
+  avatar_url: string | null;
+};
+
 export default function MyHome() {
   const router = useRouter();
 
@@ -24,6 +36,12 @@ export default function MyHome() {
   const [noteInput, setNoteInput] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
+  const [touchUsers, setTouchUsers] = useState<TouchUser[]>([]);
+  const [incomingTouchRequests, setIncomingTouchRequests] = useState<TouchRequest[]>(
+    []
+  );
+  const [touchLoading, setTouchLoading] = useState(false);
+  const [touchBusyId, setTouchBusyId] = useState<number | null>(null);
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
@@ -35,6 +53,70 @@ export default function MyHome() {
   const [personalLastMessage, setPersonalLastMessage] = useState<string | null>(
     null
   );
+
+  async function loadKeepInTouch() {
+    setTouchLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setTouchUsers([]);
+        setIncomingTouchRequests([]);
+        return;
+      }
+
+      const res = await fetch("/api/keep-in-touch", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        inTouch?: TouchUser[];
+        incoming?: TouchRequest[];
+      };
+
+      if (!res.ok) {
+        setTouchUsers([]);
+        setIncomingTouchRequests([]);
+        return;
+      }
+
+      setTouchUsers(Array.isArray(body.inTouch) ? body.inTouch : []);
+      setIncomingTouchRequests(Array.isArray(body.incoming) ? body.incoming : []);
+    } finally {
+      setTouchLoading(false);
+    }
+  }
+
+  async function respondKeepInTouch(requestId: number, decision: "accept" | "decline") {
+    if (touchBusyId) return;
+    setTouchBusyId(requestId);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      await fetch("/api/keep-in-touch/respond", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          requestId,
+          decision,
+        }),
+      });
+
+      await loadKeepInTouch();
+    } finally {
+      setTouchBusyId(null);
+    }
+  }
 
   useEffect(() => {
 
@@ -65,6 +147,7 @@ export default function MyHome() {
         .order("created_at", { ascending: false });
 
       setNotes(notesData || []);
+      await loadKeepInTouch();
     }
 
     loadUserAndNotes();
@@ -82,6 +165,19 @@ useEffect(() => {
     subscription.unsubscribe();
   };
 }, [router]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const poll = window.setInterval(() => {
+      void loadKeepInTouch();
+    }, 15000);
+
+    return () => {
+      window.clearInterval(poll);
+    };
+  }, [userId]);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/");
@@ -259,6 +355,92 @@ useEffect(() => {
         <span style={{ cursor: "pointer" }} onClick={handleLogout}>
           logout
         </span>
+      </div>
+
+      <div style={touchDockStyle}>
+        <div style={touchPanelStyle}>
+          <div style={labelStyle}>users in touch</div>
+
+          {touchLoading ? (
+            <div style={touchMutedStyle}>loading...</div>
+          ) : touchUsers.length === 0 ? (
+            <div style={touchMutedStyle}>no users in touch yet</div>
+          ) : (
+            <div style={touchListStyle}>
+              {touchUsers.map((user) => (
+                <div key={user.id} style={touchUserRowStyle}>
+                  <div style={touchAvatarStyle}>
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt={`${user.username} avatar`}
+                        style={touchAvatarImageStyle}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 12, opacity: 0.72 }}>
+                        {(user.username[0] ?? "?").toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ opacity: 0.82 }}>{user.username}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {incomingTouchRequests.length > 0 ? (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ ...labelStyle, marginBottom: 8, opacity: 0.5 }}>
+                keep in touch requests
+              </div>
+              <div style={touchListStyle}>
+                {incomingTouchRequests.map((row) => (
+                  <div key={`touch-request-${row.id}`} style={touchRequestRowStyle}>
+                    <div style={touchUserRowStyle}>
+                      <div style={touchAvatarStyle}>
+                        {row.avatar_url ? (
+                          <img
+                            src={row.avatar_url}
+                            alt={`${row.username} avatar`}
+                            style={touchAvatarImageStyle}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 12, opacity: 0.72 }}>
+                            {(row.username[0] ?? "?").toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ opacity: 0.82 }}>{row.username}</span>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void respondKeepInTouch(row.id, "accept");
+                        }}
+                        disabled={touchBusyId === row.id}
+                        style={touchActionButtonStyle}
+                      >
+                        {touchBusyId === row.id ? "..." : "yes"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void respondKeepInTouch(row.id, "decline");
+                        }}
+                        disabled={touchBusyId === row.id}
+                        style={{ ...touchActionButtonStyle, opacity: 0.6 }}
+                      >
+                        no
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* CONTENT */}
@@ -549,6 +731,80 @@ const notesListStyle: React.CSSProperties = {
 const noteContentStyle: React.CSSProperties = {
   whiteSpace: "pre-wrap",
   lineHeight: 1.45,
+};
+
+const touchDockStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 44,
+  top: 214,
+  width: "min(360px, calc(100vw - 88px))",
+};
+
+const touchPanelStyle: React.CSSProperties = {
+  width: "100%",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 10,
+  padding: "12px 14px",
+  background: "rgba(255,255,255,0.02)",
+};
+
+const touchMutedStyle: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.48,
+};
+
+const touchListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const touchUserRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  minWidth: 0,
+};
+
+const touchAvatarStyle: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  borderRadius: "50%",
+  border: "1px solid rgba(255,255,255,0.2)",
+  overflow: "hidden",
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(255,255,255,0.05)",
+  flexShrink: 0,
+};
+
+const touchAvatarImageStyle: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+};
+
+const touchRequestRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 999,
+  padding: "6px 8px",
+};
+
+const touchActionButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.22)",
+  borderRadius: 999,
+  background: "transparent",
+  color: "#eaeaea",
+  padding: "2px 10px",
+  fontSize: 11,
+  letterSpacing: "0.08em",
+  cursor: "pointer",
+  opacity: 0.82,
 };
 
 const personalAxyWrapStyle: React.CSSProperties = {

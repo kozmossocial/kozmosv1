@@ -111,6 +111,13 @@ export default function Main() {
   const [presentUserAvatars, setPresentUserAvatars] = useState<
     Record<string, string | null>
   >({});
+  const [selfAvatarUrl, setSelfAvatarUrl] = useState<string | null>(null);
+  const [presentUserHover, setPresentUserHover] = useState<string | null>(null);
+  const [touchPromptUser, setTouchPromptUser] = useState<string | null>(null);
+  const [touchBusy, setTouchBusy] = useState(false);
+  const [touchStatusByUser, setTouchStatusByUser] = useState<
+    Record<string, string>
+  >({});
 
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
@@ -170,23 +177,44 @@ export default function Main() {
   const [puzzleSolved, setPuzzleSolved] = useState(false);
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
+  const presentUsersPanelRef = useRef<HTMLDivElement | null>(null);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
   const currentUsername = username?.trim() ? username.trim() : "user";
   const displayUsername = username?.trim() ? username.trim() : "\u00A0";
-  const presentUsers = useMemo(
-    () =>
-      Array.from(new Set([...realtimePresentUsers, ...runtimePresentUsers])).sort(
-        (a, b) => a.localeCompare(b, "en", { sensitivity: "base" })
-      ),
-    [realtimePresentUsers, runtimePresentUsers]
-  );
+  const presentUsers = useMemo(() => {
+    const normalized = [...realtimePresentUsers, ...runtimePresentUsers]
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
+    return Array.from(new Set(normalized)).sort((a, b) =>
+      a.localeCompare(b, "en", { sensitivity: "base" })
+    );
+  }, [realtimePresentUsers, runtimePresentUsers]);
 
   useEffect(() => {
     if (!presentUserOpen) return;
     if (!presentUsers.includes(presentUserOpen)) {
       setPresentUserOpen(null);
+      setTouchPromptUser(null);
     }
   }, [presentUserOpen, presentUsers]);
+
+  useEffect(() => {
+    if (!presentUserOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (presentUsersPanelRef.current?.contains(target)) return;
+      setPresentUserOpen(null);
+      setTouchPromptUser(null);
+      setPresentUserHover(null);
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [presentUserOpen]);
 
   useEffect(() => {
     const names = Array.from(
@@ -227,12 +255,12 @@ export default function Main() {
 
       const nextMap: Record<string, string | null> = {};
       names.forEach((name) => {
-        nextMap[name.toLowerCase()] = null;
+        nextMap[name.trim().toLowerCase()] = null;
       });
 
       (body.rows || []).forEach((row) => {
         if (!row?.username) return;
-        nextMap[String(row.username).toLowerCase()] =
+        nextMap[String(row.username).trim().toLowerCase()] =
           typeof row.avatar_url === "string" ? row.avatar_url : null;
       });
 
@@ -262,11 +290,14 @@ export default function Main() {
 
       const { data: profile } = await supabase
         .from("profileskozmos")
-        .select("username")
+        .select("username, avatar_url")
         .eq("id", user.id)
         .maybeSingle();
 
       setUsername(profile?.username?.trim() || "user");
+      setSelfAvatarUrl(
+        typeof profile?.avatar_url === "string" ? profile.avatar_url : null
+      );
 
       const { data } = await supabase
         .from("main_messages")
@@ -672,6 +703,70 @@ export default function Main() {
 
     setInput("");
     setLoading(false);
+  }
+
+  async function requestKeepInTouch(targetUsername: string) {
+    const name = targetUsername.trim();
+    if (!name || touchBusy) return;
+    if (name.toLowerCase() === currentUsername.toLowerCase()) return;
+
+    setTouchBusy(true);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setTouchStatusByUser((prev) => ({
+          ...prev,
+          [name.toLowerCase()]: "session missing",
+        }));
+        return;
+      }
+
+      const res = await fetch("/api/keep-in-touch/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ targetUsername: name }),
+      });
+
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        status?: string;
+      };
+
+      if (!res.ok) {
+        setTouchStatusByUser((prev) => ({
+          ...prev,
+          [name.toLowerCase()]: body.error || "request failed",
+        }));
+        return;
+      }
+
+      let message = "request sent";
+      if (body.status === "accepted") {
+        message = "you are now in touch";
+      } else if (body.status === "pending") {
+        message = "request sent";
+      }
+
+      setTouchStatusByUser((prev) => ({
+        ...prev,
+        [name.toLowerCase()]: message,
+      }));
+      setTouchPromptUser(null);
+    } catch {
+      setTouchStatusByUser((prev) => ({
+        ...prev,
+        [name.toLowerCase()]: "request failed",
+      }));
+    } finally {
+      setTouchBusy(false);
+    }
   }
 
   /*  delete */
@@ -1791,6 +1886,7 @@ export default function Main() {
           />
 
           <div
+            ref={presentUsersPanelRef}
             style={{
               marginTop: 10,
               minHeight: 42,
@@ -1808,17 +1904,20 @@ export default function Main() {
               <span style={{ fontSize: 11, opacity: 0.4 }}>nobody visible</span>
             ) : (
               presentUsers.map((name) => {
-                const avatarUrl = presentUserAvatars[name.toLowerCase()] ?? null;
+                const normalizedName = name.trim().toLowerCase();
+                const isSelf = normalizedName === currentUsername.toLowerCase();
+                const avatarUrl =
+                  presentUserAvatars[normalizedName] ??
+                  (isSelf ? selfAvatarUrl : null);
                 const isOpen = presentUserOpen === name;
+                const isHoveringAvatar = presentUserHover === name;
+                const showTouchPrompt = touchPromptUser === name && !isSelf;
+                const touchStatus = touchStatusByUser[normalizedName] ?? null;
                 return (
                   <div
                     key={`present-${name}`}
                     style={{ position: "relative" }}
-                    onMouseLeave={() => {
-                      if (presentUserOpen === name) {
-                        setPresentUserOpen(null);
-                      }
-                    }}
+                    onMouseLeave={() => setPresentUserHover(null)}
                   >
                     <span
                       className="present-user-chip"
@@ -1865,6 +1964,13 @@ export default function Main() {
                           display: "grid",
                           placeItems: "center",
                         }}
+                        onMouseEnter={() => setPresentUserHover(name)}
+                        onMouseLeave={() => setPresentUserHover(null)}
+                        onClick={() => {
+                          if (!isSelf) {
+                            setTouchPromptUser(name);
+                          }
+                        }}
                       >
                         {avatarUrl ? (
                           <img
@@ -1882,6 +1988,132 @@ export default function Main() {
                             {(name[0] ?? "?").toUpperCase()}
                           </span>
                         )}
+
+                        {!isSelf ? (
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              borderRadius: "50%",
+                              display: "grid",
+                              placeItems: "center",
+                              background: isHoveringAvatar
+                                ? "rgba(0,0,0,0.36)"
+                                : "rgba(0,0,0,0)",
+                              opacity: isHoveringAvatar ? 1 : 0,
+                              transition:
+                                "opacity 0.16s ease, background 0.16s ease",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 28,
+                                lineHeight: 1,
+                                fontWeight: 500,
+                                opacity: 0.9,
+                                textShadow:
+                                  "0 0 8px rgba(255,255,255,0.45), 0 0 18px rgba(255,255,255,0.28)",
+                              }}
+                            >
+                              +
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {showTouchPrompt ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "50%",
+                          bottom: "calc(100% + 94px)",
+                          transform: "translateX(-50%)",
+                          minWidth: 210,
+                          maxWidth: 260,
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(255,255,255,0.18)",
+                          background: "rgba(7,7,7,0.94)",
+                          boxShadow:
+                            "0 0 14px rgba(255,255,255,0.12), 0 0 28px rgba(255,255,255,0.08)",
+                          zIndex: 28,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            opacity: 0.78,
+                            marginBottom: 10,
+                            textAlign: "center",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          keep in touch with {name}?
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            gap: 10,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void requestKeepInTouch(name);
+                            }}
+                            disabled={touchBusy}
+                            style={{
+                              border: "1px solid rgba(255,255,255,0.26)",
+                              borderRadius: 999,
+                              background: "transparent",
+                              color: "#eaeaea",
+                              fontSize: 11,
+                              letterSpacing: "0.08em",
+                              padding: "4px 12px",
+                              cursor: touchBusy ? "default" : "pointer",
+                              opacity: touchBusy ? 0.5 : 0.84,
+                            }}
+                          >
+                            {touchBusy ? "..." : "yes"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTouchPromptUser(null)}
+                            style={{
+                              border: "1px solid rgba(255,255,255,0.14)",
+                              borderRadius: 999,
+                              background: "transparent",
+                              color: "#eaeaea",
+                              fontSize: 11,
+                              letterSpacing: "0.08em",
+                              padding: "4px 12px",
+                              cursor: "pointer",
+                              opacity: 0.62,
+                            }}
+                          >
+                            no
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {touchStatus ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "50%",
+                          top: "calc(100% + 6px)",
+                          transform: "translateX(-50%)",
+                          fontSize: 10,
+                          opacity: 0.58,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {touchStatus}
                       </div>
                     ) : null}
                   </div>
