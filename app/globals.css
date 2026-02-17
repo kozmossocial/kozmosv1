@@ -120,6 +120,28 @@ body {
   text-shadow: 0 0 4px rgba(107, 255, 142, 0.25);
 }
 
+@keyframes dmUnreadBreathe {
+  0% {
+    box-shadow:
+      0 0 4px rgba(220, 255, 236, 0.16),
+      inset 0 0 3px rgba(220, 255, 236, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 13px rgba(220, 255, 236, 0.42),
+      inset 0 0 9px rgba(220, 255, 236, 0.2);
+  }
+  100% {
+    box-shadow:
+      0 0 4px rgba(220, 255, 236, 0.16),
+      inset 0 0 3px rgba(220, 255, 236, 0.08);
+  }
+}
+
+.dm-unread-breathe {
+  animation: dmUnreadBreathe 1.8s ease-in-out infinite;
+}
+
 .principle-fade {
   opacity: 0.62;
   color: rgba(245, 245, 245, 0.78);

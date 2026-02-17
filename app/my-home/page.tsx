@@ -73,9 +73,14 @@ export default function MyHome() {
   const [directChatEditMode, setDirectChatEditMode] = useState(false);
   const [directChatSavingOrder, setDirectChatSavingOrder] = useState(false);
   const [directChatRemovingId, setDirectChatRemovingId] = useState<string | null>(null);
+  const [directUnreadChatIds, setDirectUnreadChatIds] = useState<Record<string, true>>(
+    {}
+  );
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const directMessagesViewportRef = useRef<HTMLDivElement | null>(null);
   const lastDirectScrollKeyRef = useRef<string>("");
+  const directChatsInitializedRef = useRef(false);
+  const directChatUpdatedAtRef = useRef<Record<string, string>>({});
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
@@ -149,12 +154,50 @@ export default function MyHome() {
 
       if (!res.ok) return;
       const nextChats = Array.isArray(body.chats) ? body.chats : [];
+
+      if (!directChatsInitializedRef.current) {
+        directChatsInitializedRef.current = true;
+        directChatUpdatedAtRef.current = nextChats.reduce<Record<string, string>>(
+          (acc, chat) => {
+            acc[chat.chat_id] = chat.updated_at || "";
+            return acc;
+          },
+          {}
+        );
+      } else {
+        const previous = directChatUpdatedAtRef.current;
+        const nextMap = nextChats.reduce<Record<string, string>>((acc, chat) => {
+          acc[chat.chat_id] = chat.updated_at || "";
+          return acc;
+        }, {});
+
+        const nextUnread: Record<string, true> = {};
+        nextChats.forEach((chat) => {
+          if (chat.chat_id === selectedDirectChatId) return;
+          const prevTs = Date.parse(previous[chat.chat_id] || "");
+          const nextTs = Date.parse(chat.updated_at || "");
+          const isNewChat = !previous[chat.chat_id];
+          const isUpdated =
+            Number.isFinite(nextTs) &&
+            (!Number.isFinite(prevTs) || nextTs > prevTs);
+          if (isNewChat || isUpdated) {
+            nextUnread[chat.chat_id] = true;
+          }
+        });
+
+        if (Object.keys(nextUnread).length > 0) {
+          setDirectUnreadChatIds((prev) => ({ ...prev, ...nextUnread }));
+        }
+
+        directChatUpdatedAtRef.current = nextMap;
+      }
+
       setActiveChats(nextChats);
       setSelectedDirectChatId((prev) => {
         if (prev && nextChats.some((chat) => chat.chat_id === prev)) {
           return prev;
         }
-        return nextChats[0]?.chat_id ?? null;
+        return null;
       });
     } catch {
       // ignore transient fetch failures
@@ -219,6 +262,12 @@ export default function MyHome() {
       if (!res.ok || !body.chat?.chat_id) return;
       await loadDirectChats();
       setSelectedDirectChatId(body.chat.chat_id);
+      setDirectUnreadChatIds((prev) => {
+        if (!prev[body.chat!.chat_id]) return prev;
+        const copy = { ...prev };
+        delete copy[body.chat!.chat_id];
+        return copy;
+      });
       await loadDirectMessages(body.chat.chat_id);
     } finally {
       setChatStartBusyUserId(null);
@@ -284,6 +333,12 @@ export default function MyHome() {
       setActiveChats((prev) => prev.filter((chat) => chat.chat_id !== chatId));
       setSelectedDirectChatId((prev) => (prev === chatId ? null : prev));
       setDirectMessages((prev) => prev.filter((msg) => msg.chat_id !== chatId));
+      setDirectUnreadChatIds((prev) => {
+        if (!prev[chatId]) return prev;
+        const copy = { ...prev };
+        delete copy[chatId];
+        return copy;
+      });
     } finally {
       setDirectChatRemovingId(null);
     }
@@ -480,6 +535,13 @@ useEffect(() => {
       setDirectMessages([]);
       return;
     }
+
+    setDirectUnreadChatIds((prev) => {
+      if (!prev[selectedDirectChatId]) return prev;
+      const copy = { ...prev };
+      delete copy[selectedDirectChatId];
+      return copy;
+    });
 
     const run = () => {
       void loadDirectMessages(selectedDirectChatId);
@@ -817,21 +879,39 @@ useEffect(() => {
             {activeChats.map((chat, idx) => (
               <div
                 key={chat.chat_id}
+                className={
+                  !directChatEditMode &&
+                  selectedDirectChatId !== chat.chat_id &&
+                  directUnreadChatIds[chat.chat_id]
+                    ? "dm-unread-breathe"
+                    : undefined
+                }
                 style={{
                   ...touchUserRowStyle,
                   border:
                     selectedDirectChatId === chat.chat_id
                       ? "1px solid rgba(255,255,255,0.2)"
-                      : "1px solid transparent",
+                      : directUnreadChatIds[chat.chat_id]
+                        ? "1px solid rgba(230,255,240,0.45)"
+                        : "1px solid transparent",
                   borderRadius: 8,
                   padding: "3px 4px",
                   cursor: directChatEditMode ? "default" : "pointer",
                 }}
                 onClick={() => {
                   if (!directChatEditMode) {
-                    setSelectedDirectChatId((prev) =>
-                      prev === chat.chat_id ? null : chat.chat_id
-                    );
+                    setSelectedDirectChatId((prev) => {
+                      const next = prev === chat.chat_id ? null : chat.chat_id;
+                      if (next) {
+                        setDirectUnreadChatIds((prevUnread) => {
+                          if (!prevUnread[next]) return prevUnread;
+                          const copy = { ...prevUnread };
+                          delete copy[next];
+                          return copy;
+                        });
+                      }
+                      return next;
+                    });
                   }
                 }}
               >
