@@ -24,6 +24,33 @@ export default function AuthSyncGuard() {
   const protectedPath = useMemo(() => isProtectedPath(pathname), [pathname]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
+    const forceTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    };
+
+    forceTop();
+    const raf1 = window.requestAnimationFrame(forceTop);
+    const raf2 = window.requestAnimationFrame(forceTop);
+    const timer = window.setTimeout(forceTop, 50);
+
+    const onPageShow = () => forceTop();
+    window.addEventListener("pageshow", onPageShow);
+
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
     let disposed = false;
     let signingOut = false;
     let lastWriteAt = 0;
