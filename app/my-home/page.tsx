@@ -42,6 +42,9 @@ export default function MyHome() {
   );
   const [touchLoading, setTouchLoading] = useState(false);
   const [touchBusyId, setTouchBusyId] = useState<number | null>(null);
+  const [touchEditMode, setTouchEditMode] = useState(false);
+  const [touchSavingOrder, setTouchSavingOrder] = useState(false);
+  const [touchRemovingUserId, setTouchRemovingUserId] = useState<string | null>(null);
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
@@ -115,6 +118,67 @@ export default function MyHome() {
       await loadKeepInTouch();
     } finally {
       setTouchBusyId(null);
+    }
+  }
+
+  async function persistTouchOrder(nextUsers: TouchUser[]) {
+    setTouchSavingOrder(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      await fetch("/api/keep-in-touch/order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          orderedUserIds: nextUsers.map((row) => row.id),
+        }),
+      });
+    } finally {
+      setTouchSavingOrder(false);
+    }
+  }
+
+  function moveTouchUser(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= touchUsers.length) return;
+
+    const nextUsers = [...touchUsers];
+    const swap = nextUsers[index];
+    nextUsers[index] = nextUsers[nextIndex];
+    nextUsers[nextIndex] = swap;
+    setTouchUsers(nextUsers);
+    void persistTouchOrder(nextUsers);
+  }
+
+  async function removeTouchUser(targetUserId: string) {
+    if (!targetUserId || touchRemovingUserId) return;
+    setTouchRemovingUserId(targetUserId);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      await fetch("/api/keep-in-touch/remove", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ targetUserId }),
+      });
+
+      await loadKeepInTouch();
+    } finally {
+      setTouchRemovingUserId(null);
     }
   }
 
@@ -359,7 +423,16 @@ useEffect(() => {
 
       <div style={touchDockStyle}>
         <div style={touchPanelStyle}>
-          <div style={labelStyle}>users in touch</div>
+          <div style={touchPanelHeadStyle}>
+            <div style={{ ...labelStyle, marginBottom: 0 }}>users in touch</div>
+            <button
+              type="button"
+              onClick={() => setTouchEditMode((prev) => !prev)}
+              style={touchEditButtonStyle}
+            >
+              {touchEditMode ? "done" : "edit"}
+            </button>
+          </div>
 
           {touchLoading ? (
             <div style={touchMutedStyle}>loading...</div>
@@ -367,7 +440,7 @@ useEffect(() => {
             <div style={touchMutedStyle}>no users in touch yet</div>
           ) : (
             <div style={touchListStyle}>
-              {touchUsers.map((user) => (
+              {touchUsers.map((user, idx) => (
                 <div key={user.id} style={touchUserRowStyle}>
                   <div style={touchAvatarStyle}>
                     {user.avatar_url ? (
@@ -383,6 +456,36 @@ useEffect(() => {
                     )}
                   </div>
                   <span style={{ opacity: 0.82 }}>{user.username}</span>
+                  {touchEditMode ? (
+                    <div style={touchEditActionsStyle}>
+                      <button
+                        type="button"
+                        onClick={() => moveTouchUser(idx, -1)}
+                        disabled={idx === 0 || touchSavingOrder}
+                        style={touchMiniButtonStyle}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveTouchUser(idx, 1)}
+                        disabled={idx === touchUsers.length - 1 || touchSavingOrder}
+                        style={touchMiniButtonStyle}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void removeTouchUser(user.id);
+                        }}
+                        disabled={touchRemovingUserId === user.id}
+                        style={{ ...touchMiniButtonStyle, opacity: 0.72 }}
+                      >
+                        {touchRemovingUserId === user.id ? "..." : "remove"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -753,6 +856,25 @@ const touchMutedStyle: React.CSSProperties = {
   opacity: 0.48,
 };
 
+const touchPanelHeadStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: 10,
+};
+
+const touchEditButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.16)",
+  borderRadius: 999,
+  background: "transparent",
+  color: "#eaeaea",
+  fontSize: 10,
+  letterSpacing: "0.08em",
+  padding: "3px 10px",
+  opacity: 0.7,
+  cursor: "pointer",
+};
+
 const touchListStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -764,6 +886,24 @@ const touchUserRowStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 10,
   minWidth: 0,
+};
+
+const touchEditActionsStyle: React.CSSProperties = {
+  marginLeft: "auto",
+  display: "flex",
+  gap: 6,
+};
+
+const touchMiniButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.16)",
+  borderRadius: 999,
+  background: "transparent",
+  color: "#eaeaea",
+  fontSize: 10,
+  letterSpacing: "0.04em",
+  padding: "2px 8px",
+  cursor: "pointer",
+  opacity: 0.78,
 };
 
 const touchAvatarStyle: React.CSSProperties = {

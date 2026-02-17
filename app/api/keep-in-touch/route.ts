@@ -15,6 +15,11 @@ type ProfileRow = {
   avatar_url: string | null;
 };
 
+type OrderRow = {
+  contact_user_id: string;
+  sort_order: number;
+};
+
 export async function GET(req: Request) {
   try {
     const user = await authenticateUser(req);
@@ -73,10 +78,36 @@ export async function GET(req: Request) {
       });
     }
 
-    const inTouch = Array.from(touchIds)
+    const touchIdList = Array.from(touchIds);
+    const orderMap: Record<string, number> = {};
+
+    if (touchIdList.length > 0) {
+      const { data: orders, error: ordersErr } = await supabaseAdmin
+        .from("keep_in_touch_orders")
+        .select("contact_user_id, sort_order")
+        .eq("user_id", user.id)
+        .in("contact_user_id", touchIdList);
+
+      if (ordersErr) {
+        return NextResponse.json({ error: "orders query failed" }, { status: 500 });
+      }
+
+      (orders as OrderRow[] | null)?.forEach((row) => {
+        orderMap[row.contact_user_id] = Number(row.sort_order) || 0;
+      });
+    }
+
+    const inTouch = touchIdList
       .map((id) => profilesMap[id])
       .filter((row): row is ProfileRow => Boolean(row))
-      .sort((a, b) => a.username.localeCompare(b.username, "en", { sensitivity: "base" }))
+      .sort((a, b) => {
+        const orderA =
+          typeof orderMap[a.id] === "number" ? orderMap[a.id] : Number.MAX_SAFE_INTEGER;
+        const orderB =
+          typeof orderMap[b.id] === "number" ? orderMap[b.id] : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.username.localeCompare(b.username, "en", { sensitivity: "base" });
+      })
       .map((row) => ({
         id: row.id,
         username: row.username,

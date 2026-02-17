@@ -115,9 +115,7 @@ export default function Main() {
   const [presentUserHover, setPresentUserHover] = useState<string | null>(null);
   const [touchPromptUser, setTouchPromptUser] = useState<string | null>(null);
   const [touchBusy, setTouchBusy] = useState(false);
-  const [touchStatusByUser, setTouchStatusByUser] = useState<
-    Record<string, string>
-  >({});
+  const [inTouchByName, setInTouchByName] = useState<Record<string, boolean>>({});
 
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
@@ -273,6 +271,40 @@ export default function Main() {
       cancelled = true;
     };
   }, [presentUsers]);
+
+  const loadTouchState = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        setInTouchByName({});
+        return;
+      }
+
+      const res = await fetch("/api/keep-in-touch", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const body = (await res.json().catch(() => ({}))) as {
+        inTouch?: Array<{ username: string }>;
+      };
+
+      if (!res.ok) return;
+
+      const nextMap: Record<string, boolean> = {};
+      (body.inTouch || []).forEach((row) => {
+        if (!row?.username) return;
+        nextMap[String(row.username).trim().toLowerCase()] = true;
+      });
+      setInTouchByName(nextMap);
+    } catch {
+      // ignore background load failures
+    }
+  }, []);
 
   /*  load user + messages */
   useEffect(() => {
@@ -689,6 +721,22 @@ export default function Main() {
     };
   }, [loadRuntimePresentUsers, userId]);
 
+  useEffect(() => {
+    if (!userId) return;
+
+    const run = () => {
+      void loadTouchState();
+    };
+
+    const first = window.setTimeout(run, 0);
+    const poll = window.setInterval(run, 15000);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(poll);
+    };
+  }, [loadTouchState, userId]);
+
   /*  send */
   async function sendMessage() {
     if (!input.trim() || !userId) return;
@@ -718,10 +766,6 @@ export default function Main() {
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
-        setTouchStatusByUser((prev) => ({
-          ...prev,
-          [name.toLowerCase()]: "session missing",
-        }));
         return;
       }
 
@@ -734,36 +778,15 @@ export default function Main() {
         body: JSON.stringify({ targetUsername: name }),
       });
 
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        status?: string;
-      };
+      await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setTouchStatusByUser((prev) => ({
-          ...prev,
-          [name.toLowerCase()]: body.error || "request failed",
-        }));
         return;
       }
-
-      let message = "request sent";
-      if (body.status === "accepted") {
-        message = "you are now in touch";
-      } else if (body.status === "pending") {
-        message = "request sent";
-      }
-
-      setTouchStatusByUser((prev) => ({
-        ...prev,
-        [name.toLowerCase()]: message,
-      }));
+      await loadTouchState();
       setTouchPromptUser(null);
     } catch {
-      setTouchStatusByUser((prev) => ({
-        ...prev,
-        [name.toLowerCase()]: "request failed",
-      }));
+      // no inline status toast for keep-in-touch action
     } finally {
       setTouchBusy(false);
     }
@@ -1912,7 +1935,7 @@ export default function Main() {
                 const isOpen = presentUserOpen === name;
                 const isHoveringAvatar = presentUserHover === name;
                 const showTouchPrompt = touchPromptUser === name && !isSelf;
-                const touchStatus = touchStatusByUser[normalizedName] ?? null;
+                const alreadyInTouch = inTouchByName[normalizedName] === true;
                 return (
                   <div
                     key={`present-${name}`}
@@ -2050,7 +2073,9 @@ export default function Main() {
                             letterSpacing: "0.04em",
                           }}
                         >
-                          keep in touch with {name}?
+                          {alreadyInTouch
+                            ? `already in touch with ${name}`
+                            : `keep in touch with ${name}?`}
                         </div>
 
                         <div
@@ -2060,26 +2085,28 @@ export default function Main() {
                             gap: 10,
                           }}
                         >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void requestKeepInTouch(name);
-                            }}
-                            disabled={touchBusy}
-                            style={{
-                              border: "1px solid rgba(255,255,255,0.26)",
-                              borderRadius: 999,
-                              background: "transparent",
-                              color: "#eaeaea",
-                              fontSize: 11,
-                              letterSpacing: "0.08em",
-                              padding: "4px 12px",
-                              cursor: touchBusy ? "default" : "pointer",
-                              opacity: touchBusy ? 0.5 : 0.84,
-                            }}
-                          >
-                            {touchBusy ? "..." : "yes"}
-                          </button>
+                          {!alreadyInTouch ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void requestKeepInTouch(name);
+                              }}
+                              disabled={touchBusy}
+                              style={{
+                                border: "1px solid rgba(255,255,255,0.26)",
+                                borderRadius: 999,
+                                background: "transparent",
+                                color: "#eaeaea",
+                                fontSize: 11,
+                                letterSpacing: "0.08em",
+                                padding: "4px 12px",
+                                cursor: touchBusy ? "default" : "pointer",
+                                opacity: touchBusy ? 0.5 : 0.84,
+                              }}
+                            >
+                              {touchBusy ? "..." : "yes"}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => setTouchPromptUser(null)}
@@ -2095,27 +2122,12 @@ export default function Main() {
                               opacity: 0.62,
                             }}
                           >
-                            no
+                            {alreadyInTouch ? "ok" : "no"}
                           </button>
                         </div>
                       </div>
                     ) : null}
 
-                    {touchStatus ? (
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: "50%",
-                          top: "calc(100% + 6px)",
-                          transform: "translateX(-50%)",
-                          fontSize: 10,
-                          opacity: 0.58,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {touchStatus}
-                      </div>
-                    ) : null}
                   </div>
                 );
               })
