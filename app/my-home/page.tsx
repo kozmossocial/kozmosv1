@@ -57,6 +57,9 @@ export default function MyHome() {
   const [touchHoverUserId, setTouchHoverUserId] = useState<string | null>(null);
   const [chatStartBusyUserId, setChatStartBusyUserId] = useState<string | null>(null);
   const [activeChats, setActiveChats] = useState<DirectChat[]>([]);
+  const [directChatEditMode, setDirectChatEditMode] = useState(false);
+  const [directChatSavingOrder, setDirectChatSavingOrder] = useState(false);
+  const [directChatRemovingId, setDirectChatRemovingId] = useState<string | null>(null);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
 
   //  AXY STATES
@@ -159,6 +162,68 @@ export default function MyHome() {
       await loadDirectChats();
     } finally {
       setChatStartBusyUserId(null);
+    }
+  }
+
+  async function persistDirectChatOrder(nextChats: DirectChat[]) {
+    setDirectChatSavingOrder(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      await fetch("/api/direct-chats/order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          orderedChatIds: nextChats.map((chat) => chat.chat_id),
+        }),
+      });
+    } finally {
+      setDirectChatSavingOrder(false);
+    }
+  }
+
+  function moveDirectChat(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= activeChats.length) return;
+
+    const nextChats = [...activeChats];
+    const swap = nextChats[index];
+    nextChats[index] = nextChats[nextIndex];
+    nextChats[nextIndex] = swap;
+    setActiveChats(nextChats);
+    void persistDirectChatOrder(nextChats);
+  }
+
+  async function removeDirectChat(chatId: string) {
+    if (!chatId || directChatRemovingId) return;
+    setDirectChatRemovingId(chatId);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      const res = await fetch("/api/direct-chats/remove", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ chatId }),
+      });
+
+      if (!res.ok) return;
+      setActiveChats((prev) => prev.filter((chat) => chat.chat_id !== chatId));
+    } finally {
+      setDirectChatRemovingId(null);
     }
   }
 
@@ -589,8 +654,12 @@ useEffect(() => {
       <div style={touchPanelStyle}>
         <div style={touchPanelHeadStyle}>
           <div style={{ ...labelStyle, marginBottom: 0 }}>1:1 chat</div>
-          <button type="button" style={touchEditButtonStyle}>
-            edit
+          <button
+            type="button"
+            onClick={() => setDirectChatEditMode((prev) => !prev)}
+            style={touchEditButtonStyle}
+          >
+            {directChatEditMode ? "done" : "edit"}
           </button>
         </div>
 
@@ -598,7 +667,7 @@ useEffect(() => {
           <div style={touchMutedStyle}>no active chats</div>
         ) : (
           <div style={touchListStyle}>
-            {activeChats.map((chat) => (
+            {activeChats.map((chat, idx) => (
               <div key={chat.chat_id} style={touchUserRowStyle}>
                 <div style={touchAvatarStyle}>
                   {chat.avatar_url ? (
@@ -614,6 +683,36 @@ useEffect(() => {
                   )}
                 </div>
                 <span style={{ opacity: 0.82 }}>{chat.username}</span>
+                {directChatEditMode ? (
+                  <div style={touchEditActionsStyle}>
+                    <button
+                      type="button"
+                      onClick={() => moveDirectChat(idx, -1)}
+                      disabled={idx === 0 || directChatSavingOrder}
+                      style={touchMiniButtonStyle}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveDirectChat(idx, 1)}
+                      disabled={idx === activeChats.length - 1 || directChatSavingOrder}
+                      style={touchMiniButtonStyle}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void removeDirectChat(chat.chat_id);
+                      }}
+                      disabled={directChatRemovingId === chat.chat_id}
+                      style={{ ...touchMiniButtonStyle, opacity: 0.72 }}
+                    >
+                      {directChatRemovingId === chat.chat_id ? "..." : "remove"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

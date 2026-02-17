@@ -15,6 +15,11 @@ type ProfileRow = {
   avatar_url: string | null;
 };
 
+type DirectChatOrderRow = {
+  chat_id: string;
+  sort_order: number;
+};
+
 export async function GET(req: Request) {
   try {
     const user = await authenticateUser(req);
@@ -33,6 +38,24 @@ export async function GET(req: Request) {
     }
 
     const rows = (chats || []) as DirectChatRow[];
+    const orderMap: Record<string, number> = {};
+
+    if (rows.length > 0) {
+      const chatIds = rows.map((row) => row.id);
+      const { data: orders, error: orderErr } = await supabaseAdmin
+        .from("direct_chat_orders")
+        .select("chat_id, sort_order")
+        .eq("user_id", user.id)
+        .in("chat_id", chatIds);
+
+      if (orderErr) {
+        return NextResponse.json({ error: "chat order query failed" }, { status: 500 });
+      }
+
+      (orders as DirectChatOrderRow[] | null)?.forEach((row) => {
+        orderMap[row.chat_id] = Number(row.sort_order) || 0;
+      });
+    }
 
     const otherIds = Array.from(
       new Set(
@@ -82,7 +105,19 @@ export async function GET(req: Request) {
           avatar_url: string | null;
           updated_at: string;
         } => Boolean(row)
-      );
+      )
+      .sort((a, b) => {
+        const orderA =
+          typeof orderMap[a.chat_id] === "number"
+            ? orderMap[a.chat_id]
+            : Number.MAX_SAFE_INTEGER;
+        const orderB =
+          typeof orderMap[b.chat_id] === "number"
+            ? orderMap[b.chat_id]
+            : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        return Date.parse(b.updated_at) - Date.parse(a.updated_at);
+      });
 
     return NextResponse.json({ chats: list });
   } catch {
