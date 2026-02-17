@@ -866,16 +866,16 @@ body {
   }
 
   .home-hero-runtime-mobile.runtime-mobile-expanded {
-    position: fixed !important;
-    left: 50% !important;
-    bottom: max(12px, env(safe-area-inset-bottom)) !important;
-    transform: translateX(-50%) !important;
+    position: relative !important;
+    left: auto !important;
+    bottom: auto !important;
+    transform: none !important;
     width: min(320px, 94vw) !important;
     max-height: min(62vh, 520px) !important;
     overflow-y: auto !important;
     overscroll-behavior: contain;
-    margin-top: 0 !important;
-    z-index: 120 !important;
+    margin-top: 26px !important;
+    z-index: 90 !important;
   }
 
   .runtime-connect-desktop {
