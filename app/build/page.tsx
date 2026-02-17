@@ -554,23 +554,31 @@ export default function BuildPage() {
       </div>
 
       {!isDesktop ? (
-        <section
+        <div
           style={{
-            marginTop: 120,
-            maxWidth: 700,
-            border: "1px solid rgba(255,255,255,0.16)",
-            borderRadius: 12,
-            padding: 18,
-            background: "rgba(255,255,255,0.03)",
+            marginTop: 140,
+            display: "flex",
+            justifyContent: "center",
           }}
         >
-          <div style={{ letterSpacing: "0.12em", opacity: 0.86 }}>user build</div>
-          <div style={{ marginTop: 10, opacity: 0.72, lineHeight: 1.6 }}>
+          <section
+            style={{
+              width: "fit-content",
+              maxWidth: "min(92vw, 420px)",
+              textAlign: "center",
+              fontSize: 12,
+              letterSpacing: "0.06em",
+              opacity: 0.84,
+              padding: "10px 14px",
+              borderRadius: 10,
+              background: "rgba(8,8,8,0.72)",
+              boxShadow: "0 0 14px rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.18)",
+            }}
+          >
             not available for mobile device use.
-            <br />
-            please open this page from a desktop browser.
-          </div>
-        </section>
+          </section>
+        </div>
       ) : (
         <section
           style={{
