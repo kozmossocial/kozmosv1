@@ -2048,6 +2048,7 @@ export default function Main() {
 
   return (
     <main
+      className="main-page-shell"
       style={{
         minHeight: "100vh",
         background: "#0b0b0b",
