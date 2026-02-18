@@ -147,6 +147,7 @@ const NIGHT_PROTOCOL_ROLE_LABEL: Record<
 const VS_ARENA_LIMIT = 48;
 const VS_MATCH_SECONDS = 60;
 const VS_STEP_SECONDS = 0.1;
+const VS_MULTI_STEP_SECONDS = 0.06;
 
 type VsPlayer = {
   id: string;
@@ -1691,12 +1692,12 @@ export default function Main() {
         if (idx < 0) return prev;
         const player = prev.players[idx];
         const nextX = vsClamp(
-          player.x + (horizontal / norm) * speed * VS_STEP_SECONDS,
+          player.x + (horizontal / norm) * speed * VS_MULTI_STEP_SECONDS,
           -VS_ARENA_LIMIT + 2,
           VS_ARENA_LIMIT - 2
         );
         const nextY = vsClamp(
-          player.y + (vertical / norm) * speed * VS_STEP_SECONDS,
+          player.y + (vertical / norm) * speed * VS_MULTI_STEP_SECONDS,
           -VS_ARENA_LIMIT + 2,
           VS_ARENA_LIMIT - 2
         );
@@ -1709,7 +1710,7 @@ export default function Main() {
           players,
         };
       });
-    }, VS_STEP_SECONDS * 1000);
+    }, VS_MULTI_STEP_SECONDS * 1000);
 
     return () => window.clearInterval(timer);
   }, [
@@ -1784,7 +1785,7 @@ export default function Main() {
   }, [activePlay, playOpen, quiteSwarmRunning]);
 
   useEffect(() => {
-    if (!playOpen || activePlay !== QUITE_SWARM_MODE) {
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !isQuiteSwarmMultiMode) {
       setQuiteSwarmRuntimePlayers([]);
       setQuiteSwarmRoom(null);
       return;
@@ -1848,19 +1849,93 @@ export default function Main() {
 
     const refreshRuntimeSwarm = () => {
       const now = Date.now();
-      if (now - quiteSwarmLastRuntimeLoadRef.current < 140) return;
+      if (now - quiteSwarmLastRuntimeLoadRef.current < 65) return;
       quiteSwarmLastRuntimeLoadRef.current = now;
       void loadRuntimeSwarm();
     };
 
     refreshRuntimeSwarm();
-    const timer = window.setInterval(refreshRuntimeSwarm, 320);
+    const timer = window.setInterval(refreshRuntimeSwarm, 120);
     const presenceChannel = supabase
       .channel("quite-swarm-runtime-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "runtime_presence" },
-        refreshRuntimeSwarm
+        (payload) => {
+          const eventType = String(
+            (payload as { eventType?: string }).eventType || ""
+          ).toUpperCase();
+          const nextRow = (payload as { new?: Record<string, unknown> }).new;
+          const oldRow = (payload as { old?: Record<string, unknown> }).old;
+          const row = nextRow || oldRow;
+          const rowUserId = String(row?.user_id || "").trim();
+          if (!rowUserId) {
+            refreshRuntimeSwarm();
+            return;
+          }
+
+          if (eventType === "DELETE") {
+            setQuiteSwarmRuntimePlayers((prev) =>
+              prev.filter((item) => item.userId !== rowUserId)
+            );
+            return;
+          }
+
+          const active = Boolean(nextRow?.swarm_active);
+          if (!active) {
+            setQuiteSwarmRuntimePlayers((prev) =>
+              prev.filter((item) => item.userId !== rowUserId)
+            );
+            return;
+          }
+
+          const rawX = nextRow?.swarm_x;
+          const rawY = nextRow?.swarm_y;
+          const x =
+            typeof rawX === "number" && Number.isFinite(rawX) ? Number(rawX) : 0;
+          const y =
+            typeof rawY === "number" && Number.isFinite(rawY) ? Number(rawY) : 0;
+          const username =
+            String(nextRow?.username || "").trim() ||
+            String(oldRow?.username || "").trim() ||
+            "user";
+          const updatedAt = String(nextRow?.swarm_updated_at || "");
+          const lastSeenAt = String(nextRow?.last_seen_at || "");
+
+          setQuiteSwarmRuntimePlayers((prev) => {
+            const idx = prev.findIndex((item) => item.userId === rowUserId);
+            if (idx < 0) {
+              return [
+                {
+                  userId: rowUserId,
+                  username,
+                  color: "#7df9ff",
+                  x,
+                  y,
+                  active: true,
+                  updatedAt,
+                  lastSeenAt,
+                },
+                ...prev,
+              ];
+            }
+            const copy = [...prev];
+            copy[idx] = {
+              ...copy[idx],
+              username: username || copy[idx].username,
+              x,
+              y,
+              active: true,
+              updatedAt: updatedAt || copy[idx].updatedAt,
+              lastSeenAt: lastSeenAt || copy[idx].lastSeenAt,
+            };
+            return copy;
+          });
+
+          if (eventType === "INSERT") {
+            refreshRuntimeSwarm();
+          }
+        }
       )
       .subscribe();
     const roomChannel = supabase
@@ -1880,7 +1955,7 @@ export default function Main() {
       setQuiteSwarmRuntimePlayers([]);
       setQuiteSwarmRoom(null);
     };
-  }, [activePlay, playOpen]);
+  }, [activePlay, isQuiteSwarmMultiMode, playOpen]);
 
   useEffect(() => {
     if (!playOpen || activePlay !== QUITE_SWARM_MODE || !isQuiteSwarmMultiMode) {
@@ -1894,7 +1969,7 @@ export default function Main() {
     if (!me) return;
 
     const now = Date.now();
-    if (now - quiteSwarmLastSyncRef.current < 120) return;
+    if (now - quiteSwarmLastSyncRef.current < 60) return;
     quiteSwarmLastSyncRef.current = now;
 
     void fetchQuiteSwarmJson("/api/quite-swarm/state", {
@@ -5250,52 +5325,57 @@ export default function Main() {
                         </div>
                       );
                     })}
-                    {quiteSwarmRuntimePlayers
-                      .filter(
-                        (row) =>
-                          row.userId !== userId &&
-                          row.username.trim().toLowerCase() !==
-                            currentUsername.trim().toLowerCase()
-                      )
-                      .map((row) => {
-                        const x =
-                          ((row.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
-                        const y =
-                          ((row.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
-                        return (
-                          <div key={`runtime-swarm-${row.userId}`}>
-                            <div
-                              style={{
-                                position: "absolute",
-                                left: `${x}%`,
-                                top: `${y}%`,
-                                width: 12,
-                                height: 12,
-                                transform: "translate(-50%, -50%)",
-                                borderRadius: "999px",
-                                border: "1px solid rgba(220,240,255,0.76)",
-                                background: row.color,
-                                boxShadow: `0 0 12px ${row.color}`,
-                                opacity: 0.9,
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "absolute",
-                                left: `${x}%`,
-                                top: `calc(${y}% - 11px)`,
-                                transform: "translate(-50%, -100%)",
-                                fontSize: 9,
-                                opacity: 0.72,
-                                whiteSpace: "nowrap",
-                                textShadow: "0 0 6px rgba(0,0,0,0.8)",
-                              }}
-                            >
-                              {row.username} rt
-                            </div>
-                          </div>
-                        );
-                      })}
+                    {isQuiteSwarmMultiMode
+                      ? quiteSwarmRuntimePlayers
+                          .filter(
+                            (row) =>
+                              row.userId !== userId &&
+                              row.username.trim().toLowerCase() !==
+                                currentUsername.trim().toLowerCase()
+                          )
+                          .map((row) => {
+                            const x =
+                              ((row.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                            const y =
+                              ((row.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                            return (
+                              <div key={`runtime-swarm-${row.userId}`}>
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    left: `${x}%`,
+                                    top: `${y}%`,
+                                    width: 12,
+                                    height: 12,
+                                    transform: "translate(-50%, -50%)",
+                                    borderRadius: "999px",
+                                    border: "1px solid rgba(220,240,255,0.76)",
+                                    background: row.color,
+                                    boxShadow: `0 0 12px ${row.color}`,
+                                    opacity: 0.9,
+                                    transition:
+                                      "left 90ms linear, top 90ms linear, opacity 120ms ease",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    left: `${x}%`,
+                                    top: `calc(${y}% - 11px)`,
+                                    transform: "translate(-50%, -100%)",
+                                    fontSize: 9,
+                                    opacity: 0.72,
+                                    whiteSpace: "nowrap",
+                                    textShadow: "0 0 6px rgba(0,0,0,0.8)",
+                                    transition: "left 90ms linear, top 90ms linear",
+                                  }}
+                                >
+                                  {row.username} rt
+                                </div>
+                              </div>
+                            );
+                          })
+                      : null}
                   </div>
 
                   <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 8 }}>
