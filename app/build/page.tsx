@@ -37,16 +37,6 @@ type SpaceAccessEntry = {
 
 const LANGUAGE_OPTIONS = ["text", "ts", "tsx", "js", "json", "md", "sql", "py"];
 
-const BUILD_QUICK_STEPS = [
-  "Create a subspace, then pick it from the list.",
-  "Add files (for web preview, include index.html and optionally .css/.js files).",
-  "Save often. Preview updates live (or use refresh/open tab).",
-  "Set public/private visibility as owner.",
-  "Grant or revoke edit rights from in-touch users.",
-  "Publish room writes/updates space.room.json for matrix/world integration.",
-  "Use Builder Axy for planning, file structure, debugging, and next-step prompts.",
-];
-
 type AxyTurn = {
   id: string;
   role: "user" | "assistant";
@@ -931,50 +921,29 @@ export default function BuildPage() {
         </div>
       </div>
 
-      <section
+      <div
         style={{
           marginTop: 10,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
           border: "1px solid rgba(121,193,255,0.28)",
-          borderRadius: 10,
-          background: "rgba(6,14,22,0.52)",
-          padding: "10px 12px",
+          borderRadius: 9,
+          background: "rgba(6,14,22,0.42)",
+          padding: "6px 10px",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-            marginBottom: 8,
-          }}
+        <span style={{ fontSize: 11, letterSpacing: "0.08em", opacity: 0.76 }}>
+          user manual
+        </span>
+        <span
+          className="kozmos-tap"
+          style={{ fontSize: 11, opacity: 0.9, cursor: "pointer" }}
+          onClick={() => router.push("/build/manual")}
         >
-          <div style={{ fontSize: 12, letterSpacing: "0.08em", opacity: 0.85 }}>
-            user build quick guide
-          </div>
-          <span
-            style={{ fontSize: 11, opacity: 0.78, cursor: "pointer" }}
-            onClick={() => router.push("/build/manual")}
-          >
-            open full manual
-          </span>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: 6,
-            fontSize: 11,
-            opacity: 0.74,
-            lineHeight: 1.45,
-          }}
-        >
-          {BUILD_QUICK_STEPS.map((step, idx) => (
-            <div key={`build-step-${idx}`}>{idx + 1}. {step}</div>
-          ))}
-        </div>
-      </section>
+          open →
+        </span>
+      </div>
 
       {!isDesktop ? (
         <div
@@ -1005,7 +974,7 @@ export default function BuildPage() {
       ) : (
         <section
           style={{
-            marginTop: 100,
+            marginTop: 26,
             border: "1px solid rgba(108,255,150,0.24)",
             borderRadius: 12,
             background: "rgba(5,14,9,0.72)",
