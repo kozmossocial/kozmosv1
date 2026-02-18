@@ -4006,6 +4006,7 @@ export default function Main() {
             }}
           >
             <span
+              suppressHydrationWarning
               aria-hidden
               style={{
                 position: "absolute",
@@ -4030,6 +4031,7 @@ export default function Main() {
               {backChatLabel}
             </span>
             <span
+              suppressHydrationWarning
               aria-hidden
               style={{
                 position: "absolute",
@@ -4054,6 +4056,7 @@ export default function Main() {
               {farLeftChatLabel}
             </span>
             <button
+              suppressHydrationWarning
               type="button"
               onClick={() => selectChatMode(leftChatMode)}
               onPointerDown={(e) => e.stopPropagation()}
@@ -4083,6 +4086,7 @@ export default function Main() {
               {leftChatLabel}
             </button>
             <div
+              suppressHydrationWarning
               style={{
                 position: "absolute",
                 left: "50%",
@@ -4104,6 +4108,7 @@ export default function Main() {
               {activeChatLabel}
             </div>
             <button
+              suppressHydrationWarning
               type="button"
               onClick={() => selectChatMode(rightChatMode)}
               onPointerDown={(e) => e.stopPropagation()}
@@ -4133,6 +4138,7 @@ export default function Main() {
               {rightChatLabel}
             </button>
             <span
+              suppressHydrationWarning
               aria-hidden
               style={{
                 position: "absolute",
