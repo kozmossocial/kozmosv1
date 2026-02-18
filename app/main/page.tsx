@@ -205,6 +205,23 @@ type QuiteSwarmRuntimePlayer = {
   lastSeenAt: string;
 };
 
+type QuiteSwarmRoomState = {
+  id: string;
+  status: "idle" | "running";
+  seed: number | null;
+  startedAt: string;
+  hostUserId: string;
+  updatedAt: string;
+};
+
+type QuiteSwarmSharedEnemy = {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+  color: string;
+};
+
 const VS_PLAYER_COLORS = [
   "#7df9ff",
   "#8cb8ff",
@@ -555,6 +572,46 @@ function createPuzzle() {
   return { board, goal };
 }
 
+function seededUnit(seed: number, index: number) {
+  const raw = Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453;
+  return raw - Math.floor(raw);
+}
+
+function buildQuiteSwarmSharedEnemies(
+  seed: number,
+  elapsedSeconds: number
+): QuiteSwarmSharedEnemy[] {
+  const wave = 1 + Math.floor(Math.max(0, elapsedSeconds) / 12);
+  const count = Math.min(42, 8 + wave * 3);
+  const enemies: QuiteSwarmSharedEnemy[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const base = seededUnit(seed, index + 1);
+    const swing = seededUnit(seed, index + 101);
+    const speed = 0.42 + seededUnit(seed, index + 501) * 0.62;
+    const spin = seededUnit(seed, index + 1201) > 0.5 ? 1 : -1;
+    const angle = base * Math.PI * 2 + elapsedSeconds * speed * spin;
+    const radiusBase = 11 + (index % 9) * 3.2;
+    const radiusPulse = Math.sin(elapsedSeconds * (0.7 + swing * 0.4) + index) * 5.8;
+    const orbitRadius = vsClamp(
+      radiusBase + radiusPulse,
+      8,
+      VS_ARENA_LIMIT - 5
+    );
+    const x = Math.cos(angle) * orbitRadius;
+    const y = Math.sin(angle) * orbitRadius;
+    const hot = (Math.sin(elapsedSeconds * 1.8 + index * 0.8) + 1) / 2;
+    const color = hot > 0.55 ? "rgba(255,116,128,0.95)" : "rgba(255,165,90,0.9)";
+    enemies.push({
+      id: `shared-${index}`,
+      x,
+      y,
+      radius: 8 + hot * 2.6,
+      color,
+    });
+  }
+  return enemies;
+}
+
 export default function Main() {
   const router = useRouter();
 
@@ -662,12 +719,18 @@ export default function Main() {
   );
   const [puzzleMoves, setPuzzleMoves] = useState(0);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [quiteSwarmMode, setQuiteSwarmMode] = useState<"single" | "multi">(
+    "multi"
+  );
   const [vsSession, setVsSession] = useState<VsSession>(() =>
     createVsSession(["user"], false)
   );
   const [quiteSwarmRuntimePlayers, setQuiteSwarmRuntimePlayers] = useState<
     QuiteSwarmRuntimePlayer[]
   >([]);
+  const [quiteSwarmRoom, setQuiteSwarmRoom] =
+    useState<QuiteSwarmRoomState | null>(null);
+  const [quiteSwarmNowMs, setQuiteSwarmNowMs] = useState(() => Date.now());
   const [nightProtocolSessionId, setNightProtocolSessionId] = useState("");
   const [nightProtocolSessionCodeInput, setNightProtocolSessionCodeInput] =
     useState("");
@@ -826,6 +889,60 @@ export default function Main() {
     () => uniqueNames([currentUsername, ...presentUsers]),
     [currentUsername, presentUsers]
   );
+  const isQuiteSwarmMultiMode = quiteSwarmMode === "multi";
+  const quiteSwarmRoomStartMs = useMemo(() => {
+    if (!quiteSwarmRoom?.startedAt) return 0;
+    const parsed = Date.parse(quiteSwarmRoom.startedAt);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }, [quiteSwarmRoom?.startedAt]);
+  const quiteSwarmMultiRunning = Boolean(
+    isQuiteSwarmMultiMode &&
+      quiteSwarmRoom?.status === "running" &&
+      quiteSwarmRoomStartMs > 0 &&
+      quiteSwarmNowMs >= quiteSwarmRoomStartMs
+  );
+  const quiteSwarmMultiElapsedSeconds = quiteSwarmMultiRunning
+    ? Math.max(0, (quiteSwarmNowMs - quiteSwarmRoomStartMs) / 1000)
+    : 0;
+  const quiteSwarmStartCountdownSeconds =
+    isQuiteSwarmMultiMode &&
+    quiteSwarmRoom?.status === "running" &&
+    quiteSwarmRoomStartMs > quiteSwarmNowMs
+      ? Math.ceil((quiteSwarmRoomStartMs - quiteSwarmNowMs) / 1000)
+      : 0;
+  const quiteSwarmMultiWave = 1 + Math.floor(quiteSwarmMultiElapsedSeconds / 12);
+  const quiteSwarmMultiTimeLeft = Math.max(
+    0,
+    VS_MATCH_SECONDS - quiteSwarmMultiElapsedSeconds
+  );
+  const quiteSwarmSharedEnemies = useMemo(() => {
+    if (!isQuiteSwarmMultiMode) return [] as QuiteSwarmSharedEnemy[];
+    if (!quiteSwarmMultiRunning) return [] as QuiteSwarmSharedEnemy[];
+    if (typeof quiteSwarmRoom?.seed !== "number") return [] as QuiteSwarmSharedEnemy[];
+    return buildQuiteSwarmSharedEnemies(
+      quiteSwarmRoom.seed,
+      quiteSwarmMultiElapsedSeconds
+    );
+  }, [
+    isQuiteSwarmMultiMode,
+    quiteSwarmMultiElapsedSeconds,
+    quiteSwarmMultiRunning,
+    quiteSwarmRoom?.seed,
+  ]);
+  const quiteSwarmRunning = isQuiteSwarmMultiMode
+    ? quiteSwarmMultiRunning
+    : vsSession.running;
+  const quiteSwarmWave = isQuiteSwarmMultiMode ? quiteSwarmMultiWave : vsSession.wave;
+  const quiteSwarmTimeLeft = isQuiteSwarmMultiMode
+    ? quiteSwarmMultiTimeLeft
+    : vsSession.timeLeft;
+  const quiteSwarmModeratorLine = isQuiteSwarmMultiMode
+    ? quiteSwarmRoom?.status === "running"
+      ? quiteSwarmMultiRunning
+        ? `Axy moderator: synchronized swarm online. ${quiteSwarmRuntimePlayers.length} live pilots.`
+        : "Axy moderator: synchronized start pulse incoming."
+      : "Axy moderator: multiplayer room idle. host can trigger synced start."
+    : vsSession.moderatorLine;
   const nightProtocolAliveTargets = useMemo(() => {
     if (!nightProtocolState) return [];
     return nightProtocolState.players.filter((player) => player.isAlive);
@@ -849,6 +966,15 @@ export default function Main() {
   useEffect(() => {
     chatModeRef.current = chatMode;
   }, [chatMode]);
+
+  useEffect(() => {
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !isQuiteSwarmMultiMode) return;
+    setQuiteSwarmNowMs(Date.now());
+    const timer = window.setInterval(() => {
+      setQuiteSwarmNowMs(Date.now());
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [activePlay, isQuiteSwarmMultiMode, playOpen]);
 
   useEffect(() => {
     if (!presentUserOpen) return;
@@ -1517,7 +1643,14 @@ export default function Main() {
   }, [playOpen, activePlay, orbitRunning]);
 
   useEffect(() => {
-    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !vsSession.running) return;
+    if (
+      !playOpen ||
+      activePlay !== QUITE_SWARM_MODE ||
+      !vsSession.running ||
+      isQuiteSwarmMultiMode
+    ) {
+      return;
+    }
 
     const timer = window.setInterval(() => {
       const controls = vsMoveKeysRef.current;
@@ -1530,7 +1663,62 @@ export default function Main() {
     }, VS_STEP_SECONDS * 1000);
 
     return () => window.clearInterval(timer);
-  }, [playOpen, activePlay, currentUsername, vsSession.running]);
+  }, [activePlay, currentUsername, isQuiteSwarmMultiMode, playOpen, vsSession.running]);
+
+  useEffect(() => {
+    if (
+      !playOpen ||
+      activePlay !== QUITE_SWARM_MODE ||
+      !isQuiteSwarmMultiMode ||
+      !quiteSwarmMultiRunning
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const controls = vsMoveKeysRef.current;
+      const horizontal =
+        Number(Boolean(controls.right)) - Number(Boolean(controls.left));
+      const vertical = Number(Boolean(controls.down)) - Number(Boolean(controls.up));
+      if (horizontal === 0 && vertical === 0) return;
+      const norm = Math.hypot(horizontal, vertical) || 1;
+      const speed = 16;
+      setVsSession((prev) => {
+        const idx = prev.players.findIndex(
+          (player) =>
+            player.name.trim().toLowerCase() === currentUsername.trim().toLowerCase()
+        );
+        if (idx < 0) return prev;
+        const player = prev.players[idx];
+        const nextX = vsClamp(
+          player.x + (horizontal / norm) * speed * VS_STEP_SECONDS,
+          -VS_ARENA_LIMIT + 2,
+          VS_ARENA_LIMIT - 2
+        );
+        const nextY = vsClamp(
+          player.y + (vertical / norm) * speed * VS_STEP_SECONDS,
+          -VS_ARENA_LIMIT + 2,
+          VS_ARENA_LIMIT - 2
+        );
+        if (nextX === player.x && nextY === player.y && prev.running) return prev;
+        const players = [...prev.players];
+        players[idx] = { ...player, x: nextX, y: nextY };
+        return {
+          ...prev,
+          running: true,
+          players,
+        };
+      });
+    }, VS_STEP_SECONDS * 1000);
+
+    return () => window.clearInterval(timer);
+  }, [
+    activePlay,
+    currentUsername,
+    isQuiteSwarmMultiMode,
+    playOpen,
+    quiteSwarmMultiRunning,
+  ]);
 
   useEffect(() => {
     if (activePlay !== QUITE_SWARM_MODE || vsSession.running) return;
@@ -1546,7 +1734,7 @@ export default function Main() {
   }, [activePlay, currentUsername, vsSession.players, vsSession.running]);
 
   useEffect(() => {
-    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !vsSession.running) return;
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !quiteSwarmRunning) return;
 
     function resetKeys() {
       vsMoveKeysRef.current.up = false;
@@ -1593,11 +1781,12 @@ export default function Main() {
       window.removeEventListener("blur", resetKeys);
       resetKeys();
     };
-  }, [playOpen, activePlay, vsSession.running]);
+  }, [activePlay, playOpen, quiteSwarmRunning]);
 
   useEffect(() => {
     if (!playOpen || activePlay !== QUITE_SWARM_MODE) {
       setQuiteSwarmRuntimePlayers([]);
+      setQuiteSwarmRoom(null);
       return;
     }
 
@@ -1625,9 +1814,34 @@ export default function Main() {
           }))
           .filter((row) => row.userId.length > 0 && row.active);
         setQuiteSwarmRuntimePlayers(parsed);
+        const roomRow =
+          body.room && typeof body.room === "object"
+            ? (body.room as Record<string, unknown>)
+            : null;
+        if (roomRow) {
+          const status =
+            String(roomRow.status || "idle").toLowerCase() === "running"
+              ? "running"
+              : "idle";
+          const seed =
+            typeof roomRow.seed === "number" && Number.isFinite(roomRow.seed)
+              ? Number(roomRow.seed)
+              : null;
+          setQuiteSwarmRoom({
+            id: String(roomRow.id || "main"),
+            status,
+            seed,
+            startedAt: String(roomRow.startedAt || ""),
+            hostUserId: String(roomRow.hostUserId || ""),
+            updatedAt: String(roomRow.updatedAt || ""),
+          });
+        } else {
+          setQuiteSwarmRoom(null);
+        }
       } catch {
         if (!cancelled) {
           setQuiteSwarmRuntimePlayers([]);
+          setQuiteSwarmRoom(null);
         }
       }
     };
@@ -1641,7 +1855,7 @@ export default function Main() {
 
     refreshRuntimeSwarm();
     const timer = window.setInterval(refreshRuntimeSwarm, 320);
-    const channel = supabase
+    const presenceChannel = supabase
       .channel("quite-swarm-runtime-realtime")
       .on(
         "postgres_changes",
@@ -1649,17 +1863,29 @@ export default function Main() {
         refreshRuntimeSwarm
       )
       .subscribe();
+    const roomChannel = supabase
+      .channel("quite-swarm-room-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "runtime_quite_swarm_room" },
+        refreshRuntimeSwarm
+      )
+      .subscribe();
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
-      supabase.removeChannel(channel);
+      supabase.removeChannel(presenceChannel);
+      supabase.removeChannel(roomChannel);
       setQuiteSwarmRuntimePlayers([]);
+      setQuiteSwarmRoom(null);
     };
   }, [activePlay, playOpen]);
 
   useEffect(() => {
-    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !vsSession.running) return;
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !isQuiteSwarmMultiMode) {
+      return;
+    }
 
     const me = vsSession.players.find(
       (player) =>
@@ -1675,15 +1901,41 @@ export default function Main() {
       method: "POST",
       body: JSON.stringify({ x: me.x, y: me.y, active: true }),
     }).catch(() => null);
-  }, [activePlay, currentUsername, playOpen, vsSession.players, vsSession.running]);
+  }, [activePlay, currentUsername, isQuiteSwarmMultiMode, playOpen, vsSession.players]);
 
   useEffect(() => {
-    if (playOpen && activePlay === QUITE_SWARM_MODE && vsSession.running) return;
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !isQuiteSwarmMultiMode) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      const me = vsSession.players.find(
+        (player) =>
+          player.name.trim().toLowerCase() === currentUsername.trim().toLowerCase()
+      );
+      if (!me) return;
+      void fetchQuiteSwarmJson("/api/quite-swarm/state", {
+        method: "POST",
+        body: JSON.stringify({ x: me.x, y: me.y, active: true }),
+      }).catch(() => null);
+    }, 12_000);
+    return () => window.clearInterval(timer);
+  }, [activePlay, currentUsername, isQuiteSwarmMultiMode, playOpen, vsSession.players]);
+
+  useEffect(() => {
+    if (playOpen && activePlay === QUITE_SWARM_MODE && isQuiteSwarmMultiMode) return;
+    if (
+      playOpen &&
+      activePlay === QUITE_SWARM_MODE &&
+      !isQuiteSwarmMultiMode &&
+      vsSession.running
+    ) {
+      return;
+    }
 
     void fetchQuiteSwarmJson("/api/quite-swarm/state", {
       method: "DELETE",
     }).catch(() => null);
-  }, [activePlay, playOpen, vsSession.running]);
+  }, [activePlay, isQuiteSwarmMultiMode, playOpen, vsSession.running]);
 
   const syncSharedStickToBottom = useCallback(() => {
     const el = sharedMessagesRef.current;
@@ -2235,13 +2487,84 @@ export default function Main() {
     setPuzzleMoves((prev) => prev + 1);
   }
 
-  function startAxyVampire() {
+  function switchQuiteSwarmMode(nextMode: "single" | "multi") {
+    setQuiteSwarmMode(nextMode);
+    setVsSession(createVsSession([currentUsername], false));
+    setQuiteSwarmNowMs(Date.now());
+  }
+
+  async function startAxyVampire() {
+    if (isQuiteSwarmMultiMode) {
+      const me = vsSession.players.find(
+        (player) =>
+          player.name.trim().toLowerCase() === currentUsername.trim().toLowerCase()
+      );
+      const body = await fetchQuiteSwarmJson("/api/quite-swarm/state", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "start_room",
+          x: me?.x ?? 0,
+          y: me?.y ?? 0,
+        }),
+      }).catch(() => null);
+      const roomRow =
+        body && body.room && typeof body.room === "object"
+          ? (body.room as Record<string, unknown>)
+          : null;
+      if (roomRow) {
+        setQuiteSwarmRoom({
+          id: String(roomRow.id || "main"),
+          status:
+            String(roomRow.status || "idle").toLowerCase() === "running"
+              ? "running"
+              : "idle",
+          seed:
+            typeof roomRow.seed === "number" && Number.isFinite(roomRow.seed)
+              ? Number(roomRow.seed)
+              : null,
+          startedAt: String(roomRow.startedAt || ""),
+          hostUserId: String(roomRow.hostUserId || ""),
+          updatedAt: String(roomRow.updatedAt || ""),
+        });
+      }
+      setQuiteSwarmNowMs(Date.now());
+      return;
+    }
+
     const roster = uniqueNames([currentUsername]);
     if (roster.length === 0) return;
     setVsSession(createVsSession(roster, true));
   }
 
-  function stopAxyVampire() {
+  async function stopAxyVampire() {
+    if (isQuiteSwarmMultiMode) {
+      const body = await fetchQuiteSwarmJson("/api/quite-swarm/state", {
+        method: "POST",
+        body: JSON.stringify({ action: "stop_room" }),
+      }).catch(() => null);
+      const roomRow =
+        body && body.room && typeof body.room === "object"
+          ? (body.room as Record<string, unknown>)
+          : null;
+      if (roomRow) {
+        setQuiteSwarmRoom({
+          id: String(roomRow.id || "main"),
+          status:
+            String(roomRow.status || "idle").toLowerCase() === "running"
+              ? "running"
+              : "idle",
+          seed:
+            typeof roomRow.seed === "number" && Number.isFinite(roomRow.seed)
+              ? Number(roomRow.seed)
+              : null,
+          startedAt: String(roomRow.startedAt || ""),
+          hostUserId: String(roomRow.hostUserId || ""),
+          updatedAt: String(roomRow.updatedAt || ""),
+        });
+      }
+      return;
+    }
+
     setVsSession((prev) => ({
       ...prev,
       running: false,
@@ -4733,12 +5056,48 @@ export default function Main() {
                   >
                     <span>Axy mod: survive the quiet swarm</span>
                     <span style={{ opacity: 0.74 }}>
-                      wave {vsSession.wave} · {Math.ceil(vsSession.timeLeft)}s
+                      wave {quiteSwarmWave} · {Math.ceil(quiteSwarmTimeLeft)}s
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      marginBottom: 8,
+                      fontSize: 10,
+                    }}
+                  >
+                    <span
+                      className="kozmos-tap"
+                      style={{
+                        cursor: "pointer",
+                        opacity: isQuiteSwarmMultiMode ? 0.62 : 0.95,
+                      }}
+                      onClick={() => switchQuiteSwarmMode("single")}
+                    >
+                      singleplayer
+                    </span>
+                    <span
+                      className="kozmos-tap"
+                      style={{
+                        cursor: "pointer",
+                        opacity: isQuiteSwarmMultiMode ? 0.95 : 0.62,
+                      }}
+                      onClick={() => switchQuiteSwarmMode("multi")}
+                    >
+                      multiplayer
                     </span>
                   </div>
 
                   <div style={{ marginBottom: 8, fontSize: 10, opacity: 0.68 }}>
-                    multiplayer live after each player presses start
+                    {isQuiteSwarmMultiMode
+                      ? quiteSwarmRoom?.status === "running"
+                        ? quiteSwarmStartCountdownSeconds > 0
+                          ? `synced start in ${quiteSwarmStartCountdownSeconds}s`
+                          : "synced room active"
+                        : "host triggers one synced start for everyone"
+                      : "singleplayer runs local simulation"}
                   </div>
                   <div
                     style={{
@@ -4796,46 +5155,60 @@ export default function Main() {
                         opacity: 0.38,
                       }}
                     />
-                    {vsSession.enemies.map((enemy) => {
-                      const x = ((enemy.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
-                      const y = ((enemy.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
-                      return (
-                        <div
-                          key={enemy.id}
-                          style={{
-                            position: "absolute",
-                            left: `${x}%`,
-                            top: `${y}%`,
-                            width: 9,
-                            height: 9,
-                            transform: "translate(-50%, -50%)",
-                            borderRadius: "999px",
-                            background: "rgba(255,116,128,0.92)",
-                            boxShadow: "0 0 8px rgba(255,116,128,0.6)",
-                          }}
-                        />
-                      );
-                    })}
-                    {vsSession.projectiles.map((projectile) => {
-                      const x = ((projectile.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
-                      const y = ((projectile.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
-                      return (
-                        <div
-                          key={projectile.id}
-                          style={{
-                            position: "absolute",
-                            left: `${x}%`,
-                            top: `${y}%`,
-                            width: 4,
-                            height: 4,
-                            transform: "translate(-50%, -50%)",
-                            borderRadius: "999px",
-                            background: "rgba(174,224,255,0.96)",
-                            boxShadow: "0 0 8px rgba(168,223,255,0.8)",
-                          }}
-                        />
-                      );
-                    })}
+                    {(isQuiteSwarmMultiMode ? quiteSwarmSharedEnemies : vsSession.enemies).map(
+                      (enemy) => {
+                        const x =
+                          ((enemy.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                        const y =
+                          ((enemy.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                        const size =
+                          "radius" in enemy ? Math.max(6, enemy.radius) : 9;
+                        const enemyColor =
+                          "color" in enemy
+                            ? enemy.color
+                            : "rgba(255,116,128,0.92)";
+                        return (
+                          <div
+                            key={enemy.id}
+                            style={{
+                              position: "absolute",
+                              left: `${x}%`,
+                              top: `${y}%`,
+                              width: size,
+                              height: size,
+                              transform: "translate(-50%, -50%)",
+                              borderRadius: "999px",
+                              background: enemyColor,
+                              boxShadow: `0 0 8px ${enemyColor}`,
+                            }}
+                          />
+                        );
+                      }
+                    )}
+                    {!isQuiteSwarmMultiMode
+                      ? vsSession.projectiles.map((projectile) => {
+                          const x =
+                            ((projectile.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                          const y =
+                            ((projectile.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                          return (
+                            <div
+                              key={projectile.id}
+                              style={{
+                                position: "absolute",
+                                left: `${x}%`,
+                                top: `${y}%`,
+                                width: 4,
+                                height: 4,
+                                transform: "translate(-50%, -50%)",
+                                borderRadius: "999px",
+                                background: "rgba(174,224,255,0.96)",
+                                boxShadow: "0 0 8px rgba(168,223,255,0.8)",
+                              }}
+                            />
+                          );
+                        })
+                      : null}
                     {vsSession.players.map((player) => {
                       const x = ((player.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
                       const y = ((player.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
@@ -4926,38 +5299,56 @@ export default function Main() {
                   </div>
 
                   <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 8 }}>
-                    {vsSession.moderatorLine}
+                    {quiteSwarmModeratorLine}
                   </div>
                   <div style={{ fontSize: 10, opacity: 0.62, marginBottom: 8 }}>
                     control: WASD or Arrow keys (you)
                   </div>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: 4,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {[...vsSession.players]
-                      .sort((a, b) => b.kills - a.kills)
-                      .map((player) => (
-                        <div
-                          key={`score-${player.id}`}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            fontSize: 10,
-                            opacity: player.alive ? 0.86 : 0.5,
-                          }}
-                        >
-                          <span>{player.name}</span>
-                          <span>
-                            {player.kills} kill · {Math.ceil(player.hp)} hp
-                          </span>
-                        </div>
-                      ))}
-                  </div>
+                  {!isQuiteSwarmMultiMode ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 4,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {[...vsSession.players]
+                        .sort((a, b) => b.kills - a.kills)
+                        .map((player) => (
+                          <div
+                            key={`score-${player.id}`}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontSize: 10,
+                              opacity: player.alive ? 0.86 : 0.5,
+                            }}
+                          >
+                            <span>{player.name}</span>
+                            <span>
+                              {player.kills} kill · {Math.ceil(player.hp)} hp
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 4,
+                        marginBottom: 8,
+                        fontSize: 10,
+                        opacity: 0.75,
+                      }}
+                    >
+                      <div>
+                        room {quiteSwarmRoom?.status || "idle"} · host{" "}
+                        {quiteSwarmRoom?.hostUserId === userId ? "you" : "remote"}
+                      </div>
+                      <div>shared enemy stream seed {quiteSwarmRoom?.seed ?? "-"}</div>
+                    </div>
+                  )}
 
                   <div
                     style={{
@@ -4972,17 +5363,26 @@ export default function Main() {
                       style={{ cursor: "pointer" }}
                       onClick={startAxyVampire}
                     >
-                      {vsSession.running ? "restart" : "start"}
+                      {isQuiteSwarmMultiMode
+                        ? quiteSwarmRoom?.status === "running"
+                          ? quiteSwarmStartCountdownSeconds > 0
+                            ? `starting ${quiteSwarmStartCountdownSeconds}s`
+                            : "running"
+                          : "sync start"
+                        : vsSession.running
+                          ? "restart"
+                          : "start"}
                     </span>
                     <span
                       className="kozmos-tap"
                       style={{ cursor: "pointer" }}
                       onClick={stopAxyVampire}
                     >
-                      stop
+                      {isQuiteSwarmMultiMode ? "stop room" : "stop"}
                     </span>
                     <span style={{ opacity: 0.6 }}>
-                      live {quiteSwarmRuntimePlayers.length}
+                      live{" "}
+                      {isQuiteSwarmMultiMode ? quiteSwarmRuntimePlayers.length : 1}
                     </span>
                   </div>
                 </div>

@@ -6,6 +6,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const QUITE_SWARM_WORLD_LIMIT = 48;
 const ACTIVE_WINDOW_MS = 90 * 1000;
+const QUITE_SWARM_ROOM_ID = "main";
+const QUITE_SWARM_ROOM_DURATION_MS = 75 * 1000;
 
 function extractBearerToken(req: Request) {
   const header =
@@ -36,6 +38,19 @@ function clampQuiteSwarm(value: number) {
 
 function hasSchemaError(message: string) {
   return /swarm_x|swarm_y|swarm_active|swarm_updated_at/i.test(message);
+}
+
+function hasRoomSchemaError(message: string) {
+  return /runtime_quite_swarm_room|started_at|host_user_id|status|seed/i.test(
+    message
+  );
+}
+
+function roomIsExpired(startedAt: string | null | undefined) {
+  if (!startedAt) return false;
+  const startedMs = Date.parse(startedAt);
+  if (!Number.isFinite(startedMs)) return false;
+  return Date.now() - startedMs > QUITE_SWARM_ROOM_DURATION_MS;
 }
 
 async function resolveUsername(userId: string) {
@@ -128,7 +143,87 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ players });
+    const { data: roomRow, error: roomErr } = await supabaseAdmin
+      .from("runtime_quite_swarm_room")
+      .select("id, status, seed, started_at, host_user_id, updated_at")
+      .eq("id", QUITE_SWARM_ROOM_ID)
+      .maybeSingle();
+
+    if (roomErr) {
+      const msg = String(roomErr.message || "");
+      if (hasRoomSchemaError(msg)) {
+        return NextResponse.json(
+          { error: "quite swarm room schema missing (run migration)" },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json(
+        { error: "quite swarm room load failed" },
+        { status: 500 }
+      );
+    }
+
+    if (
+      roomRow &&
+      String((roomRow as { status?: string }).status || "idle") === "running" &&
+      roomIsExpired((roomRow as { started_at?: string | null }).started_at)
+    ) {
+      await supabaseAdmin
+        .from("runtime_quite_swarm_room")
+        .update({
+          status: "idle",
+          seed: null,
+          started_at: null,
+          host_user_id: null,
+        })
+        .eq("id", QUITE_SWARM_ROOM_ID)
+        .eq("status", "running");
+    }
+
+    const freshRoomRow =
+      roomRow &&
+      String((roomRow as { status?: string }).status || "idle") === "running" &&
+      roomIsExpired((roomRow as { started_at?: string | null }).started_at)
+        ? {
+            ...roomRow,
+            status: "idle",
+            seed: null,
+            started_at: null,
+            host_user_id: null,
+          }
+        : roomRow;
+
+    const room = freshRoomRow
+      ? {
+          id: String((freshRoomRow as { id?: string }).id || QUITE_SWARM_ROOM_ID),
+          status:
+            String((freshRoomRow as { status?: string }).status || "idle") === "running"
+              ? "running"
+              : "idle",
+          seed:
+            typeof (freshRoomRow as { seed?: number | null }).seed === "number"
+              ? Number((freshRoomRow as { seed?: number | null }).seed)
+              : null,
+          startedAt: String(
+            (freshRoomRow as { started_at?: string | null }).started_at || ""
+          ),
+          hostUserId: String(
+            (freshRoomRow as { host_user_id?: string | null }).host_user_id || ""
+          ),
+          updatedAt: String(
+            (freshRoomRow as { updated_at?: string | null }).updated_at || ""
+          ),
+        }
+      : {
+          id: QUITE_SWARM_ROOM_ID,
+          status: "idle",
+          seed: null,
+          startedAt: "",
+          hostUserId: "",
+          updatedAt: "",
+        };
+
+    return NextResponse.json({ players, room });
   } catch {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
@@ -142,12 +237,150 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => ({}))) as {
+      action?: unknown;
       x?: unknown;
       y?: unknown;
       dx?: unknown;
       dy?: unknown;
       active?: unknown;
     };
+    const action =
+      typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
+
+    if (action === "start_room" || action === "stop_room") {
+      const { data: roomRow, error: roomErr } = await supabaseAdmin
+        .from("runtime_quite_swarm_room")
+        .select("id, status, seed, started_at, host_user_id")
+        .eq("id", QUITE_SWARM_ROOM_ID)
+        .maybeSingle();
+
+      if (roomErr) {
+        const msg = String(roomErr.message || "");
+        if (hasRoomSchemaError(msg)) {
+          return NextResponse.json(
+            { error: "quite swarm room schema missing (run migration)" },
+            { status: 500 }
+          );
+        }
+        return NextResponse.json(
+          { error: "quite swarm room load failed" },
+          { status: 500 }
+        );
+      }
+
+      const roomStatus = String((roomRow as { status?: string } | null)?.status || "idle");
+      const roomHost = String(
+        (roomRow as { host_user_id?: string | null } | null)?.host_user_id || ""
+      );
+      const expired = roomIsExpired(
+        (roomRow as { started_at?: string | null } | null)?.started_at
+      );
+
+      if (action === "start_room") {
+        if (roomStatus === "running" && !expired && roomHost && roomHost !== user.id) {
+          return NextResponse.json(
+            { error: "room already running by another host" },
+            { status: 409 }
+          );
+        }
+
+        const seed = Math.floor(Math.random() * 2_000_000_000);
+        const startedAt = new Date(Date.now() + 1800).toISOString();
+        const username = await resolveUsername(user.id);
+        const nowIso = new Date().toISOString();
+
+        const { error: upsertRoomErr } = await supabaseAdmin
+          .from("runtime_quite_swarm_room")
+          .upsert({
+            id: QUITE_SWARM_ROOM_ID,
+            status: "running",
+            seed,
+            started_at: startedAt,
+            host_user_id: user.id,
+          });
+
+        if (upsertRoomErr) {
+          return NextResponse.json(
+            { error: "quite swarm room update failed" },
+            { status: 500 }
+          );
+        }
+
+        const maybeX =
+          typeof body.x === "number" && Number.isFinite(body.x)
+            ? clampQuiteSwarm(Number(body.x))
+            : 0;
+        const maybeY =
+          typeof body.y === "number" && Number.isFinite(body.y)
+            ? clampQuiteSwarm(Number(body.y))
+            : 0;
+
+        const { error: upsertPresenceErr } = await supabaseAdmin
+          .from("runtime_presence")
+          .upsert({
+            user_id: user.id,
+            username,
+            last_seen_at: nowIso,
+            swarm_x: maybeX,
+            swarm_y: maybeY,
+            swarm_active: true,
+            swarm_updated_at: nowIso,
+          });
+
+        if (upsertPresenceErr) {
+          return NextResponse.json(
+            { error: "quite swarm state update failed" },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({
+          ok: true,
+          room: {
+            id: QUITE_SWARM_ROOM_ID,
+            status: "running",
+            seed,
+            startedAt,
+            hostUserId: user.id,
+          },
+        });
+      }
+
+      if (roomStatus === "running" && roomHost && roomHost !== user.id) {
+        return NextResponse.json(
+          { error: "only host can stop running room" },
+          { status: 403 }
+        );
+      }
+
+      const { error: stopErr } = await supabaseAdmin
+        .from("runtime_quite_swarm_room")
+        .upsert({
+          id: QUITE_SWARM_ROOM_ID,
+          status: "idle",
+          seed: null,
+          started_at: null,
+          host_user_id: null,
+        });
+
+      if (stopErr) {
+        return NextResponse.json(
+          { error: "quite swarm room stop failed" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        room: {
+          id: QUITE_SWARM_ROOM_ID,
+          status: "idle",
+          seed: null,
+          startedAt: "",
+          hostUserId: "",
+        },
+      });
+    }
 
     const { data: current, error: currentErr } = await supabaseAdmin
       .from("runtime_presence")
