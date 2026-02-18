@@ -259,8 +259,10 @@ function createVsSession(participants: string[], running = false): VsSession {
     enemies: [],
     projectiles: [],
     moderatorLine: running
-      ? `Axy moderator: ${players.length} survivors entered the hush field.`
-      : "Axy moderator: choose present users, then start the hunt.",
+      ? `Axy moderator: ${players.length} survivor${
+          players.length === 1 ? "" : "s"
+        } entered the hush field.`
+      : "Axy moderator: press start. live players sync from runtime.",
     spawnCooldown: 0.8,
     modCooldown: 2.4,
     lastEnemyId: 0,
@@ -660,7 +662,6 @@ export default function Main() {
   );
   const [puzzleMoves, setPuzzleMoves] = useState(0);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
-  const [vsSelectedUsers, setVsSelectedUsers] = useState<string[]>([]);
   const [vsSession, setVsSession] = useState<VsSession>(() =>
     createVsSession(["user"], false)
   );
@@ -706,6 +707,7 @@ export default function Main() {
     right: boolean;
   }>({ up: false, down: false, left: false, right: false });
   const quiteSwarmLastSyncRef = useRef(0);
+  const quiteSwarmLastRuntimeLoadRef = useRef(0);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
   const currentUsername = username?.trim() ? username.trim() : "user";
   const displayUsername = username?.trim() ? username.trim() : "\u00A0";
@@ -847,28 +849,6 @@ export default function Main() {
   useEffect(() => {
     chatModeRef.current = chatMode;
   }, [chatMode]);
-
-  useEffect(() => {
-    setVsSelectedUsers((prev) => {
-      const availableSet = new Set(vsJoinableUsers.map((name) => name.toLowerCase()));
-      const selfKey = currentUsername.toLowerCase();
-      let next = prev.filter((name) => availableSet.has(name.toLowerCase()));
-      if (!next.some((name) => name.toLowerCase() === selfKey)) {
-        next = [currentUsername, ...next];
-      }
-      if (next.length === 0) {
-        next = vsJoinableUsers.slice(0, Math.min(5, vsJoinableUsers.length));
-      }
-      const deduped = uniqueNames(next);
-      if (
-        deduped.length === prev.length &&
-        deduped.every((value, idx) => value === prev[idx])
-      ) {
-        return prev;
-      }
-      return deduped;
-    });
-  }, [currentUsername, vsJoinableUsers]);
 
   useEffect(() => {
     if (!presentUserOpen) return;
@@ -1554,9 +1534,7 @@ export default function Main() {
 
   useEffect(() => {
     if (activePlay !== QUITE_SWARM_MODE || vsSession.running) return;
-    const roster = uniqueNames(
-      vsSelectedUsers.length > 0 ? vsSelectedUsers : [currentUsername]
-    );
+    const roster = uniqueNames([currentUsername]);
     const currentRoster = vsSession.players.map((player) => player.name);
     if (
       roster.length === currentRoster.length &&
@@ -1565,7 +1543,7 @@ export default function Main() {
       return;
     }
     setVsSession(createVsSession(roster, false));
-  }, [activePlay, currentUsername, vsSelectedUsers, vsSession.players, vsSession.running]);
+  }, [activePlay, currentUsername, vsSession.players, vsSession.running]);
 
   useEffect(() => {
     if (!playOpen || activePlay !== QUITE_SWARM_MODE || !vsSession.running) return;
@@ -1654,14 +1632,28 @@ export default function Main() {
       }
     };
 
-    void loadRuntimeSwarm();
-    const timer = window.setInterval(() => {
+    const refreshRuntimeSwarm = () => {
+      const now = Date.now();
+      if (now - quiteSwarmLastRuntimeLoadRef.current < 140) return;
+      quiteSwarmLastRuntimeLoadRef.current = now;
       void loadRuntimeSwarm();
-    }, 850);
+    };
+
+    refreshRuntimeSwarm();
+    const timer = window.setInterval(refreshRuntimeSwarm, 320);
+    const channel = supabase
+      .channel("quite-swarm-runtime-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "runtime_presence" },
+        refreshRuntimeSwarm
+      )
+      .subscribe();
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      supabase.removeChannel(channel);
       setQuiteSwarmRuntimePlayers([]);
     };
   }, [activePlay, playOpen]);
@@ -2083,9 +2075,7 @@ export default function Main() {
       setPuzzleSolved(false);
     }
     if (game === QUITE_SWARM_MODE) {
-      const roster =
-        vsSelectedUsers.length > 0 ? vsSelectedUsers : [currentUsername];
-      setVsSession(createVsSession(roster, false));
+      setVsSession(createVsSession([currentUsername], false));
     }
     if (game === NIGHT_PROTOCOL_MODE) {
       setChatMode("game");
@@ -2245,26 +2235,8 @@ export default function Main() {
     setPuzzleMoves((prev) => prev + 1);
   }
 
-  function toggleVsParticipant(name: string) {
-    if (vsSession.running) return;
-    const key = name.toLowerCase();
-    const selfKey = currentUsername.toLowerCase();
-    if (key === selfKey) return;
-
-    setVsSelectedUsers((prev) => {
-      const exists = prev.some((item) => item.toLowerCase() === key);
-      if (exists) {
-        return prev.filter((item) => item.toLowerCase() !== key);
-      }
-      if (prev.length >= 8) return prev;
-      return [...prev, name];
-    });
-  }
-
   function startAxyVampire() {
-    const roster = uniqueNames(
-      vsSelectedUsers.length > 0 ? vsSelectedUsers : [currentUsername]
-    );
+    const roster = uniqueNames([currentUsername]);
     if (roster.length === 0) return;
     setVsSession(createVsSession(roster, true));
   }
@@ -4780,34 +4752,23 @@ export default function Main() {
                       <span style={{ fontSize: 10, opacity: 0.48 }}>nobody visible</span>
                     ) : (
                       vsJoinableUsers.map((name) => {
-                        const key = name.toLowerCase();
-                        const isSelf = key === currentUsername.toLowerCase();
-                        const selected = vsSelectedUsers.some(
-                          (item) => item.toLowerCase() === key
-                        );
+                        const isSelf =
+                          name.trim().toLowerCase() === currentUsername.toLowerCase();
                         return (
-                          <button
+                          <span
                             key={`vs-user-${name}`}
-                            onClick={() => toggleVsParticipant(name)}
-                            disabled={isSelf || vsSession.running}
                             style={{
-                              border: selected
-                                ? "1px solid rgba(136,201,255,0.9)"
-                                : "1px solid rgba(255,255,255,0.18)",
+                              border: "1px solid rgba(255,255,255,0.18)",
                               borderRadius: 999,
-                              background: selected
-                                ? "rgba(110,182,255,0.24)"
-                                : "rgba(255,255,255,0.03)",
+                              background: "rgba(255,255,255,0.03)",
                               color: "#eaf4ff",
                               padding: "3px 8px",
                               fontSize: 10,
                               opacity: isSelf ? 0.86 : 0.74,
-                              cursor:
-                                isSelf || vsSession.running ? "default" : "pointer",
                             }}
                           >
-                            {isSelf ? `${name} (you)` : selected ? `✓ ${name}` : name}
-                          </button>
+                            {isSelf ? `${name} (you)` : name}
+                          </span>
                         );
                       })
                     )}
@@ -4917,7 +4878,12 @@ export default function Main() {
                       );
                     })}
                     {quiteSwarmRuntimePlayers
-                      .filter((row) => row.userId !== userId)
+                      .filter(
+                        (row) =>
+                          row.userId !== userId &&
+                          row.username.trim().toLowerCase() !==
+                            currentUsername.trim().toLowerCase()
+                      )
                       .map((row) => {
                         const x =
                           ((row.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
@@ -5016,8 +4982,7 @@ export default function Main() {
                       stop
                     </span>
                     <span style={{ opacity: 0.6 }}>
-                      local slots {vsSelectedUsers.length} · live{" "}
-                      {quiteSwarmRuntimePlayers.length}
+                      live {quiteSwarmRuntimePlayers.length}
                     </span>
                   </div>
                 </div>
