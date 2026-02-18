@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -79,7 +80,7 @@ function RuntimeConnectClient() {
         alignItems: "center",
       }}
     >
-      <a
+      <Link
         href="/"
         aria-label="Kozmos"
         style={{
@@ -98,7 +99,7 @@ function RuntimeConnectClient() {
           className="kozmos-logo kozmos-logo-ambient"
           style={{ height: "auto", cursor: "pointer" }}
         />
-      </a>
+      </Link>
 
       <div
         style={{
@@ -261,7 +262,7 @@ export default function RuntimeConnectPage() {
             alignItems: "center",
           }}
         >
-          <a
+          <Link
             href="/"
             aria-label="Kozmos"
             style={{
@@ -280,7 +281,7 @@ export default function RuntimeConnectPage() {
               className="kozmos-logo kozmos-logo-ambient"
               style={{ height: "auto", cursor: "pointer" }}
             />
-          </a>
+          </Link>
 
           <div
             style={{

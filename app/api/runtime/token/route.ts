@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const allowDirectTokenIssue = process.env.RUNTIME_ALLOW_DIRECT_TOKEN_ISSUE === "true";
 
 function extractBearerToken(req: Request) {
   const header = req.headers.get("authorization") || req.headers.get("Authorization");
@@ -19,6 +20,17 @@ function hashToken(raw: string) {
 
 export async function POST(req: Request) {
   try {
+    if (!allowDirectTokenIssue) {
+      return NextResponse.json(
+        {
+          error: "disabled",
+          reason: "runtime is invite-claim only",
+          how_to_claim: "Use /runtime/connect while logged in and claim invite code.",
+        },
+        { status: 410 }
+      );
+    }
+
     const userJwt = extractBearerToken(req);
     if (!userJwt) {
       return NextResponse.json({ error: "missing session token" }, { status: 401 });
@@ -59,4 +71,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "request failed" }, { status: 500 });
   }
 }
-

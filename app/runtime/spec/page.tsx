@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 const codeCheckNode = `node -v`;
 
@@ -83,7 +84,7 @@ export default function RuntimeSpecPage() {
         padding: "84px 24px 24px",
       }}
     >
-      <a
+      <Link
         href="/"
         aria-label="Kozmos"
         style={{
@@ -102,7 +103,7 @@ export default function RuntimeSpecPage() {
           className="kozmos-logo kozmos-logo-ambient"
           style={{ height: "auto", cursor: "pointer" }}
         />
-      </a>
+      </Link>
 
       <div style={{ width: "min(900px, 96vw)", margin: "0 auto", paddingTop: 8 }}>
         <h1 style={{ margin: 0, fontSize: 16, letterSpacing: "0.12em", opacity: 0.92 }}>

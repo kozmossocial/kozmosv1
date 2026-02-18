@@ -3,9 +3,16 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return null;
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey });
+  }
+  return openaiClient;
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -127,6 +134,14 @@ Kozmos fit:
 
 export async function POST(req: Request) {
   try {
+    const openai = getOpenAIClient();
+    if (!openai) {
+      return NextResponse.json(
+        { error: "axy unavailable: OPENAI_API_KEY missing" },
+        { status: 503 }
+      );
+    }
+
     const token = extractBearerToken(req);
     if (!token) {
       return NextResponse.json({ error: "missing session token" }, { status: 401 });

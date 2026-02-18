@@ -826,11 +826,13 @@ async function assertBuildOwner(spaceId: string, userId: string) {
 async function resolveProfileIdByUsername(username: string) {
   if (!username) return null;
 
-  let { data: profile, error } = await supabaseAdmin
+  const lookup = await supabaseAdmin
     .from("profileskozmos")
     .select("id")
     .eq("username", username)
     .maybeSingle();
+  let profile = lookup.data;
+  const error = lookup.error;
 
   if (error) throw new Error("profile lookup failed");
 

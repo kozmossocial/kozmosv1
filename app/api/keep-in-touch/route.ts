@@ -58,7 +58,7 @@ export async function GET(req: Request) {
       new Set([...Array.from(touchIds), ...incomingRequests.map((r) => r.userId)])
     );
 
-    let profilesMap: Record<string, ProfileRow> = {};
+    const profilesMap: Record<string, ProfileRow> = {};
 
     if (profileIds.length > 0) {
       const { data: profiles, error: profileErr } = await supabaseAdmin

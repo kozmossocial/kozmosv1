@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return null;
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey });
+  }
+  return openaiClient;
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -273,6 +280,14 @@ ${turnLines || "none"}
 
 export async function POST(req: Request) {
   try {
+    const openai = getOpenAIClient();
+    if (!openai) {
+      return NextResponse.json(
+        { error: "axy unavailable: OPENAI_API_KEY missing", reply: "..." },
+        { status: 503 }
+      );
+    }
+
     const body = await req.json();
     const message = typeof body?.message === "string" ? body.message : "";
     if (!message.trim()) {

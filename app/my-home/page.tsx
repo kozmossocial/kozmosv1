@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -96,7 +96,7 @@ export default function MyHome() {
     null
   );
 
-  async function loadKeepInTouch() {
+  const loadKeepInTouch = useCallback(async () => {
     setTouchLoading(true);
     try {
       const {
@@ -133,9 +133,9 @@ export default function MyHome() {
     } finally {
       setTouchLoading(false);
     }
-  }
+  }, [touchInitialized]);
 
-  async function loadDirectChats() {
+  const loadDirectChats = useCallback(async () => {
     try {
       const {
         data: { session },
@@ -215,9 +215,10 @@ export default function MyHome() {
     } catch {
       // ignore transient fetch failures
     }
-  }
+  }, [selectedDirectChatId]);
 
-  function persistDirectSeenMap(nextMap: Record<string, string>) {
+  const persistDirectSeenMap = useCallback(
+    (nextMap: Record<string, string>) => {
     if (!userId) return;
     try {
       window.localStorage.setItem(
@@ -227,9 +228,11 @@ export default function MyHome() {
     } catch {
       // ignore localStorage write failures
     }
-  }
+    },
+    [userId]
+  );
 
-  function markDirectChatSeen(chatId: string, seenAtIso: string) {
+  const markDirectChatSeen = useCallback((chatId: string, seenAtIso: string) => {
     if (!chatId || !seenAtIso) return;
     const current = directChatSeenAtRef.current[chatId];
     const currentTs = Date.parse(current || "");
@@ -244,9 +247,9 @@ export default function MyHome() {
     };
     directChatSeenAtRef.current = nextMap;
     persistDirectSeenMap(nextMap);
-  }
+  }, [persistDirectSeenMap]);
 
-  async function loadDirectMessages(chatId: string) {
+  const loadDirectMessages = useCallback(async (chatId: string) => {
     if (!chatId) return;
     setDirectLoading(true);
     try {
@@ -277,7 +280,7 @@ export default function MyHome() {
     } finally {
       setDirectLoading(false);
     }
-  }
+  }, []);
 
   async function startDirectChat(targetUserId: string) {
     if (!targetUserId || chatStartBusyUserId) return;
@@ -557,7 +560,7 @@ export default function MyHome() {
     }
 
     loadUserAndNotes();
-  }, [router]);
+  }, [loadDirectChats, loadKeepInTouch, router]);
 useEffect(() => {
   const {
     data: { subscription },
@@ -583,7 +586,7 @@ useEffect(() => {
     return () => {
       window.clearInterval(poll);
     };
-  }, [userId]);
+  }, [loadDirectChats, loadKeepInTouch, userId]);
 
   useEffect(() => {
     if (!selectedDirectChatId) {
@@ -611,7 +614,7 @@ useEffect(() => {
       window.clearTimeout(first);
       window.clearInterval(poll);
     };
-  }, [selectedDirectChatId]);
+  }, [loadDirectMessages, markDirectChatSeen, selectedDirectChatId]);
 
   useEffect(() => {
     lastDirectScrollKeyRef.current = "";
@@ -639,7 +642,7 @@ useEffect(() => {
     return () => {
       window.cancelAnimationFrame(raf);
     };
-  }, [selectedDirectChatId, directMessages]);
+  }, [directMessages, markDirectChatSeen, selectedDirectChatId]);
 
   useEffect(() => {
     const sync = () => setIsMobileLayout(window.innerWidth <= 1080);
