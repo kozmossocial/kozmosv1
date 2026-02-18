@@ -28,6 +28,8 @@ type DirectChat = {
   username: string;
   avatar_url: string | null;
   updated_at: string;
+  last_message_sender_id?: string | null;
+  last_message_created_at?: string | null;
 };
 
 type DirectMessage = {
@@ -164,7 +166,7 @@ export default function MyHome() {
         directChatsInitializedRef.current = true;
         directChatUpdatedAtRef.current = nextChats.reduce<Record<string, string>>(
           (acc, chat) => {
-            acc[chat.chat_id] = chat.updated_at || "";
+            acc[chat.chat_id] = chat.last_message_created_at || chat.updated_at || "";
             return acc;
           },
           {}
@@ -172,14 +174,19 @@ export default function MyHome() {
       } else {
         const previous = directChatUpdatedAtRef.current;
         const nextMap = nextChats.reduce<Record<string, string>>((acc, chat) => {
-          acc[chat.chat_id] = chat.updated_at || "";
+          acc[chat.chat_id] = chat.last_message_created_at || chat.updated_at || "";
           return acc;
         }, {});
 
         const nextUnread: Record<string, true> = {};
         nextChats.forEach((chat) => {
           if (chat.chat_id === selectedDirectChatId) return;
-          const nextTs = Date.parse(chat.updated_at || "");
+          if (chat.last_message_sender_id && chat.last_message_sender_id === userId) {
+            return;
+          }
+
+          const nextSignalAt = chat.last_message_created_at || chat.updated_at || "";
+          const nextTs = Date.parse(nextSignalAt);
           if (!Number.isFinite(nextTs)) return;
 
           const seenTs = Date.parse(seenMap[chat.chat_id] || "");
@@ -215,7 +222,7 @@ export default function MyHome() {
     } catch {
       // ignore transient fetch failures
     }
-  }, [selectedDirectChatId]);
+  }, [selectedDirectChatId, userId]);
 
   const persistDirectSeenMap = useCallback(
     (nextMap: Record<string, string>) => {

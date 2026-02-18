@@ -20,6 +20,12 @@ type DirectChatOrderRow = {
   sort_order: number;
 };
 
+type DirectChatMessagePreviewRow = {
+  chat_id: string;
+  sender_id: string;
+  created_at: string;
+};
+
 export async function GET(req: Request) {
   try {
     const user = await authenticateUser(req);
@@ -66,6 +72,7 @@ export async function GET(req: Request) {
     );
 
     const profileMap: Record<string, ProfileRow> = {};
+    const lastMessageByChatId: Record<string, DirectChatMessagePreviewRow> = {};
 
     if (otherIds.length > 0) {
       const { data: profiles, error: profileErr } = await supabaseAdmin
@@ -82,17 +89,42 @@ export async function GET(req: Request) {
       });
     }
 
+    if (rows.length > 0) {
+      const chatIds = rows.map((row) => row.id);
+      const { data: previews, error: previewErr } = await supabaseAdmin
+        .from("direct_chat_messages")
+        .select("chat_id, sender_id, created_at")
+        .in("chat_id", chatIds)
+        .order("created_at", { ascending: false });
+
+      if (previewErr) {
+        return NextResponse.json(
+          { error: "chat message preview query failed" },
+          { status: 500 }
+        );
+      }
+
+      (previews as DirectChatMessagePreviewRow[] | null)?.forEach((preview) => {
+        if (!lastMessageByChatId[preview.chat_id]) {
+          lastMessageByChatId[preview.chat_id] = preview;
+        }
+      });
+    }
+
     const list = rows
       .map((row) => {
         const otherUserId = row.participant_a === user.id ? row.participant_b : row.participant_a;
         const profile = profileMap[otherUserId];
         if (!profile?.username) return null;
+        const lastMessage = lastMessageByChatId[row.id];
         return {
           chat_id: row.id,
           other_user_id: otherUserId,
           username: profile.username,
           avatar_url: profile.avatar_url ?? null,
           updated_at: row.updated_at,
+          last_message_sender_id: lastMessage?.sender_id || "",
+          last_message_created_at: lastMessage?.created_at || "",
         };
       })
       .filter(
@@ -104,6 +136,8 @@ export async function GET(req: Request) {
           username: string;
           avatar_url: string | null;
           updated_at: string;
+          last_message_sender_id: string;
+          last_message_created_at: string;
         } => Boolean(row)
       )
       .sort((a, b) => {
