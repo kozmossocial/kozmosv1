@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
 type Message = {
@@ -223,6 +224,15 @@ type QuiteSwarmSharedEnemy = {
   color: string;
 };
 
+type QuiteSwarmPositionBroadcast = {
+  userId: string;
+  username: string;
+  color: string;
+  x: number;
+  y: number;
+  sentAt: string;
+};
+
 const VS_PLAYER_COLORS = [
   "#7df9ff",
   "#8cb8ff",
@@ -248,6 +258,12 @@ function uniqueNames(names: string[]) {
 
 function vsClamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function parseTsMs(value: string | null | undefined) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function createVsSession(participants: string[], running = false): VsSession {
@@ -772,6 +788,7 @@ export default function Main() {
   }>({ up: false, down: false, left: false, right: false });
   const quiteSwarmLastSyncRef = useRef(0);
   const quiteSwarmLastRuntimeLoadRef = useRef(0);
+  const quiteSwarmPositionChannelRef = useRef<RealtimeChannel | null>(null);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
   const currentUsername = username?.trim() ? username.trim() : "user";
   const displayUsername = username?.trim() ? username.trim() : "\u00A0";
@@ -1785,6 +1802,88 @@ export default function Main() {
   }, [activePlay, playOpen, quiteSwarmRunning]);
 
   useEffect(() => {
+    if (
+      !playOpen ||
+      activePlay !== QUITE_SWARM_MODE ||
+      !isQuiteSwarmMultiMode ||
+      !userId
+    ) {
+      const prev = quiteSwarmPositionChannelRef.current;
+      if (prev) {
+        supabase.removeChannel(prev);
+        quiteSwarmPositionChannelRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+    const channel = supabase
+      .channel("quite-swarm-pos-live")
+      .on("broadcast", { event: "pos" }, ({ payload }) => {
+        const raw = payload as Partial<QuiteSwarmPositionBroadcast> | null;
+        const rowUserId = String(raw?.userId || "").trim();
+        if (!rowUserId || rowUserId === userId) return;
+        const x = typeof raw?.x === "number" && Number.isFinite(raw.x) ? raw.x : 0;
+        const y = typeof raw?.y === "number" && Number.isFinite(raw.y) ? raw.y : 0;
+        const username = String(raw?.username || "user").trim() || "user";
+        const color = String(raw?.color || "#7df9ff").trim() || "#7df9ff";
+        const sentAt = String(raw?.sentAt || new Date().toISOString());
+        const sentAtMs = parseTsMs(sentAt);
+
+        setQuiteSwarmRuntimePlayers((prev) => {
+          const idx = prev.findIndex((item) => item.userId === rowUserId);
+          if (idx < 0) {
+            return [
+              {
+                userId: rowUserId,
+                username,
+                color,
+                x,
+                y,
+                active: true,
+                updatedAt: sentAt,
+                lastSeenAt: sentAt,
+              },
+              ...prev,
+            ];
+          }
+
+          const existing = prev[idx];
+          const existingMs = parseTsMs(existing.updatedAt);
+          if (existingMs > sentAtMs) return prev;
+
+          const copy = [...prev];
+          copy[idx] = {
+            ...existing,
+            username,
+            color,
+            x,
+            y,
+            active: true,
+            updatedAt: sentAt,
+            lastSeenAt: sentAt,
+          };
+          return copy;
+        });
+      });
+
+    channel.subscribe((status) => {
+      if (cancelled) return;
+      if (status === "SUBSCRIBED") {
+        quiteSwarmPositionChannelRef.current = channel;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (quiteSwarmPositionChannelRef.current === channel) {
+        quiteSwarmPositionChannelRef.current = null;
+      }
+      supabase.removeChannel(channel);
+    };
+  }, [activePlay, isQuiteSwarmMultiMode, playOpen, userId]);
+
+  useEffect(() => {
     if (!playOpen || activePlay !== QUITE_SWARM_MODE || !isQuiteSwarmMultiMode) {
       setQuiteSwarmRuntimePlayers([]);
       setQuiteSwarmRoom(null);
@@ -1814,7 +1913,29 @@ export default function Main() {
             lastSeenAt: String(row.lastSeenAt || ""),
           }))
           .filter((row) => row.userId.length > 0 && row.active);
-        setQuiteSwarmRuntimePlayers(parsed);
+        setQuiteSwarmRuntimePlayers((prev) => {
+          if (prev.length === 0) return parsed;
+          const prevById = new Map(prev.map((row) => [row.userId, row]));
+          const merged = parsed.map((row) => {
+            const previous = prevById.get(row.userId);
+            if (!previous) return row;
+            const prevTs = parseTsMs(previous.updatedAt || previous.lastSeenAt);
+            const nextTs = parseTsMs(row.updatedAt || row.lastSeenAt);
+            if (prevTs > nextTs) return previous;
+            return row;
+          });
+
+          const mergedIds = new Set(merged.map((row) => row.userId));
+          const now = Date.now();
+          prev.forEach((row) => {
+            if (mergedIds.has(row.userId)) return;
+            const freshnessMs = parseTsMs(row.updatedAt || row.lastSeenAt);
+            if (!freshnessMs) return;
+            if (now - freshnessMs > 2200) return;
+            merged.push(row);
+          });
+          return merged;
+        });
         const roomRow =
           body.room && typeof body.room === "object"
             ? (body.room as Record<string, unknown>)
@@ -1919,15 +2040,20 @@ export default function Main() {
                 ...prev,
               ];
             }
+            const existing = prev[idx];
+            const existingTs = parseTsMs(existing.updatedAt || existing.lastSeenAt);
+            const incomingTs = parseTsMs(updatedAt || lastSeenAt);
+            if (existingTs > incomingTs) return prev;
+
             const copy = [...prev];
             copy[idx] = {
-              ...copy[idx],
+              ...existing,
               username: username || copy[idx].username,
               x,
               y,
               active: true,
-              updatedAt: updatedAt || copy[idx].updatedAt,
-              lastSeenAt: lastSeenAt || copy[idx].lastSeenAt,
+              updatedAt: updatedAt || existing.updatedAt,
+              lastSeenAt: lastSeenAt || existing.lastSeenAt,
             };
             return copy;
           });
@@ -1958,7 +2084,12 @@ export default function Main() {
   }, [activePlay, isQuiteSwarmMultiMode, playOpen]);
 
   useEffect(() => {
-    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !isQuiteSwarmMultiMode) {
+    if (
+      !playOpen ||
+      activePlay !== QUITE_SWARM_MODE ||
+      !isQuiteSwarmMultiMode ||
+      !userId
+    ) {
       return;
     }
 
@@ -1969,17 +2100,46 @@ export default function Main() {
     if (!me) return;
 
     const now = Date.now();
-    if (now - quiteSwarmLastSyncRef.current < 60) return;
+    const sentAt = new Date(now).toISOString();
+    const positionChannel = quiteSwarmPositionChannelRef.current;
+    if (positionChannel) {
+      void positionChannel.send({
+        type: "broadcast",
+        event: "pos",
+        payload: {
+          userId,
+          username: currentUsername,
+          color: me.color,
+          x: me.x,
+          y: me.y,
+          sentAt,
+        } satisfies QuiteSwarmPositionBroadcast,
+      });
+    }
+
+    if (now - quiteSwarmLastSyncRef.current < 120) return;
     quiteSwarmLastSyncRef.current = now;
 
     void fetchQuiteSwarmJson("/api/quite-swarm/state", {
       method: "POST",
       body: JSON.stringify({ x: me.x, y: me.y, active: true }),
     }).catch(() => null);
-  }, [activePlay, currentUsername, isQuiteSwarmMultiMode, playOpen, vsSession.players]);
+  }, [
+    activePlay,
+    currentUsername,
+    isQuiteSwarmMultiMode,
+    playOpen,
+    userId,
+    vsSession.players,
+  ]);
 
   useEffect(() => {
-    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !isQuiteSwarmMultiMode) {
+    if (
+      !playOpen ||
+      activePlay !== QUITE_SWARM_MODE ||
+      !isQuiteSwarmMultiMode ||
+      !userId
+    ) {
       return;
     }
     const timer = window.setInterval(() => {
@@ -1994,7 +2154,14 @@ export default function Main() {
       }).catch(() => null);
     }, 12_000);
     return () => window.clearInterval(timer);
-  }, [activePlay, currentUsername, isQuiteSwarmMultiMode, playOpen, vsSession.players]);
+  }, [
+    activePlay,
+    currentUsername,
+    isQuiteSwarmMultiMode,
+    playOpen,
+    userId,
+    vsSession.players,
+  ]);
 
   useEffect(() => {
     if (playOpen && activePlay === QUITE_SWARM_MODE && isQuiteSwarmMultiMode) return;
@@ -5354,7 +5521,7 @@ export default function Main() {
                                     boxShadow: `0 0 12px ${row.color}`,
                                     opacity: 0.9,
                                     transition:
-                                      "left 90ms linear, top 90ms linear, opacity 120ms ease",
+                                      "left 55ms linear, top 55ms linear, opacity 120ms ease",
                                   }}
                                 />
                                 <div
@@ -5367,7 +5534,7 @@ export default function Main() {
                                     opacity: 0.72,
                                     whiteSpace: "nowrap",
                                     textShadow: "0 0 6px rgba(0,0,0,0.8)",
-                                    transition: "left 90ms linear, top 90ms linear",
+                                    transition: "left 55ms linear, top 55ms linear",
                                   }}
                                 >
                                   {row.username} rt
