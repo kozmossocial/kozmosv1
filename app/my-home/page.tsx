@@ -1394,6 +1394,8 @@ const pageStyle: React.CSSProperties = {
   color: "#eaeaea",
   padding: 40,
   position: "relative",
+  userSelect: "none",
+  WebkitUserSelect: "none",
 };
 
 const topLeftStyle: React.CSSProperties = {
@@ -1442,6 +1444,8 @@ const textareaStyle: React.CSSProperties = {
   outline: "none",
   fontSize: 14,
   lineHeight: 1.6,
+  userSelect: "text",
+  WebkitUserSelect: "text",
 };
 
 const saveStyle: React.CSSProperties = {
@@ -1476,6 +1480,8 @@ const notesListStyle: React.CSSProperties = {
 const noteContentStyle: React.CSSProperties = {
   whiteSpace: "pre-wrap",
   lineHeight: 1.45,
+  userSelect: "text",
+  WebkitUserSelect: "text",
 };
 
 const touchDockStyle: React.CSSProperties = {
@@ -1535,6 +1541,8 @@ const directMessageBubbleStyle: React.CSSProperties = {
   borderRadius: 8,
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
+  userSelect: "text",
+  WebkitUserSelect: "text",
 };
 
 const directComposerStyle: React.CSSProperties = {
@@ -1557,6 +1565,8 @@ const directComposerInputStyle: React.CSSProperties = {
   padding: "8px 10px",
   fontSize: 12,
   lineHeight: 1.4,
+  userSelect: "text",
+  WebkitUserSelect: "text",
 };
 
 const touchMobileWrapStyle: React.CSSProperties = {
