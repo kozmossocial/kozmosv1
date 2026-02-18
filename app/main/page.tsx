@@ -12,6 +12,8 @@ type Message = {
   content: string;
 };
 
+type ChatMode = "open" | "game";
+
 type HushChat = {
   id: string;
   created_by: string;
@@ -451,6 +453,19 @@ export default function Main() {
 
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [gameInput, setGameInput] = useState("");
+  const [gameMessages, setGameMessages] = useState<Message[]>([]);
+  const [gameLoading, setGameLoading] = useState(false);
+  const [chatMode, setChatMode] = useState<ChatMode>("open");
+  const [chatWheelDragOffset, setChatWheelDragOffset] = useState(0);
+  const [chatWheelIsDragging, setChatWheelIsDragging] = useState(false);
+  const chatModeRef = useRef<ChatMode>("open");
+  const chatWheelAnimatingRef = useRef(false);
+  const chatWheelDragRef = useRef<{
+    active: boolean;
+    pointerId: number | null;
+    startX: number;
+  }>({ active: false, pointerId: null, startX: 0 });
   const [loading, setLoading] = useState(false);
   const [realtimePresentUsers, setRealtimePresentUsers] = useState<string[]>(
     []
@@ -548,10 +563,47 @@ export default function Main() {
       a.localeCompare(b, "en", { sensitivity: "base" })
     );
   }, [realtimePresentUsers, runtimePresentUsers]);
+  const activeMessages = chatMode === "open" ? messages : gameMessages;
+  const activeChatLabel = chatMode === "open" ? "open chat" : "game chat";
+  const adjacentChatLabel = chatMode === "open" ? "game chat" : "open chat";
+  const chatWheelStep = Math.PI / 2.75;
+  const chatWheelRadius = 164;
+  const chatWheelDepth = 56;
+  const chatWheelLeftAngle = (-1 + chatWheelDragOffset) * chatWheelStep;
+  const chatWheelCenterAngle = (0 + chatWheelDragOffset) * chatWheelStep;
+  const chatWheelRightAngle = (1 + chatWheelDragOffset) * chatWheelStep;
+  const chatWheelLeftProminence = (Math.cos(chatWheelLeftAngle) + 1) / 2;
+  const chatWheelCenterProminence = (Math.cos(chatWheelCenterAngle) + 1) / 2;
+  const chatWheelRightProminence = (Math.cos(chatWheelRightAngle) + 1) / 2;
+  const chatWheelLeftX = Math.sin(chatWheelLeftAngle) * chatWheelRadius;
+  const chatWheelCenterX = Math.sin(chatWheelCenterAngle) * chatWheelRadius;
+  const chatWheelRightX = Math.sin(chatWheelRightAngle) * chatWheelRadius;
+  const chatWheelLeftScale = 0.72 + chatWheelLeftProminence * 0.34;
+  const chatWheelCenterScale = 0.72 + chatWheelCenterProminence * 0.34;
+  const chatWheelRightScale = 0.72 + chatWheelRightProminence * 0.34;
+  const chatWheelLeftOpacity = 0.16 + chatWheelLeftProminence * 0.78;
+  const chatWheelCenterOpacity = 0.16 + chatWheelCenterProminence * 0.78;
+  const chatWheelRightOpacity = 0.16 + chatWheelRightProminence * 0.78;
+  const chatWheelLeftBlur = (1 - chatWheelLeftProminence) * 2.1;
+  const chatWheelCenterBlur = (1 - chatWheelCenterProminence) * 2.1;
+  const chatWheelRightBlur = (1 - chatWheelRightProminence) * 2.1;
+  const chatWheelLeftTilt = (-chatWheelLeftAngle * 180) / Math.PI * 0.85;
+  const chatWheelCenterTilt = (-chatWheelCenterAngle * 180) / Math.PI * 0.85;
+  const chatWheelRightTilt = (-chatWheelRightAngle * 180) / Math.PI * 0.85;
+  const chatWheelLeftZ = Math.cos(chatWheelLeftAngle) * chatWheelDepth;
+  const chatWheelCenterZ = Math.cos(chatWheelCenterAngle) * chatWheelDepth;
+  const chatWheelRightZ = Math.cos(chatWheelRightAngle) * chatWheelDepth;
+  const chatWheelTransition = chatWheelIsDragging
+    ? "none"
+    : "transform 560ms cubic-bezier(0.17, 0.8, 0.22, 1), opacity 360ms ease, filter 360ms ease";
   const vsJoinableUsers = useMemo(
     () => uniqueNames([currentUsername, ...presentUsers]),
     [currentUsername, presentUsers]
   );
+
+  useEffect(() => {
+    chatModeRef.current = chatMode;
+  }, [chatMode]);
 
   useEffect(() => {
     setVsSelectedUsers((prev) => {
@@ -724,6 +776,13 @@ export default function Main() {
         .order("created_at", { ascending: true });
 
       setMessages(data || []);
+
+      const { data: gameData } = await supabase
+        .from("game_chat_messages")
+        .select("id, user_id, username, content")
+        .order("created_at", { ascending: true });
+
+      setGameMessages(gameData || []);
     }
 
     load();
@@ -1092,7 +1151,7 @@ export default function Main() {
     if (!el) return;
     if (!sharedStickToBottomRef.current) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [activeMessages, chatMode]);
 
   useEffect(() => {
     const el = sharedMessagesRef.current;
@@ -1126,6 +1185,34 @@ export default function Main() {
         (payload) => {
           const id = payload.old.id;
           setMessages((prev) => prev.filter((m) => m.id !== id));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("game-chat-messages-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "game_chat_messages" },
+        (payload) => {
+          const msg = payload.new as Message;
+          setGameMessages((prev) =>
+            prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "game_chat_messages" },
+        (payload) => {
+          const id = payload.old.id;
+          setGameMessages((prev) => prev.filter((m) => m.id !== id));
         }
       )
       .subscribe();
@@ -1254,6 +1341,21 @@ export default function Main() {
     setLoading(false);
   }
 
+  async function sendGameMessage() {
+    if (!gameInput.trim() || !userId) return;
+
+    setGameLoading(true);
+
+    await supabase.from("game_chat_messages").insert({
+      user_id: userId,
+      username: currentUsername,
+      content: gameInput,
+    });
+
+    setGameInput("");
+    setGameLoading(false);
+  }
+
   async function requestKeepInTouch(targetUsername: string) {
     const name = targetUsername.trim();
     if (!name || touchBusy) return;
@@ -1298,9 +1400,18 @@ export default function Main() {
     await supabase.from("main_messages").delete().eq("id", id);
   }
 
+  async function deleteGameMessage(id: string) {
+    await supabase.from("game_chat_messages").delete().eq("id", id);
+  }
+
   /* AXY reflect (message) */
-  async function askAxyOnMessage(messageId: string, content: string) {
-    setAxyMsgLoadingId(messageId);
+  async function askAxyOnMessage(
+    mode: ChatMode,
+    messageId: string,
+    content: string
+  ) {
+    const reflectionKey = `${mode}:${messageId}`;
+    setAxyMsgLoadingId(reflectionKey);
 
     try {
       const res = await fetch("/api/axy", {
@@ -1315,12 +1426,12 @@ export default function Main() {
 
       setAxyMsgReflection((prev) => ({
         ...prev,
-        [messageId]: data.reply,
+        [reflectionKey]: data.reply,
       }));
     } catch {
       setAxyMsgReflection((prev) => ({
         ...prev,
-        [messageId]: "...",
+        [reflectionKey]: "...",
       }));
     }
 
@@ -1371,6 +1482,70 @@ export default function Main() {
       }
       return next;
     });
+  }
+
+  function animateChatModeChange(nextMode: ChatMode, direction: 1 | -1) {
+    if (chatWheelAnimatingRef.current) return;
+    chatWheelAnimatingRef.current = true;
+    setChatWheelIsDragging(false);
+    const targetOffset = direction;
+    setChatWheelDragOffset(targetOffset);
+    window.setTimeout(() => {
+      setChatMode(nextMode);
+      setChatWheelDragOffset(0);
+    }, 520);
+    window.setTimeout(() => {
+      chatWheelAnimatingRef.current = false;
+    }, 620);
+  }
+
+  function cycleChatMode(direction: 1 | -1) {
+    const current = chatModeRef.current;
+    const next = current === "open" ? "game" : "open";
+    animateChatModeChange(next, direction);
+  }
+
+  function selectChatMode(target: ChatMode, direction: 1 | -1) {
+    const current = chatModeRef.current;
+    if (target === current) return;
+    animateChatModeChange(target, direction);
+  }
+
+  function onChatWheelPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (chatWheelAnimatingRef.current) return;
+    setChatWheelIsDragging(true);
+    chatWheelDragRef.current = {
+      active: true,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onChatWheelPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const state = chatWheelDragRef.current;
+    if (!state.active || state.pointerId !== e.pointerId) return;
+    const dx = e.clientX - state.startX;
+    const normalized = Math.tanh(dx / 150);
+    setChatWheelDragOffset(normalized);
+  }
+
+  function onChatWheelPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const state = chatWheelDragRef.current;
+    if (state.pointerId !== e.pointerId) return;
+    const finalOffset = chatWheelDragOffset;
+    chatWheelDragRef.current = { active: false, pointerId: null, startX: 0 };
+    setChatWheelIsDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    if (Math.abs(finalOffset) < 0.32) {
+      setChatWheelDragOffset(0);
+      return;
+    }
+    cycleChatMode(finalOffset > 0 ? 1 : -1);
   }
 
   function startSignalDrift() {
@@ -2283,23 +2458,113 @@ export default function Main() {
           }}
         >
           <div
-            className="kozmos-shared-glow"
+            onPointerDown={onChatWheelPointerDown}
+            onPointerMove={onChatWheelPointerMove}
+            onPointerUp={onChatWheelPointerUp}
+            onPointerCancel={onChatWheelPointerUp}
+            onWheel={(e) => {
+              if (Math.abs(e.deltaY) < 8 && Math.abs(e.deltaX) < 8) return;
+              e.preventDefault();
+              cycleChatMode(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
+            }}
             style={{
-              fontSize: 20,
-              letterSpacing: "0.12em",
-              fontWeight: 380,
-              opacity: 0.6,
-              textTransform: "none",
-              textAlign: "center",
+              width: "min(420px, 84vw)",
+              position: "relative",
+              height: 34,
+              userSelect: "none",
+              touchAction: "pan-y",
+              cursor: "grab",
+              opacity: 0.88,
+              overflow: "hidden",
+              perspective: "900px",
             }}
           >
-            open chat
+            <button
+              type="button"
+              onClick={() =>
+                selectChatMode(chatMode === "open" ? "game" : "open", 1)
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                border: "none",
+                background: "transparent",
+                color: "rgba(234,234,234,0.42)",
+                fontSize: 14,
+                fontWeight: 320,
+                letterSpacing: "0.12em",
+                textTransform: "none",
+                cursor: "pointer",
+                padding: "0 6px",
+                transform: `translate(-50%, -50%) translateX(${chatWheelLeftX}px) translateZ(${chatWheelLeftZ}px) rotateY(${chatWheelLeftTilt}deg) scale(${chatWheelLeftScale})`,
+                transition: chatWheelTransition,
+                opacity: chatWheelLeftOpacity,
+                appearance: "none",
+                whiteSpace: "nowrap",
+                filter: `blur(${chatWheelLeftBlur}px)`,
+                outline: "none",
+              }}
+            >
+              {adjacentChatLabel}
+            </button>
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                fontSize: 20,
+                letterSpacing: "0.12em",
+                fontWeight: 340,
+                opacity: chatWheelCenterOpacity,
+                textTransform: "none",
+                textAlign: "center",
+                transform: `translate(-50%, -50%) translateX(${chatWheelCenterX}px) translateZ(${chatWheelCenterZ}px) rotateY(${chatWheelCenterTilt}deg) scale(${chatWheelCenterScale})`,
+                transition: chatWheelTransition,
+                whiteSpace: "nowrap",
+                filter: `blur(${chatWheelCenterBlur}px)`,
+                textShadow: "0 0 8px rgba(255,230,170,0.22)",
+              }}
+            >
+              {activeChatLabel}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                selectChatMode(chatMode === "open" ? "game" : "open", -1)
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                border: "none",
+                background: "transparent",
+                color: "rgba(234,234,234,0.42)",
+                fontSize: 14,
+                fontWeight: 320,
+                letterSpacing: "0.12em",
+                textTransform: "none",
+                cursor: "pointer",
+                padding: "0 6px",
+                transform: `translate(-50%, -50%) translateX(${chatWheelRightX}px) translateZ(${chatWheelRightZ}px) rotateY(${chatWheelRightTilt}deg) scale(${chatWheelRightScale})`,
+                transition: chatWheelTransition,
+                opacity: chatWheelRightOpacity,
+                appearance: "none",
+                whiteSpace: "nowrap",
+                filter: `blur(${chatWheelRightBlur}px)`,
+                outline: "none",
+              }}
+            >
+              {adjacentChatLabel}
+            </button>
           </div>
           <div
             style={{
               width: "min(220px, 64%)",
               height: 1,
-              marginTop: 9,
+              marginTop: 11,
               background:
                 "linear-gradient(90deg, transparent 0%, rgba(255,230,170,0.75) 50%, transparent 100%)",
               boxShadow: "0 0 8px rgba(255,230,170,0.35)",
@@ -2312,9 +2577,11 @@ export default function Main() {
           style={sharedMessagesScrollStyle}
           onScroll={syncSharedStickToBottom}
         >
-          {messages.map((m) => (
+          {activeMessages.map((m) => {
+            const reflectionKey = `${chatMode}:${m.id}`;
+            return (
             <div
-              key={m.id}
+              key={`${chatMode}-${m.id}`}
               style={{
                 marginBottom: 12,
                 paddingBottom: 10,
@@ -2353,7 +2620,13 @@ export default function Main() {
                   <span>{m.content}</span>
                   {m.user_id === userId && (
                     <span
-                      onClick={() => deleteMessage(m.id)}
+                      onClick={() => {
+                        if (chatMode === "open") {
+                          void deleteMessage(m.id);
+                        } else {
+                          void deleteGameMessage(m.id);
+                        }
+                      }}
                       style={{
                         marginLeft: 8,
                         fontSize: 11,
@@ -2366,7 +2639,7 @@ export default function Main() {
                   )}
                 </div>
 
-                {axyMsgReflection[m.id] && (
+                {axyMsgReflection[reflectionKey] && (
                   <div
                     style={{
                       marginTop: 6,
@@ -2383,11 +2656,11 @@ export default function Main() {
                         cursor: "pointer",
                       }}
                       onClick={() => {
-                        setAxyMsgFadeId(m.id);
+                        setAxyMsgFadeId(reflectionKey);
 
                         setAxyMsgReflection((prev) => {
                           const copy = { ...prev };
-                          delete copy[m.id];
+                          delete copy[reflectionKey];
                           return copy;
                         });
 
@@ -2398,7 +2671,7 @@ export default function Main() {
                     >
                       Axy reflects:
                     </span>
-                    {axyMsgReflection[m.id]}
+                    {axyMsgReflection[reflectionKey]}
                   </div>
                 )}
               </div>
@@ -2412,8 +2685,9 @@ export default function Main() {
                   width: 22,
                   height: 22,
                   cursor: "pointer",
-                  opacity: axyMsgFadeId === m.id ? 0.25 : 0.6,
-                  transform: axyMsgPulseId === m.id ? "scale(1.2)" : "scale(1)",
+                  opacity: axyMsgFadeId === reflectionKey ? 0.25 : 0.6,
+                  transform:
+                    axyMsgPulseId === reflectionKey ? "scale(1.2)" : "scale(1)",
                   transition:
                     "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
                 }}
@@ -2425,8 +2699,8 @@ export default function Main() {
                   e.currentTarget.style.filter = "none";
                 }}
                 onClick={() => {
-                  setAxyMsgPulseId(m.id);
-                  askAxyOnMessage(m.id, m.content);
+                  setAxyMsgPulseId(reflectionKey);
+                  askAxyOnMessage(chatMode, m.id, m.content);
 
                   setTimeout(() => {
                     setAxyMsgPulseId(null);
@@ -2434,21 +2708,32 @@ export default function Main() {
                 }}
               />
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+          value={chatMode === "open" ? input : gameInput}
+          onChange={(e) => {
+            if (chatMode === "open") {
+              setInput(e.target.value);
+            } else {
+              setGameInput(e.target.value);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              if (!loading) {
-                void sendMessage();
+              if (chatMode === "open") {
+                if (!loading) {
+                  void sendMessage();
+                }
+              } else if (!gameLoading) {
+                void sendGameMessage();
               }
             }
           }}
-          placeholder="write something..."
+          placeholder={chatMode === "open" ? "write something..." : "write game chat..."}
           style={{
             width: "100%",
             minHeight: 80,
@@ -2470,9 +2755,21 @@ export default function Main() {
             opacity: 0.6,
             cursor: "pointer",
           }}
-          onClick={sendMessage}
+          onClick={() => {
+            if (chatMode === "open") {
+              void sendMessage();
+            } else {
+              void sendGameMessage();
+            }
+          }}
         >
-          {loading ? "sending..." : "send"}
+          {chatMode === "open"
+            ? loading
+              ? "sending..."
+              : "send"
+            : gameLoading
+              ? "sending..."
+              : "send"}
         </div>
 
         <div
