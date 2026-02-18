@@ -12,7 +12,13 @@ type Message = {
   content: string;
 };
 
-type ChatMode = "open" | "game";
+type ChatMode = "open" | "game" | "build";
+const CHAT_MODE_ORDER: ChatMode[] = ["open", "game", "build"];
+const CHAT_MODE_LABEL: Record<ChatMode, string> = {
+  open: "open chat",
+  game: "game chat",
+  build: "build chat",
+};
 
 type HushChat = {
   id: string;
@@ -455,7 +461,10 @@ export default function Main() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [gameInput, setGameInput] = useState("");
   const [gameMessages, setGameMessages] = useState<Message[]>([]);
+  const [buildInput, setBuildInput] = useState("");
+  const [buildMessages, setBuildMessages] = useState<Message[]>([]);
   const [gameLoading, setGameLoading] = useState(false);
+  const [buildLoading, setBuildLoading] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>("open");
   const [chatWheelDragOffset, setChatWheelDragOffset] = useState(0);
   const [chatWheelIsDragging, setChatWheelIsDragging] = useState(false);
@@ -573,9 +582,22 @@ export default function Main() {
       a.localeCompare(b, "en", { sensitivity: "base" })
     );
   }, [realtimePresentUsers, runtimePresentUsers]);
-  const activeMessages = chatMode === "open" ? messages : gameMessages;
-  const activeChatLabel = chatMode === "open" ? "open chat" : "game chat";
-  const adjacentChatLabel = chatMode === "open" ? "game chat" : "open chat";
+  const activeMessages =
+    chatMode === "open"
+      ? messages
+      : chatMode === "game"
+        ? gameMessages
+        : buildMessages;
+  const activeChatLabel = CHAT_MODE_LABEL[chatMode];
+  const activeChatIndex = CHAT_MODE_ORDER.indexOf(chatMode);
+  const leftChatMode =
+    CHAT_MODE_ORDER[
+      (activeChatIndex - 1 + CHAT_MODE_ORDER.length) % CHAT_MODE_ORDER.length
+    ];
+  const rightChatMode =
+    CHAT_MODE_ORDER[(activeChatIndex + 1) % CHAT_MODE_ORDER.length];
+  const leftChatLabel = CHAT_MODE_LABEL[leftChatMode];
+  const rightChatLabel = CHAT_MODE_LABEL[rightChatMode];
   const chatWheelStep = Math.PI / 2.75;
   const chatWheelRadius = 164;
   const chatWheelDepth = 56;
@@ -793,6 +815,13 @@ export default function Main() {
         .order("created_at", { ascending: true });
 
       setGameMessages(gameData || []);
+
+      const { data: buildData } = await supabase
+        .from("build_chat_messages")
+        .select("id, user_id, username, content")
+        .order("created_at", { ascending: true });
+
+      setBuildMessages(buildData || []);
     }
 
     load();
@@ -1280,6 +1309,34 @@ export default function Main() {
   }, []);
 
   useEffect(() => {
+    const channel = supabase
+      .channel("build-chat-messages-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "build_chat_messages" },
+        (payload) => {
+          const msg = payload.new as Message;
+          setBuildMessages((prev) =>
+            prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "build_chat_messages" },
+        (payload) => {
+          const id = payload.old.id;
+          setBuildMessages((prev) => prev.filter((m) => m.id !== id));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!userId) return;
 
     const channel = supabase.channel("shared-space-presence", {
@@ -1416,6 +1473,21 @@ export default function Main() {
     setGameLoading(false);
   }
 
+  async function sendBuildMessage() {
+    if (!buildInput.trim() || !userId) return;
+
+    setBuildLoading(true);
+
+    await supabase.from("build_chat_messages").insert({
+      user_id: userId,
+      username: currentUsername,
+      content: buildInput,
+    });
+
+    setBuildInput("");
+    setBuildLoading(false);
+  }
+
   async function requestKeepInTouch(targetUsername: string) {
     const name = targetUsername.trim();
     if (!name || touchBusy) return;
@@ -1462,6 +1534,10 @@ export default function Main() {
 
   async function deleteGameMessage(id: string) {
     await supabase.from("game_chat_messages").delete().eq("id", id);
+  }
+
+  async function deleteBuildMessage(id: string) {
+    await supabase.from("build_chat_messages").delete().eq("id", id);
   }
 
   /* AXY reflect (message) */
@@ -1561,7 +1637,12 @@ export default function Main() {
 
   function cycleChatMode(direction: 1 | -1) {
     const current = chatModeRef.current;
-    const next = current === "open" ? "game" : "open";
+    const currentIndex = CHAT_MODE_ORDER.indexOf(current);
+    const next =
+      CHAT_MODE_ORDER[
+        (currentIndex + direction + CHAT_MODE_ORDER.length) %
+          CHAT_MODE_ORDER.length
+      ];
     animateChatModeChange(next, direction);
   }
 
@@ -2792,7 +2873,7 @@ export default function Main() {
             <button
               type="button"
               onClick={() =>
-                selectChatMode(chatMode === "open" ? "game" : "open", 1)
+                selectChatMode(leftChatMode, 1)
               }
               onPointerDown={(e) => e.stopPropagation()}
               style={{
@@ -2817,7 +2898,7 @@ export default function Main() {
                 outline: "none",
               }}
             >
-              {adjacentChatLabel}
+              {leftChatLabel}
             </button>
             <div
               style={{
@@ -2842,7 +2923,7 @@ export default function Main() {
             <button
               type="button"
               onClick={() =>
-                selectChatMode(chatMode === "open" ? "game" : "open", -1)
+                selectChatMode(rightChatMode, -1)
               }
               onPointerDown={(e) => e.stopPropagation()}
               style={{
@@ -2867,7 +2948,7 @@ export default function Main() {
                 outline: "none",
               }}
             >
-              {adjacentChatLabel}
+              {rightChatLabel}
             </button>
           </div>
           <div
@@ -2918,8 +2999,10 @@ export default function Main() {
                       onClick={() => {
                         if (chatMode === "open") {
                           void deleteMessage(m.id);
-                        } else {
+                        } else if (chatMode === "game") {
                           void deleteGameMessage(m.id);
+                        } else {
+                          void deleteBuildMessage(m.id);
                         }
                       }}
                       style={{
@@ -3009,12 +3092,20 @@ export default function Main() {
 
         <textarea
           className="kozmos-text-input"
-          value={chatMode === "open" ? input : gameInput}
+          value={
+            chatMode === "open"
+              ? input
+              : chatMode === "game"
+                ? gameInput
+                : buildInput
+          }
           onChange={(e) => {
             if (chatMode === "open") {
               setInput(e.target.value);
-            } else {
+            } else if (chatMode === "game") {
               setGameInput(e.target.value);
+            } else {
+              setBuildInput(e.target.value);
             }
           }}
           onKeyDown={(e) => {
@@ -3024,12 +3115,20 @@ export default function Main() {
                 if (!loading) {
                   void sendMessage();
                 }
-              } else if (!gameLoading) {
+              } else if (chatMode === "game" && !gameLoading) {
                 void sendGameMessage();
+              } else if (!buildLoading) {
+                void sendBuildMessage();
               }
             }
           }}
-          placeholder={chatMode === "open" ? "write something..." : "write game chat..."}
+          placeholder={
+            chatMode === "open"
+              ? "write something..."
+              : chatMode === "game"
+                ? "write game chat..."
+                : "write build chat..."
+          }
           style={{
             width: "100%",
             minHeight: 80,
@@ -3057,8 +3156,10 @@ export default function Main() {
           onClick={() => {
             if (chatMode === "open") {
               void sendMessage();
-            } else {
+            } else if (chatMode === "game") {
               void sendGameMessage();
+            } else {
+              void sendBuildMessage();
             }
           }}
         >
@@ -3066,9 +3167,13 @@ export default function Main() {
             ? loading
               ? "sending..."
               : "send"
-            : gameLoading
-              ? "sending..."
-              : "send"}
+            : chatMode === "game"
+              ? gameLoading
+                ? "sending..."
+                : "send"
+              : buildLoading
+                ? "sending..."
+                : "send"}
         </div>
 
         <div
@@ -3442,7 +3547,7 @@ export default function Main() {
                     marginBottom: 6,
                   }}
                 >
-                  <span>Quite Swarm</span>
+                  <span>quite swarm</span>
                   <span
                     className="kozmos-tap"
                     style={{ opacity: 0.6, cursor: "pointer" }}
