@@ -921,29 +921,36 @@ export default function BuildPage() {
         </div>
       </div>
 
-      <div
+      <section
         style={{
           marginTop: 10,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
           border: "1px solid rgba(121,193,255,0.28)",
-          borderRadius: 9,
-          background: "rgba(6,14,22,0.42)",
-          padding: "6px 10px",
+          borderRadius: 10,
+          background: "rgba(6,14,22,0.52)",
+          padding: "10px 12px",
         }}
       >
-        <span style={{ fontSize: 11, letterSpacing: "0.08em", opacity: 0.76 }}>
-          user manual
-        </span>
-        <span
-          className="kozmos-tap"
-          style={{ fontSize: 11, opacity: 0.9, cursor: "pointer" }}
-          onClick={() => router.push("/build/manual")}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
         >
-          open →
-        </span>
-      </div>
+          <div style={{ fontSize: 12, letterSpacing: "0.08em", opacity: 0.8 }}>
+            user build manual
+          </div>
+          <span
+            className="kozmos-tap"
+            style={{ fontSize: 11, opacity: 0.9, cursor: "pointer" }}
+            onClick={() => router.push("/build/manual")}
+          >
+            open full manual →
+          </span>
+        </div>
+      </section>
 
       {!isDesktop ? (
         <div
