@@ -978,6 +978,13 @@ body {
   cursor: default;
 }
 
+.main-grid .selectable-text,
+.main-grid .kozmos-text-input {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}
+
 /* Main layout responsive */
 @media (max-width: 900px) {
   .kozmos-logo {

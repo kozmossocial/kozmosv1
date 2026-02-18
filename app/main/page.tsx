@@ -470,6 +470,8 @@ export default function Main() {
   const [realtimePresentUsers, setRealtimePresentUsers] = useState<string[]>(
     []
   );
+  const [realtimePresentUserIdsByName, setRealtimePresentUserIdsByName] =
+    useState<Record<string, string>>({});
   const [runtimePresentUsers, setRuntimePresentUsers] = useState<string[]>([]);
   const [presentUserGlow, setPresentUserGlow] = useState<string | null>(null);
   const [presentUserOpen, setPresentUserOpen] = useState<string | null>(null);
@@ -510,11 +512,14 @@ export default function Main() {
   const [hushInput, setHushInput] = useState("");
   const [hushLoading, setHushLoading] = useState(false);
   const [hushSending, setHushSending] = useState(false);
+  const [hushPanelOpen, setHushPanelOpen] = useState(false);
   const [hushInviteTarget, setHushInviteTarget] = useState<{
     userId: string;
     username: string;
     chatId?: string;
   } | null>(null);
+  const [hushInviteUserId, setHushInviteUserId] = useState("");
+  const [hushCreateUserId, setHushCreateUserId] = useState("");
   const [playOpen, setPlayOpen] = useState(false);
   const [activePlay, setActivePlay] = useState<
     "signal-drift" | "slow-orbit" | "hush-puzzle" | typeof QUITE_SWARM_MODE | null
@@ -1241,10 +1246,12 @@ export default function Main() {
       }>();
 
       const map = new Map<string, string>();
+      const idsByName: Record<string, string> = {};
       Object.values(state).forEach((metas) => {
         metas.forEach((meta) => {
           if (meta?.user_id && meta?.username) {
             map.set(meta.user_id, meta.username);
+            idsByName[meta.username.trim().toLowerCase()] = meta.user_id;
           }
         });
       });
@@ -1253,6 +1260,7 @@ export default function Main() {
         a.localeCompare(b, "en", { sensitivity: "base" })
       );
       setRealtimePresentUsers(names);
+      setRealtimePresentUserIdsByName(idsByName);
     };
 
     channel
@@ -1643,7 +1651,7 @@ export default function Main() {
     }));
   }
 
-  async function createHushWith(targetUserId: string) {
+  async function createHushWith(targetUserId: string, targetUsername?: string) {
     if (!userId || hushLoading) return;
 
     setHushLoading(true);
@@ -1674,7 +1682,7 @@ export default function Main() {
           user_id: targetUserId,
           role: "member",
           status: "invited",
-          display_name: hushInviteTarget?.username ?? "user",
+          display_name: targetUsername ?? hushInviteTarget?.username ?? "user",
         },
       ]);
 
@@ -1687,7 +1695,11 @@ export default function Main() {
     setHushLoading(false);
   }
 
-  async function inviteToHushChat(chatId: string, targetUserId: string) {
+  async function inviteToHushChat(
+    chatId: string,
+    targetUserId: string,
+    targetUsername?: string
+  ) {
     if (!userId || hushLoading) return;
 
     setHushLoading(true);
@@ -1697,7 +1709,7 @@ export default function Main() {
       user_id: targetUserId,
       role: "member",
       status: "invited",
-      display_name: hushInviteTarget?.username ?? "user",
+      display_name: targetUsername ?? hushInviteTarget?.username ?? "user",
     });
 
     setHushInviteTarget(null);
@@ -1864,6 +1876,21 @@ export default function Main() {
     ? getMyHushMembership(selectedHushChatId)
     : null;
 
+  const hushCreatablePresentUsers = useMemo(() => {
+    const byId = new Map<string, string>();
+    presentUsers.forEach((username) => {
+      const mappedUserId = realtimePresentUserIdsByName[username.trim().toLowerCase()];
+      if (!mappedUserId || mappedUserId === userId) return;
+      if (!byId.has(mappedUserId)) {
+        byId.set(mappedUserId, username);
+      }
+    });
+    return Array.from(byId.entries()).map(([id, username]) => ({
+      userId: id,
+      username,
+    }));
+  }, [presentUsers, realtimePresentUserIdsByName, userId]);
+
   const selectedHushMembers = selectedHushChatId
     ? hushMembers.filter(
         (member) =>
@@ -1875,13 +1902,83 @@ export default function Main() {
       )
     : [];
 
+  const canChatInSelectedHush =
+    selectedHushMembership?.status === "accepted";
+  const isSelectedHushOwner = selectedHushMembership?.role === "owner";
+
+  const hushInvitablePresentUsers = useMemo(() => {
+    if (!selectedHushChatId || !isSelectedHushOwner) return [];
+
+    const memberIds = new Set(selectedHushMembers.map((member) => member.user_id));
+
+    return presentUsers
+      .map((username) => {
+        const mappedUserId =
+          realtimePresentUserIdsByName[username.trim().toLowerCase()];
+        return { userId: mappedUserId, username };
+      })
+      .filter(
+        (entry) =>
+          Boolean(entry.userId) &&
+          entry.userId !== userId &&
+          !memberIds.has(entry.userId)
+      );
+  }, [
+    isSelectedHushOwner,
+    presentUsers,
+    realtimePresentUserIdsByName,
+    selectedHushChatId,
+    selectedHushMembers,
+    userId,
+  ]);
+
+  const selectedHushInviteUser =
+    hushInvitablePresentUsers.find((entry) => entry.userId === hushInviteUserId) ??
+    hushInvitablePresentUsers[0] ??
+    null;
+
+  const selectedHushCreateUser =
+    hushCreatablePresentUsers.find((entry) => entry.userId === hushCreateUserId) ??
+    hushCreatablePresentUsers[0] ??
+    null;
+
   const selectedChatMessages = selectedHushChatId
     ? hushMessages.filter((msg) => msg.chat_id === selectedHushChatId)
     : [];
 
-  const canChatInSelectedHush =
-    selectedHushMembership?.status === "accepted";
-  const isSelectedHushOwner = selectedHushMembership?.role === "owner";
+  useEffect(() => {
+    if (hushInvitablePresentUsers.length === 0) {
+      setHushInviteUserId("");
+      return;
+    }
+    if (
+      hushInviteUserId &&
+      hushInvitablePresentUsers.some((entry) => entry.userId === hushInviteUserId)
+    ) {
+      return;
+    }
+    setHushInviteUserId(hushInvitablePresentUsers[0].userId);
+  }, [hushInviteUserId, hushInvitablePresentUsers]);
+
+  useEffect(() => {
+    if (hushCreatablePresentUsers.length === 0) {
+      setHushCreateUserId("");
+      return;
+    }
+    if (
+      hushCreateUserId &&
+      hushCreatablePresentUsers.some((entry) => entry.userId === hushCreateUserId)
+    ) {
+      return;
+    }
+    setHushCreateUserId(hushCreatablePresentUsers[0].userId);
+  }, [hushCreateUserId, hushCreatablePresentUsers]);
+
+  useEffect(() => {
+    if (selectedHushChatId) {
+      setHushPanelOpen(true);
+    }
+  }, [selectedHushChatId]);
 
   return (
     <main
@@ -2014,14 +2111,87 @@ export default function Main() {
           <div style={{ opacity: 0.6, letterSpacing: "0.2em" }}>
             {"hush\u00b7chat"}
           </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div
             className="kozmos-tap hush-refresh"
             style={{ opacity: 0.4, cursor: "pointer" }}
-            onClick={loadHush}
+            onClick={(e) => {
+              e.stopPropagation();
+              loadHush();
+            }}
           >
             refresh
           </div>
+          <div
+            className="kozmos-tap"
+            style={{ opacity: 0.52, cursor: "pointer" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setHushPanelOpen((prev) => !prev);
+            }}
+          >
+            {hushPanelOpen ? "close" : "open"}
+          </div>
         </div>
+      </div>
+
+      {!hushPanelOpen ? (
+        <div
+          className="kozmos-tap"
+          style={{ opacity: 0.55, fontSize: 11, cursor: "pointer" }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setHushPanelOpen(true);
+          }}
+        >
+          tap to open hush chat
+        </div>
+      ) : (
+      <>
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ opacity: 0.5, marginBottom: 4 }}>start hush</div>
+        {selectedHushCreateUser ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <select
+              value={selectedHushCreateUser.userId}
+              onChange={(e) => setHushCreateUserId(e.target.value)}
+              style={{
+                flex: 1,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.18)",
+                color: "#eaeaea",
+                fontSize: 12,
+                padding: "6px 8px",
+                outline: "none",
+              }}
+            >
+              {hushCreatablePresentUsers.map((entry) => (
+                <option key={entry.userId} value={entry.userId}>
+                  {entry.username}
+                </option>
+              ))}
+            </select>
+            <span
+              className="kozmos-tap"
+              style={{ opacity: hushLoading ? 0.4 : 0.72, cursor: "pointer" }}
+              onClick={() => {
+                if (!selectedHushCreateUser || hushLoading) return;
+                void createHushWith(
+                  selectedHushCreateUser.userId,
+                  selectedHushCreateUser.username
+                );
+              }}
+            >
+              {hushLoading ? "..." : "create"}
+            </span>
+          </div>
+        ) : (
+          <div style={{ opacity: 0.4, fontSize: 11 }}>
+            no present users available
+          </div>
+        )}
+      </div>
 
         {hushInviteTarget && (
           <div style={{ marginBottom: 12 }}>
@@ -2044,10 +2214,14 @@ export default function Main() {
                   if (hushInviteTarget.chatId) {
                     inviteToHushChat(
                       hushInviteTarget.chatId,
-                      hushInviteTarget.userId
+                      hushInviteTarget.userId,
+                      hushInviteTarget.username
                     );
                   } else {
-                    createHushWith(hushInviteTarget.userId);
+                    createHushWith(
+                      hushInviteTarget.userId,
+                      hushInviteTarget.username
+                    );
                   }
                 }}
               >
@@ -2151,11 +2325,11 @@ export default function Main() {
                   paddingBottom: 8,
                   borderBottom: "1px solid rgba(255,255,255,0.06)",
                 }}
-                onClick={() =>
-                  setSelectedHushChatId((prev) =>
-                    prev === chat.id ? null : chat.id
-                  )
-                }
+                onClick={() => {
+                  if (selectedHushChatId === chat.id) return;
+                  setSelectedHushChatId(chat.id);
+                  void loadHushMessages(chat.id);
+                }}
                 onMouseEnter={() => setHoveredHushChatId(chat.id)}
                 onMouseLeave={() => setHoveredHushChatId(null)}
               >
@@ -2250,6 +2424,69 @@ export default function Main() {
               ))}
             </div>
 
+            {isSelectedHushOwner && (
+              <div
+                style={{
+                  marginBottom: 10,
+                  paddingBottom: 10,
+                  borderBottom: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                <div style={{ opacity: 0.5, marginBottom: 6, fontSize: 11 }}>
+                  invite present user
+                </div>
+                {selectedHushInviteUser ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <select
+                      value={selectedHushInviteUser.userId}
+                      onChange={(e) => setHushInviteUserId(e.target.value)}
+                      style={{
+                        flex: 1,
+                        background: "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.18)",
+                        color: "#eaeaea",
+                        fontSize: 12,
+                        padding: "6px 8px",
+                        outline: "none",
+                      }}
+                    >
+                      {hushInvitablePresentUsers.map((entry) => (
+                        <option key={entry.userId} value={entry.userId}>
+                          {entry.username}
+                        </option>
+                      ))}
+                    </select>
+                    <span
+                      className="kozmos-tap"
+                      style={{ opacity: hushLoading ? 0.4 : 0.72, cursor: "pointer" }}
+                      onClick={() => {
+                        if (!selectedHushChatId || !selectedHushInviteUser || hushLoading) {
+                          return;
+                        }
+                        void inviteToHushChat(
+                          selectedHushChatId,
+                          selectedHushInviteUser.userId,
+                          selectedHushInviteUser.username
+                        );
+                      }}
+                    >
+                      {hushLoading ? "..." : "invite"}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ opacity: 0.4, fontSize: 11 }}>
+                    no present users available
+                  </div>
+                )}
+              </div>
+            )}
+
             {canChatInSelectedHush ? (
               <>
                 <div
@@ -2264,12 +2501,13 @@ export default function Main() {
                       <span style={{ opacity: 0.6 }}>
                         {getHushUserName(msg.user_id)}:
                       </span>{" "}
-                      <span>{msg.content}</span>
+                      <span className="selectable-text">{msg.content}</span>
                     </div>
                   ))}
                 </div>
 
                 <input
+                  className="kozmos-text-input"
                   value={hushInput}
                   onChange={(e) => setHushInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -2288,6 +2526,9 @@ export default function Main() {
                     fontSize: 12,
                     outline: "none",
                     paddingBottom: 6,
+                    cursor: "text",
+                    userSelect: "text",
+                    WebkitUserSelect: "text",
                   }}
                 />
 
@@ -2339,6 +2580,8 @@ export default function Main() {
             )}
           </div>
         )}
+      </>
+      )}
           </div>
 
           <div
@@ -2597,27 +2840,12 @@ export default function Main() {
                   <span
                     style={{
                       opacity: 0.6,
-                      cursor: m.user_id === userId ? "default" : "pointer",
-                    }}
-                    onMouseEnter={() => setHoveredMsgId(m.id)}
-                    onMouseLeave={() => setHoveredMsgId(null)}
-                    onClick={() => {
-                      if (m.user_id === userId) return;
-                      setHushInviteTarget({
-                        userId: m.user_id,
-                        username: m.username,
-                        chatId: isSelectedHushOwner
-                          ? selectedHushChatId ?? undefined
-                          : undefined,
-                      });
+                      cursor: "default",
                     }}
                   >
-                    {m.user_id !== userId && hoveredMsgId === m.id && (
-                      <span style={hushPillStyle}>hush-chat</span>
-                    )}
                     {m.username}:
                   </span>{" "}
-                  <span>{m.content}</span>
+                  <span className="selectable-text">{m.content}</span>
                   {m.user_id === userId && (
                     <span
                       onClick={() => {
@@ -2713,6 +2941,7 @@ export default function Main() {
         </div>
 
         <textarea
+          className="kozmos-text-input"
           value={chatMode === "open" ? input : gameInput}
           onChange={(e) => {
             if (chatMode === "open") {
@@ -2744,6 +2973,9 @@ export default function Main() {
             resize: "none",
             outline: "none",
             fontSize: 14,
+            cursor: "text",
+            userSelect: "text",
+            WebkitUserSelect: "text",
           }}
         />
 
@@ -3038,7 +3270,6 @@ export default function Main() {
               ...playPanelStyle,
               minHeight: playOpen ? undefined : playClosedHeight ?? undefined,
             }}
-            onClick={togglePlayPanel}
           >
           <div
             style={{
@@ -3051,7 +3282,19 @@ export default function Main() {
             <div style={{ opacity: 0.6, letterSpacing: "0.2em" }}>
               {"kozmos\u00b7play"}
             </div>
-            <div style={{ opacity: 0.35 }}>beta</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ opacity: 0.35 }}>beta</span>
+              <span
+                className="kozmos-tap"
+                style={{ opacity: 0.58, cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePlayPanel();
+                }}
+              >
+                {playOpen ? "close" : "open"}
+              </span>
+            </div>
           </div>
 
           <div style={{ opacity: 0.5, marginBottom: 6 }}>
