@@ -79,6 +79,8 @@ body {
 .manifesto-link {
   opacity: 0.75;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
   transition:
     opacity 0.25s ease,
     text-shadow 0.25s ease;
@@ -588,6 +590,71 @@ body {
 
 .home-hero-title::after {
   content: none;
+}
+
+@keyframes homeManifestoWake {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  28% {
+    transform: translate3d(
+        calc(var(--wobble-x, 0px) * var(--wobble-scale, 1)),
+        calc(var(--wobble-y, 0px) * var(--wobble-scale, 1) * -1),
+        0
+      )
+      rotate(calc(var(--wobble-r, 0deg) * var(--wobble-scale, 1)));
+  }
+  56% {
+    transform: translate3d(
+        calc(var(--wobble-x, 0px) * var(--wobble-scale, 1) * -0.8),
+        calc(var(--wobble-y, 0px) * var(--wobble-scale, 1)),
+        0
+      )
+      rotate(calc(var(--wobble-r, 0deg) * var(--wobble-scale, 1) * -0.75));
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+.home-manifesto-line {
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.home-manifesto-word-wrap {
+  display: inline;
+}
+
+.home-manifesto-word {
+  display: inline-block;
+  transform: translate3d(0, 0, 0);
+  transition:
+    text-shadow 180ms ease,
+    opacity 180ms ease;
+  will-change: transform, text-shadow;
+}
+
+.home-manifesto-line:hover .home-manifesto-word {
+  opacity: 0.95;
+}
+
+.home-manifesto-word.is-active {
+  --wobble-scale: 1.08;
+  animation: homeManifestoWake 820ms ease-in-out infinite;
+  text-shadow: 0 0 12px rgba(235, 244, 255, 0.44);
+}
+
+.home-manifesto-word.is-near {
+  --wobble-scale: 0.72;
+  animation: homeManifestoWake 980ms ease-in-out infinite;
+  text-shadow: 0 0 8px rgba(220, 232, 248, 0.3);
+}
+
+.home-manifesto-word.is-echo {
+  --wobble-scale: 0.44;
+  animation: homeManifestoWake 1120ms ease-in-out infinite;
 }
 
 @keyframes homeTitleSilverPulse {

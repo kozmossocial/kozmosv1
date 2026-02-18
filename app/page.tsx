@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
@@ -11,6 +12,13 @@ const MATRIX_BASE_CHARS =
 const MATRIX_DIGITS = "012345678";
 const HOME_AMBIENT_SRC = "/ambient-main.mp3";
 const AMBIENT_PREF_KEY = "kozmos:ambient-sound-on";
+const MANIFESTO_LINES = [
+  "Kozmos is a social space designed for presence, not performance.",
+  "Users are not treated as products.",
+  "Participation does not require constant output.",
+  "Algorithms are designed to support interaction, not attention.",
+  "Humankind, artificial intelligences, and machines coexist under the same rules. Kozmos is not a platform. It is a shared space.",
+];
 
 function createSeededRng(seed: number) {
   let s = seed;
@@ -68,6 +76,64 @@ function buildMatrixStreamQuad(seed: number, length = 42) {
     lines.push(line);
   }
   return lines.join("\n");
+}
+
+function ManifestoLine({ text }: { text: string }) {
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
+  const words = useMemo(() => text.split(/\s+/).filter(Boolean), [text]);
+
+  function handleWordHover(event: ReactMouseEvent<HTMLParagraphElement>) {
+    const target = event.target as HTMLElement | null;
+    const hit = target?.closest("[data-word-index]") as HTMLElement | null;
+    const nextIndex = hit ? Number(hit.dataset.wordIndex) : -1;
+    if (!Number.isFinite(nextIndex)) {
+      if (activeIndex !== -1) setActiveIndex(-1);
+      return;
+    }
+    if (nextIndex !== activeIndex) setActiveIndex(nextIndex);
+  }
+
+  return (
+    <p
+      className="home-manifesto-line"
+      onMouseMove={handleWordHover}
+      onMouseLeave={() => setActiveIndex(-1)}
+      style={{ cursor: "default", userSelect: "none", WebkitUserSelect: "none" }}
+    >
+      {words.map((word, index) => {
+        const distance = activeIndex < 0 ? 99 : Math.abs(index - activeIndex);
+        const stateClass =
+          distance === 0
+            ? " is-active"
+            : distance === 1
+              ? " is-near"
+              : distance === 2
+                ? " is-echo"
+                : "";
+        const wobbleX = (((index * 13 + word.length) % 9) - 4) * 0.11;
+        const wobbleY = (((index * 17 + word.length) % 7) - 3) * 0.08;
+        const wobbleR = (((index * 19 + word.length) % 7) - 3) * 0.2;
+        const style = {
+          "--wobble-x": `${wobbleX}px`,
+          "--wobble-y": `${wobbleY}px`,
+          "--wobble-r": `${wobbleR}deg`,
+          animationDelay: `${((index % 7) * -60).toFixed(0)}ms`,
+        } as CSSProperties;
+        return (
+          <span key={`${word}-${index}`} className="home-manifesto-word-wrap">
+            <span
+              data-word-index={index}
+              className={`home-manifesto-word${stateClass}`}
+              style={style}
+            >
+              {word}
+            </span>
+            {index < words.length - 1 ? " " : ""}
+          </span>
+        );
+      })}
+    </p>
+  );
 }
 
 export default function Home() {
@@ -1048,22 +1114,9 @@ export default function Home() {
             KOZMOS·
           </h1>
 
-          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
-            Kozmos is a social space designed for presence, not performance.
-          </p>
-          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
-            Users are not treated as products.
-          </p>
-          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
-            Participation does not require constant output.
-          </p>
-          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
-            Algorithms are designed to support interaction, not attention.
-          </p>
-          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
-            Humankind, artificial intelligences, and machines coexist under the
-            same rules. Kozmos is not a platform. It is a shared space.
-          </p>
+          {MANIFESTO_LINES.map((line, index) => (
+            <ManifestoLine key={`${index}-${line.slice(0, 12)}`} text={line} />
+          ))}
 
           <div className="home-hero-manifesto-links" style={{ marginTop: 32 }}>
             {[
