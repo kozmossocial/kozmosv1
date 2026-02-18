@@ -19,6 +19,87 @@ const CHAT_MODE_LABEL: Record<ChatMode, string> = {
   game: "game chat",
   build: "build chat",
 };
+const NIGHT_PROTOCOL_MODE = "night-protocol";
+
+type NightProtocolLobby = {
+  id: string;
+  sessionCode: string;
+  status: "LOBBY" | "NIGHT" | "DAY" | "VOTING" | "ENDED";
+  roundNo: number;
+  minPlayers: number;
+  maxPlayers: number;
+  presenceMode: boolean;
+  axyChatBridge: boolean;
+  votingChatMode: "closed" | "open_short";
+  hostUserId: string;
+  createdAt: string;
+  playerCount: number;
+  joined: boolean;
+};
+
+type NightProtocolSessionState = {
+  session: {
+    id: string;
+    sessionCode: string;
+    status: "LOBBY" | "NIGHT" | "DAY" | "VOTING" | "ENDED";
+    roundNo: number;
+    minPlayers: number;
+    maxPlayers: number;
+    presenceMode: boolean;
+    axyChatBridge: boolean;
+    votingChatMode: "closed" | "open_short";
+    currentSpeakerPlayerId: string | null;
+    speakerOrder: string[];
+    speakerIndex: number;
+    speakerTurnEndsAt: string | null;
+    phaseEndsAt: string | null;
+    winner: "CITIZENS" | "SHADOWS" | null;
+    hostUserId: string;
+    createdAt: string;
+  };
+  me: {
+    id: string;
+    username: string;
+    role: "shadow" | "oracle" | "guardian" | "citizen" | null;
+    isAlive: boolean;
+    isHost: boolean;
+    isAi: boolean;
+  };
+  players: Array<{
+    id: string;
+    username: string;
+    isAi: boolean;
+    seatNo: number;
+    isAlive: boolean;
+    eliminationType: "night_fade" | "exile" | null;
+    roleVisible: "shadow" | "oracle" | "guardian" | "citizen" | null;
+  }>;
+  events: Array<{
+    id: number;
+    roundNo: number;
+    phase: string;
+    scope: "public" | "private";
+    eventType: string;
+    content: string;
+    createdAt: string;
+  }>;
+  dayMessages: Array<{
+    id: number;
+    roundNo: number;
+    senderPlayerId: string;
+    username: string;
+    content: string;
+    createdAt: string;
+  }>;
+  myRoundAction: { actionType: string; targetPlayerId: string } | null;
+  myRoundVote: { targetPlayerId: string } | null;
+  counts: {
+    totalPlayers: number;
+    alivePlayers: number;
+    votesThisRound: number;
+    actionsThisRound: number;
+  };
+};
 
 type HushChat = {
   id: string;
@@ -53,6 +134,16 @@ type HushMessage = {
 
 const ORBIT_TRACK_SIZE = 12;
 const QUITE_SWARM_MODE = "quite-swarm";
+const CHAT_REQUIRED_PLAYS = new Set<string>([QUITE_SWARM_MODE, NIGHT_PROTOCOL_MODE]);
+const NIGHT_PROTOCOL_ROLE_LABEL: Record<
+  "shadow" | "oracle" | "guardian" | "citizen",
+  string
+> = {
+  shadow: "Shadow Entity",
+  oracle: "Oracle",
+  guardian: "Guardian",
+  citizen: "Citizen",
+};
 const VS_ARENA_LIMIT = 48;
 const VS_MATCH_SECONDS = 60;
 const VS_STEP_SECONDS = 0.1;
@@ -532,7 +623,12 @@ export default function Main() {
   const [hushCreateUserId, setHushCreateUserId] = useState("");
   const [playOpen, setPlayOpen] = useState(false);
   const [activePlay, setActivePlay] = useState<
-    "signal-drift" | "slow-orbit" | "hush-puzzle" | typeof QUITE_SWARM_MODE | null
+    | "signal-drift"
+    | "slow-orbit"
+    | "hush-puzzle"
+    | typeof QUITE_SWARM_MODE
+    | typeof NIGHT_PROTOCOL_MODE
+    | null
   >(null);
   const [driftRunning, setDriftRunning] = useState(false);
   const [driftScore, setDriftScore] = useState(0);
@@ -557,6 +653,30 @@ export default function Main() {
   const [vsSession, setVsSession] = useState<VsSession>(() =>
     createVsSession(["user"], false)
   );
+  const [nightProtocolSessionId, setNightProtocolSessionId] = useState("");
+  const [nightProtocolSessionCodeInput, setNightProtocolSessionCodeInput] =
+    useState("");
+  const [nightProtocolMaxPlayers, setNightProtocolMaxPlayers] = useState(12);
+  const [nightProtocolPresenceMode, setNightProtocolPresenceMode] = useState(true);
+  const [nightProtocolAxyChatBridge, setNightProtocolAxyChatBridge] =
+    useState(true);
+  const [nightProtocolVotingChatMode, setNightProtocolVotingChatMode] = useState<
+    "closed" | "open_short"
+  >("closed");
+  const [nightProtocolShowInstructions, setNightProtocolShowInstructions] =
+    useState(false);
+  const [nightProtocolAiName, setNightProtocolAiName] = useState("");
+  const [nightProtocolTargetPlayerId, setNightProtocolTargetPlayerId] =
+    useState("");
+  const [nightProtocolLobbies, setNightProtocolLobbies] = useState<
+    NightProtocolLobby[]
+  >([]);
+  const [nightProtocolState, setNightProtocolState] =
+    useState<NightProtocolSessionState | null>(null);
+  const [nightProtocolBusyAction, setNightProtocolBusyAction] = useState<
+    string | null
+  >(null);
+  const [nightProtocolError, setNightProtocolError] = useState("");
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
   const hushMembersRef = useRef<HushMember[]>([]);
   const hushAlertTimeoutRef = useRef<number | null>(null);
@@ -582,11 +702,68 @@ export default function Main() {
       a.localeCompare(b, "en", { sensitivity: "base" })
     );
   }, [realtimePresentUsers, runtimePresentUsers]);
+  const gameChatEnabled = Boolean(
+    playOpen && activePlay && CHAT_REQUIRED_PLAYS.has(activePlay)
+  );
+  const isNightProtocolPlay = activePlay === NIGHT_PROTOCOL_MODE;
+  const nightProtocolChatMessages = useMemo(() => {
+    if (!nightProtocolState) return [] as Message[];
+
+    const dayRows = nightProtocolState.dayMessages.map((row) => ({
+      id: `np-day-${row.id}`,
+      user_id: `np-player-${row.senderPlayerId}`,
+      username: row.username,
+      content: row.content,
+      created_at: row.createdAt,
+    }));
+
+    const eventRows = nightProtocolState.session.axyChatBridge
+      ? nightProtocolState.events.map((row) => ({
+          id: `np-event-${row.id}`,
+          user_id: "np-axy",
+          username: "Axy",
+          content: row.content,
+          created_at: row.createdAt,
+        }))
+      : [];
+
+    return [...dayRows, ...eventRows]
+      .sort(
+        (a, b) =>
+          Date.parse(a.created_at || "0") - Date.parse(b.created_at || "0")
+      )
+      .map((item) => ({
+        id: item.id,
+        user_id: item.user_id,
+        username: item.username,
+        content: item.content,
+      }));
+  }, [nightProtocolState]);
+  const nightProtocolCanSend = useMemo(() => {
+    if (!nightProtocolState) return false;
+    if (!nightProtocolState.me.isAlive) return false;
+    const status = nightProtocolState.session.status;
+    if (status === "DAY") {
+      if (!nightProtocolState.session.presenceMode) return true;
+      return (
+        nightProtocolState.session.currentSpeakerPlayerId ===
+        nightProtocolState.me.id
+      );
+    }
+    if (status === "VOTING") {
+      return nightProtocolState.session.votingChatMode === "open_short";
+    }
+    return false;
+  }, [nightProtocolState]);
+  const gameChatReadOnly =
+    !gameChatEnabled || (isNightProtocolPlay && !nightProtocolCanSend);
   const activeMessages =
     chatMode === "open"
       ? messages
       : chatMode === "game"
-        ? gameMessages
+        ? isNightProtocolPlay
+          ? nightProtocolChatMessages
+          : gameMessages
         : buildMessages;
   const activeChatLabel = CHAT_MODE_LABEL[chatMode];
   const activeChatIndex = CHAT_MODE_ORDER.indexOf(chatMode);
@@ -632,6 +809,25 @@ export default function Main() {
     () => uniqueNames([currentUsername, ...presentUsers]),
     [currentUsername, presentUsers]
   );
+  const nightProtocolAliveTargets = useMemo(() => {
+    if (!nightProtocolState) return [];
+    return nightProtocolState.players.filter((player) => player.isAlive);
+  }, [nightProtocolState]);
+  const nightProtocolCanNightAct = useMemo(() => {
+    if (!nightProtocolState) return false;
+    if (!nightProtocolState.me.isAlive) return false;
+    if (nightProtocolState.session.status !== "NIGHT") return false;
+    return (
+      nightProtocolState.me.role === "shadow" ||
+      nightProtocolState.me.role === "oracle" ||
+      nightProtocolState.me.role === "guardian"
+    );
+  }, [nightProtocolState]);
+  const nightProtocolCanVote = useMemo(() => {
+    if (!nightProtocolState) return false;
+    if (!nightProtocolState.me.isAlive) return false;
+    return nightProtocolState.session.status === "VOTING";
+  }, [nightProtocolState]);
 
   useEffect(() => {
     chatModeRef.current = chatMode;
@@ -928,6 +1124,116 @@ export default function Main() {
     }
   }, []);
 
+  async function fetchNightProtocolJson(
+    path: string,
+    init?: RequestInit
+  ): Promise<Record<string, unknown>> {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("session missing");
+    }
+
+    const headers = new Headers(init?.headers || {});
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+    if (init?.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const res = await fetch(path, { ...init, headers });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      throw new Error(String(body.error || "night protocol request failed"));
+    }
+    return body;
+  }
+
+  const loadNightProtocolLobby = useCallback(async () => {
+    try {
+      const body = await fetchNightProtocolJson("/api/night-protocol");
+      const lobbies = (body.lobbies || []) as NightProtocolLobby[];
+      const mySessions = (body.mySessions || []) as Array<{ id: string }>;
+      setNightProtocolLobbies(lobbies);
+
+      if (!nightProtocolSessionId && mySessions.length > 0) {
+        const nextSessionId = String(mySessions[0].id || "").trim();
+        if (nextSessionId) {
+          setNightProtocolSessionId(nextSessionId);
+        }
+      }
+    } catch (err) {
+      setNightProtocolError(
+        err instanceof Error ? err.message : "night protocol lobby failed"
+      );
+    }
+  }, [nightProtocolSessionId]);
+
+  const loadNightProtocolState = useCallback(
+    async (sessionIdOverride?: string) => {
+      const targetId = (sessionIdOverride || nightProtocolSessionId).trim();
+      if (!targetId) {
+        setNightProtocolState(null);
+        return;
+      }
+      try {
+        const body = await fetchNightProtocolJson(
+          `/api/night-protocol?sessionId=${encodeURIComponent(targetId)}`
+        );
+        const next = body as unknown as NightProtocolSessionState;
+        setNightProtocolState(next);
+        setNightProtocolAxyChatBridge(next.session.axyChatBridge);
+        setNightProtocolVotingChatMode(next.session.votingChatMode);
+        setNightProtocolPresenceMode(next.session.presenceMode);
+        setNightProtocolError("");
+      } catch (err) {
+        setNightProtocolState(null);
+        setNightProtocolError(
+          err instanceof Error ? err.message : "night protocol state failed"
+        );
+      }
+    },
+    [nightProtocolSessionId]
+  );
+
+  async function runNightProtocolAction(
+    action: string,
+    payload?: Record<string, unknown>
+  ) {
+    setNightProtocolBusyAction(action);
+    setNightProtocolError("");
+    try {
+      const body = await fetchNightProtocolJson("/api/night-protocol", {
+        method: "POST",
+        body: JSON.stringify({
+          action,
+          sessionId: nightProtocolSessionId || undefined,
+          ...payload,
+        }),
+      });
+
+      const returnedSessionId = String(body.sessionId || "").trim();
+      const resolvedSessionId = returnedSessionId || nightProtocolSessionId;
+      if (returnedSessionId && returnedSessionId !== nightProtocolSessionId) {
+        setNightProtocolSessionId(returnedSessionId);
+      }
+
+      await loadNightProtocolLobby();
+      if (resolvedSessionId) {
+        await loadNightProtocolState(resolvedSessionId);
+      }
+      return body;
+    } catch (err) {
+      setNightProtocolError(
+        err instanceof Error ? err.message : "night protocol action failed"
+      );
+      return null;
+    } finally {
+      setNightProtocolBusyAction(null);
+    }
+  }
+
   function getHushUserName(id: string) {
     return hushUsers[id] || "user";
   }
@@ -1098,6 +1404,51 @@ export default function Main() {
 
     setPlayClosedHeight(el.getBoundingClientRect().height);
   }, [playClosedHeight]);
+
+  useEffect(() => {
+    if (!playOpen || activePlay !== NIGHT_PROTOCOL_MODE) return;
+    void loadNightProtocolLobby();
+  }, [activePlay, loadNightProtocolLobby, playOpen]);
+
+  useEffect(() => {
+    if (!playOpen || activePlay !== NIGHT_PROTOCOL_MODE) return;
+    if (!nightProtocolSessionId) return;
+    void loadNightProtocolState(nightProtocolSessionId);
+  }, [
+    activePlay,
+    loadNightProtocolState,
+    nightProtocolSessionId,
+    playOpen,
+  ]);
+
+  useEffect(() => {
+    if (!playOpen || activePlay !== NIGHT_PROTOCOL_MODE) return;
+    const poll = window.setInterval(() => {
+      void loadNightProtocolLobby();
+      if (nightProtocolSessionId) {
+        void loadNightProtocolState(nightProtocolSessionId);
+      }
+    }, 2600);
+    return () => {
+      window.clearInterval(poll);
+    };
+  }, [
+    activePlay,
+    loadNightProtocolLobby,
+    loadNightProtocolState,
+    nightProtocolSessionId,
+    playOpen,
+  ]);
+
+  useEffect(() => {
+    if (!nightProtocolTargetPlayerId || !nightProtocolState) return;
+    const exists = nightProtocolState.players.some(
+      (player) => player.id === nightProtocolTargetPlayerId && player.isAlive
+    );
+    if (!exists) {
+      setNightProtocolTargetPlayerId("");
+    }
+  }, [nightProtocolState, nightProtocolTargetPlayerId]);
 
   useEffect(() => {
     if (!playOpen || activePlay !== "signal-drift" || !driftRunning) return;
@@ -1459,7 +1810,16 @@ export default function Main() {
   }
 
   async function sendGameMessage() {
-    if (!gameInput.trim() || !userId) return;
+    if (!gameInput.trim() || !userId || !gameChatEnabled) return;
+
+    if (isNightProtocolPlay) {
+      const content = gameInput.trim();
+      const result = await runNightProtocolAction("send_day_message", { content });
+      if (result) {
+        setGameInput("");
+      }
+      return;
+    }
 
     setGameLoading(true);
 
@@ -1575,7 +1935,12 @@ export default function Main() {
   }
 
   function openPlay(
-    game: "signal-drift" | "slow-orbit" | "hush-puzzle" | typeof QUITE_SWARM_MODE
+    game:
+      | "signal-drift"
+      | "slow-orbit"
+      | "hush-puzzle"
+      | typeof QUITE_SWARM_MODE
+      | typeof NIGHT_PROTOCOL_MODE
   ) {
     setActivePlay(game);
     if (game === "signal-drift") {
@@ -1604,6 +1969,13 @@ export default function Main() {
       const roster =
         vsSelectedUsers.length > 0 ? vsSelectedUsers : [currentUsername];
       setVsSession(createVsSession(roster, false));
+    }
+    if (game === NIGHT_PROTOCOL_MODE) {
+      setChatMode("game");
+      void loadNightProtocolLobby();
+      if (nightProtocolSessionId) {
+        void loadNightProtocolState(nightProtocolSessionId);
+      }
     }
   }
 
@@ -1638,6 +2010,10 @@ export default function Main() {
   function cycleChatMode(direction: 1 | -1) {
     const current = chatModeRef.current;
     const currentIndex = CHAT_MODE_ORDER.indexOf(current);
+    if (currentIndex < 0) {
+      setChatMode("open");
+      return;
+    }
     const next =
       CHAT_MODE_ORDER[
         (currentIndex + direction + CHAT_MODE_ORDER.length) %
@@ -3100,6 +3476,7 @@ export default function Main() {
                 : buildInput
           }
           onChange={(e) => {
+            if (chatMode === "game" && gameChatReadOnly) return;
             if (chatMode === "open") {
               setInput(e.target.value);
             } else if (chatMode === "game") {
@@ -3115,8 +3492,10 @@ export default function Main() {
                 if (!loading) {
                   void sendMessage();
                 }
-              } else if (chatMode === "game" && !gameLoading) {
-                void sendGameMessage();
+              } else if (chatMode === "game") {
+                if (!gameLoading && !gameChatReadOnly) {
+                  void sendGameMessage();
+                }
               } else if (!buildLoading) {
                 void sendBuildMessage();
               }
@@ -3126,9 +3505,14 @@ export default function Main() {
             chatMode === "open"
               ? "write something..."
               : chatMode === "game"
-                ? "write game chat..."
+                ? gameChatReadOnly
+                  ? isNightProtocolPlay
+                    ? "chat locked by current phase"
+                    : "game chat is read-only until a chat-required game is active"
+                  : "write game chat..."
                 : "write build chat..."
           }
+          disabled={chatMode === "game" && gameChatReadOnly}
           style={{
             width: "100%",
             minHeight: 80,
@@ -3139,9 +3523,10 @@ export default function Main() {
             resize: "none",
             outline: "none",
             fontSize: 14,
-            cursor: "text",
+            cursor: chatMode === "game" && gameChatReadOnly ? "default" : "text",
             userSelect: "text",
             WebkitUserSelect: "text",
+            opacity: chatMode === "game" && gameChatReadOnly ? 0.72 : 1,
           }}
         />
 
@@ -3151,13 +3536,16 @@ export default function Main() {
             fontSize: 12,
             letterSpacing: "0.12em",
             opacity: 0.6,
-            cursor: "pointer",
+            cursor:
+              chatMode === "game" && gameChatReadOnly ? "default" : "pointer",
           }}
           onClick={() => {
             if (chatMode === "open") {
               void sendMessage();
             } else if (chatMode === "game") {
-              void sendGameMessage();
+              if (!gameChatReadOnly) {
+                void sendGameMessage();
+              }
             } else {
               void sendBuildMessage();
             }
@@ -3168,7 +3556,9 @@ export default function Main() {
               ? "sending..."
               : "send"
             : chatMode === "game"
-              ? gameLoading
+              ? gameChatReadOnly
+                ? "read-only"
+                : gameLoading
                 ? "sending..."
                 : "send"
               : buildLoading
@@ -3484,13 +3874,13 @@ export default function Main() {
                     marginBottom: 6,
                   }}
                 >
-                  <span>night protocol</span>
+                  <span>night protocol 🐺</span>
                   <span
                     className="kozmos-tap"
                     style={{ opacity: 0.78, cursor: "pointer" }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      router.push("/main/night-protocol");
+                      openPlay(NIGHT_PROTOCOL_MODE);
                     }}
                   >
                     enter circle
@@ -3580,6 +3970,459 @@ export default function Main() {
                   </span>
                 </div>
               </div>
+
+              {activePlay === NIGHT_PROTOCOL_MODE && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    marginTop: 12,
+                    border: "1px solid rgba(132,190,255,0.34)",
+                    borderRadius: 10,
+                    padding: 10,
+                    background: "rgba(7, 12, 24, 0.82)",
+                    boxShadow:
+                      "0 0 20px rgba(90,160,255,0.16), inset 0 0 10px rgba(136,191,255,0.1)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
+                      fontSize: 11,
+                    }}
+                  >
+                    <span>Night Protocol 🐺 - enter the circle</span>
+                    <span style={{ opacity: 0.7 }}>
+                      {nightProtocolState
+                        ? `${nightProtocolState.session.status} · round ${nightProtocolState.session.roundNo}`
+                        : "lobby"}
+                    </span>
+                  </div>
+
+                  {nightProtocolError ? (
+                    <div style={{ color: "#ff9da4", fontSize: 10, marginBottom: 8 }}>
+                      {nightProtocolError}
+                    </div>
+                  ) : null}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
+                      fontSize: 10,
+                      opacity: 0.82,
+                    }}
+                  >
+                    <span>
+                      setup: host picks max players, presence mode, Axy bridge and vote chat
+                    </span>
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer", opacity: 0.9 }}
+                      onClick={() =>
+                        setNightProtocolShowInstructions((prev) => !prev)
+                      }
+                    >
+                      {nightProtocolShowInstructions ? "hide instructions" : "instructions"}
+                    </span>
+                  </div>
+
+                  {nightProtocolShowInstructions ? (
+                    <div
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.16)",
+                        background: "rgba(10,14,28,0.7)",
+                        borderRadius: 8,
+                        padding: 8,
+                        marginBottom: 8,
+                        fontSize: 10,
+                        lineHeight: 1.5,
+                        opacity: 0.9,
+                      }}
+                    >
+                      <div style={{ marginBottom: 4, opacity: 0.9 }}>
+                        <strong>How To Play - Kozmos Night Protocol</strong>
+                      </div>
+                      <div>1. Host creates a session and shares the session code.</div>
+                      <div>2. Minimum 6 players required. You can add AI players.</div>
+                      <div>3. Start game: roles are assigned privately.</div>
+                      <div>4. NIGHT: Shadow/Oracle/Guardian submit private actions.</div>
+                      <div>5. Host resolves night. Axy announces dawn outcome.</div>
+                      <div>
+                        6. DAY: discuss in game chat. If presence mode is on, only current
+                        speaker can chat.
+                      </div>
+                      <div>7. Host starts voting, everyone votes one target.</div>
+                      <div>8. Host resolves vote. Exiled role is revealed.</div>
+                      <div>9. Repeat rounds until win condition is met.</div>
+                      <div style={{ marginTop: 4, opacity: 0.82 }}>
+                        Win: Citizens remove all Shadows. Shadows win when they reach parity.
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <input
+                      value={nightProtocolSessionCodeInput}
+                      onChange={(e) =>
+                        setNightProtocolSessionCodeInput(e.target.value.toUpperCase())
+                      }
+                      placeholder="session code"
+                      style={{
+                        flex: 1,
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.2)",
+                        color: "#eaeaea",
+                        fontSize: 11,
+                        padding: "6px 8px",
+                      }}
+                    />
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer", opacity: 0.72 }}
+                      onClick={() => {
+                        if (!nightProtocolSessionCodeInput.trim()) return;
+                        void runNightProtocolAction("join_session", {
+                          sessionCode: nightProtocolSessionCodeInput.trim(),
+                        });
+                      }}
+                    >
+                      join
+                    </span>
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer", opacity: 0.72 }}
+                      onClick={() => {
+                        void runNightProtocolAction("create_session", {
+                          maxPlayers: nightProtocolMaxPlayers,
+                          presenceMode: nightProtocolPresenceMode,
+                          axyChatBridge: nightProtocolAxyChatBridge,
+                          votingChatMode: nightProtocolVotingChatMode,
+                        });
+                      }}
+                    >
+                      create
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                      marginBottom: 8,
+                      fontSize: 10,
+                    }}
+                  >
+                    <span style={{ opacity: 0.62 }}>max players</span>
+                    <input
+                      type="number"
+                      min={6}
+                      max={12}
+                      value={nightProtocolMaxPlayers}
+                      onChange={(e) =>
+                        setNightProtocolMaxPlayers(Number(e.target.value) || 12)
+                      }
+                      style={{
+                        width: 52,
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.2)",
+                        color: "#eaeaea",
+                        fontSize: 11,
+                        padding: "4px 6px",
+                      }}
+                    />
+                    <label style={{ opacity: 0.72 }}>
+                      <input
+                        type="checkbox"
+                        checked={nightProtocolPresenceMode}
+                        onChange={(e) =>
+                          setNightProtocolPresenceMode(e.target.checked)
+                        }
+                        style={{ marginRight: 4 }}
+                      />
+                      presence mode
+                    </label>
+                    <label style={{ opacity: 0.72 }}>
+                      <input
+                        type="checkbox"
+                        checked={nightProtocolAxyChatBridge}
+                        onChange={(e) =>
+                          setNightProtocolAxyChatBridge(e.target.checked)
+                        }
+                        style={{ marginRight: 4 }}
+                      />
+                      axy bridge
+                    </label>
+                    <select
+                      value={nightProtocolVotingChatMode}
+                      onChange={(e) =>
+                        setNightProtocolVotingChatMode(
+                          e.target.value === "open_short" ? "open_short" : "closed"
+                        )
+                      }
+                      style={{
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.2)",
+                        color: "#eaeaea",
+                        fontSize: 10,
+                        padding: "4px 6px",
+                      }}
+                    >
+                      <option value="closed">vote chat closed</option>
+                      <option value="open_short">vote chat open</option>
+                    </select>
+                  </div>
+
+                  {nightProtocolLobbies.length > 0 ? (
+                    <div style={{ marginBottom: 8, fontSize: 10, opacity: 0.76 }}>
+                      {nightProtocolLobbies.slice(0, 4).map((lobby) => (
+                        <div
+                          key={`np-lobby-${lobby.id}`}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 4,
+                          }}
+                        >
+                          <span>
+                            {lobby.sessionCode} · {lobby.playerCount}/{lobby.maxPlayers}
+                          </span>
+                          <span
+                            className="kozmos-tap"
+                            style={{ cursor: "pointer", opacity: 0.74 }}
+                            onClick={() => {
+                              setNightProtocolSessionCodeInput(lobby.sessionCode);
+                              void runNightProtocolAction("join_session", {
+                                sessionCode: lobby.sessionCode,
+                              });
+                            }}
+                          >
+                            join
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {nightProtocolState ? (
+                    <>
+                      <div style={{ fontSize: 10, opacity: 0.76, marginBottom: 6 }}>
+                        session {nightProtocolState.session.sessionCode} · you are{" "}
+                        {nightProtocolState.me.role
+                          ? NIGHT_PROTOCOL_ROLE_LABEL[nightProtocolState.me.role]
+                          : "unassigned"}
+                      </div>
+
+                      <div
+                        style={{
+                          maxHeight: 104,
+                          overflowY: "auto",
+                          marginBottom: 8,
+                          fontSize: 10,
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          padding: 6,
+                        }}
+                      >
+                        {nightProtocolState.players.map((player) => (
+                          <div
+                            key={`np-player-${player.id}`}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              opacity: player.isAlive ? 0.9 : 0.56,
+                              marginBottom: 3,
+                            }}
+                          >
+                            <span>
+                              {player.username}
+                              {player.isAi ? " [AI]" : ""}
+                            </span>
+                            <span>
+                              {player.roleVisible
+                                ? NIGHT_PROTOCOL_ROLE_LABEL[player.roleVisible]
+                                : ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {nightProtocolState.me.isHost ? (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          <span
+                            className="kozmos-tap"
+                            style={{ cursor: "pointer", opacity: 0.76 }}
+                            onClick={() => {
+                              void runNightProtocolAction("update_settings", {
+                                presenceMode: nightProtocolPresenceMode,
+                                axyChatBridge: nightProtocolAxyChatBridge,
+                                votingChatMode: nightProtocolVotingChatMode,
+                              });
+                            }}
+                          >
+                            save settings
+                          </span>
+                          {nightProtocolState.session.status === "LOBBY" ? (
+                            <>
+                              <input
+                                value={nightProtocolAiName}
+                                onChange={(e) => setNightProtocolAiName(e.target.value)}
+                                placeholder="ai name"
+                                style={{
+                                  width: 110,
+                                  background: "rgba(255,255,255,0.05)",
+                                  border: "1px solid rgba(255,255,255,0.2)",
+                                  color: "#eaeaea",
+                                  fontSize: 10,
+                                  padding: "3px 5px",
+                                }}
+                              />
+                              <span
+                                className="kozmos-tap"
+                                style={{ cursor: "pointer", opacity: 0.76 }}
+                                onClick={() => {
+                                  void runNightProtocolAction("add_ai_player", {
+                                    aiName: nightProtocolAiName.trim() || undefined,
+                                  });
+                                }}
+                              >
+                                +ai
+                              </span>
+                              <span
+                                className="kozmos-tap"
+                                style={{ cursor: "pointer", opacity: 0.84 }}
+                                onClick={() => {
+                                  void runNightProtocolAction("start_session");
+                                }}
+                              >
+                                start
+                              </span>
+                            </>
+                          ) : null}
+                          {nightProtocolState.session.status === "NIGHT" ? (
+                            <span
+                              className="kozmos-tap"
+                              style={{ cursor: "pointer", opacity: 0.82 }}
+                              onClick={() => {
+                                void runNightProtocolAction("resolve_night");
+                              }}
+                            >
+                              resolve night
+                            </span>
+                          ) : null}
+                          {nightProtocolState.session.status === "DAY" &&
+                          nightProtocolState.session.presenceMode ? (
+                            <span
+                              className="kozmos-tap"
+                              style={{ cursor: "pointer", opacity: 0.82 }}
+                              onClick={() => {
+                                void runNightProtocolAction("advance_day_turn");
+                              }}
+                            >
+                              next speaker
+                            </span>
+                          ) : null}
+                          {nightProtocolState.session.status === "DAY" &&
+                          !nightProtocolState.session.presenceMode ? (
+                            <span
+                              className="kozmos-tap"
+                              style={{ cursor: "pointer", opacity: 0.82 }}
+                              onClick={() => {
+                                void runNightProtocolAction("begin_voting");
+                              }}
+                            >
+                              begin voting
+                            </span>
+                          ) : null}
+                          {nightProtocolState.session.status === "VOTING" ? (
+                            <span
+                              className="kozmos-tap"
+                              style={{ cursor: "pointer", opacity: 0.82 }}
+                              onClick={() => {
+                                void runNightProtocolAction("resolve_vote");
+                              }}
+                            >
+                              resolve vote
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {nightProtocolCanNightAct || nightProtocolCanVote ? (
+                        <div style={{ marginTop: 8 }}>
+                          <select
+                            value={nightProtocolTargetPlayerId}
+                            onChange={(e) =>
+                              setNightProtocolTargetPlayerId(e.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              background: "rgba(255,255,255,0.05)",
+                              border: "1px solid rgba(255,255,255,0.2)",
+                              color: "#eaeaea",
+                              fontSize: 10,
+                              padding: "4px 6px",
+                            }}
+                          >
+                            <option value="">choose target</option>
+                            {nightProtocolAliveTargets
+                              .filter((player) => player.id !== nightProtocolState.me.id)
+                              .map((player) => (
+                                <option key={`np-target-${player.id}`} value={player.id}>
+                                  {player.username}
+                                </option>
+                              ))}
+                          </select>
+                          <div style={{ marginTop: 6, fontSize: 10 }}>
+                            {nightProtocolCanNightAct ? (
+                              <span
+                                className="kozmos-tap"
+                                style={{ cursor: "pointer", opacity: 0.82 }}
+                                onClick={() => {
+                                  if (!nightProtocolTargetPlayerId) return;
+                                  void runNightProtocolAction("submit_night_action", {
+                                    targetPlayerId: nightProtocolTargetPlayerId,
+                                  });
+                                }}
+                              >
+                                submit night action
+                              </span>
+                            ) : null}
+                            {nightProtocolCanVote ? (
+                              <span
+                                className="kozmos-tap"
+                                style={{ cursor: "pointer", opacity: 0.82, marginLeft: 10 }}
+                                onClick={() => {
+                                  if (!nightProtocolTargetPlayerId) return;
+                                  void runNightProtocolAction("submit_vote", {
+                                    targetPlayerId: nightProtocolTargetPlayerId,
+                                  });
+                                }}
+                              >
+                                submit vote
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 10, opacity: 0.62 }}>
+                      create or join a session to begin
+                    </div>
+                  )}
+
+                  {nightProtocolBusyAction ? (
+                    <div style={{ fontSize: 10, opacity: 0.6, marginTop: 8 }}>
+                      {nightProtocolBusyAction}...
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
               {activePlay === "signal-drift" && (
                 <div

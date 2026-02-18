@@ -34,6 +34,8 @@ type SessionRow = {
   min_players: number;
   max_players: number;
   presence_mode: boolean;
+  axy_chat_bridge: boolean;
+  voting_chat_mode: "closed" | "open_short";
   current_speaker_player_id: string | null;
   speaker_order: unknown;
   speaker_index: number;
@@ -147,7 +149,7 @@ async function loadSession(sessionId: string) {
   const { data, error } = await supabaseAdmin
     .from("night_protocol_sessions")
     .select(
-      "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, current_speaker_player_id, speaker_order, speaker_index, speaker_turn_ends_at, phase_ends_at, winner, created_at"
+      "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, axy_chat_bridge, voting_chat_mode, current_speaker_player_id, speaker_order, speaker_index, speaker_turn_ends_at, phase_ends_at, winner, created_at"
     )
     .eq("id", sessionId)
     .maybeSingle();
@@ -395,6 +397,8 @@ function serializeStateForViewer(
       minPlayers: session.min_players,
       maxPlayers: session.max_players,
       presenceMode: session.presence_mode,
+      axyChatBridge: session.axy_chat_bridge,
+      votingChatMode: session.voting_chat_mode,
       currentSpeakerPlayerId: session.current_speaker_player_id,
       speakerOrder: parseSpeakerOrder(session.speaker_order),
       speakerIndex: session.speaker_index,
@@ -520,7 +524,7 @@ export async function GET(req: Request) {
         supabaseAdmin
           .from("night_protocol_sessions")
           .select(
-            "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, created_at"
+            "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, axy_chat_bridge, voting_chat_mode, created_at"
           )
           .eq("status", "LOBBY")
           .order("created_at", { ascending: false })
@@ -540,6 +544,8 @@ export async function GET(req: Request) {
         min_players: number;
         max_players: number;
         presence_mode: boolean;
+        axy_chat_bridge: boolean;
+        voting_chat_mode: "closed" | "open_short";
         created_at: string;
       }>;
 
@@ -565,7 +571,7 @@ export async function GET(req: Request) {
       const mySessionsResult = await supabaseAdmin
         .from("night_protocol_players")
         .select(
-          "session_id, night_protocol_sessions!inner(id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, created_at)"
+          "session_id, night_protocol_sessions!inner(id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, axy_chat_bridge, voting_chat_mode, created_at)"
         )
         .eq("user_id", user.id);
 
@@ -586,6 +592,8 @@ export async function GET(req: Request) {
             minPlayers: session.min_players,
             maxPlayers: session.max_players,
             presenceMode: session.presence_mode,
+            axyChatBridge: session.axy_chat_bridge,
+            votingChatMode: session.voting_chat_mode,
             hostUserId: session.host_user_id,
             createdAt: session.created_at,
           };
@@ -601,6 +609,8 @@ export async function GET(req: Request) {
           minPlayers: row.min_players,
           maxPlayers: row.max_players,
           presenceMode: row.presence_mode,
+          axyChatBridge: row.axy_chat_bridge,
+          votingChatMode: row.voting_chat_mode,
           hostUserId: row.host_user_id,
           createdAt: row.created_at,
           playerCount: playerCountMap[row.id] || 0,
@@ -645,6 +655,15 @@ export async function POST(req: Request) {
         typeof (body as { presenceMode?: unknown }).presenceMode === "boolean"
           ? Boolean((body as { presenceMode?: boolean }).presenceMode)
           : true;
+      const axyChatBridge =
+        typeof (body as { axyChatBridge?: unknown }).axyChatBridge === "boolean"
+          ? Boolean((body as { axyChatBridge?: boolean }).axyChatBridge)
+          : true;
+      const votingChatModeRaw = asString(
+        (body as { votingChatMode?: unknown }).votingChatMode
+      ).toLowerCase();
+      const votingChatMode: "closed" | "open_short" =
+        votingChatModeRaw === "open_short" ? "open_short" : "closed";
 
       const sessionCode = await createUniqueSessionCode();
       const { data: session, error: sessionErr } = await supabaseAdmin
@@ -657,9 +676,11 @@ export async function POST(req: Request) {
           min_players: NIGHT_PROTOCOL_MIN_PLAYERS,
           max_players: maxPlayers,
           presence_mode: presenceMode,
+          axy_chat_bridge: axyChatBridge,
+          voting_chat_mode: votingChatMode,
         })
         .select(
-          "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, current_speaker_player_id, speaker_order, speaker_index, speaker_turn_ends_at, phase_ends_at, winner, created_at"
+          "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, axy_chat_bridge, voting_chat_mode, current_speaker_player_id, speaker_order, speaker_index, speaker_turn_ends_at, phase_ends_at, winner, created_at"
         )
         .single();
 
@@ -733,7 +754,7 @@ export async function POST(req: Request) {
       const { data: found } = await supabaseAdmin
         .from("night_protocol_sessions")
         .select(
-          "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, current_speaker_player_id, speaker_order, speaker_index, speaker_turn_ends_at, phase_ends_at, winner, created_at"
+          "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, axy_chat_bridge, voting_chat_mode, current_speaker_player_id, speaker_order, speaker_index, speaker_turn_ends_at, phase_ends_at, winner, created_at"
         )
         .eq("session_code", sessionCode)
         .maybeSingle();
@@ -858,6 +879,65 @@ export async function POST(req: Request) {
           scope: "public",
           event_type: "lobby",
           content: `${candidate} (AI) entered the Circle.`,
+        },
+      ]);
+
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "update_settings") {
+      if (!isHost) {
+        return NextResponse.json({ error: "host only" }, { status: 403 });
+      }
+      if (session.status === "ENDED") {
+        return NextResponse.json({ error: "session ended" }, { status: 400 });
+      }
+
+      const updates: Record<string, unknown> = {};
+
+      if (typeof (body as { axyChatBridge?: unknown }).axyChatBridge === "boolean") {
+        updates.axy_chat_bridge = Boolean(
+          (body as { axyChatBridge?: boolean }).axyChatBridge
+        );
+      }
+
+      const requestedVotingMode = asString(
+        (body as { votingChatMode?: unknown }).votingChatMode
+      ).toLowerCase();
+      if (requestedVotingMode === "closed" || requestedVotingMode === "open_short") {
+        updates.voting_chat_mode = requestedVotingMode;
+      }
+
+      if (typeof (body as { presenceMode?: unknown }).presenceMode === "boolean") {
+        if (session.status !== "LOBBY") {
+          return NextResponse.json(
+            { error: "presence mode can only be changed in lobby" },
+            { status: 400 }
+          );
+        }
+        updates.presence_mode = Boolean((body as { presenceMode?: boolean }).presenceMode);
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return NextResponse.json({ ok: true, unchanged: true });
+      }
+
+      const { error: updateErr } = await supabaseAdmin
+        .from("night_protocol_sessions")
+        .update(updates)
+        .eq("id", sessionId);
+      if (updateErr) {
+        return NextResponse.json({ error: "settings update failed" }, { status: 500 });
+      }
+
+      await insertEvents([
+        {
+          session_id: sessionId,
+          round_no: session.round_no,
+          phase: session.status,
+          scope: "public",
+          event_type: "system",
+          content: "Host updated session settings.",
         },
       ]);
 
@@ -1248,8 +1328,11 @@ export async function POST(req: Request) {
       if (!me) {
         return NextResponse.json({ error: "not joined" }, { status: 403 });
       }
-      if (session.status !== "DAY") {
-        return NextResponse.json({ error: "day phase required" }, { status: 400 });
+      const dayChatOpen = session.status === "DAY";
+      const votingChatOpen =
+        session.status === "VOTING" && session.voting_chat_mode === "open_short";
+      if (!dayChatOpen && !votingChatOpen) {
+        return NextResponse.json({ error: "chat is closed in this phase" }, { status: 400 });
       }
       if (!me.is_alive) {
         return NextResponse.json({ error: "eliminated players cannot speak" }, { status: 400 });
@@ -1263,7 +1346,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "message too long" }, { status: 400 });
       }
 
-      if (session.presence_mode && session.current_speaker_player_id !== me.id) {
+      if (
+        session.status === "DAY" &&
+        session.presence_mode &&
+        session.current_speaker_player_id !== me.id
+      ) {
         return NextResponse.json({ error: "not your turn" }, { status: 403 });
       }
 
@@ -1363,6 +1450,17 @@ export async function POST(req: Request) {
           event_type: "system",
           content: `You have ${NIGHT_PROTOCOL_VOTE_SECONDS}s.`,
         },
+        {
+          session_id: sessionId,
+          round_no: session.round_no,
+          phase: "VOTING",
+          scope: "public",
+          event_type: "system",
+          content:
+            session.voting_chat_mode === "open_short"
+              ? "Voting chat is briefly open."
+              : "Voting chat is closed.",
+        },
       ]);
       await applyAiVotes(sessionId, session.round_no, roundPlayers);
       return NextResponse.json({ ok: true });
@@ -1395,6 +1493,17 @@ export async function POST(req: Request) {
           scope: "public",
           event_type: "system",
           content: "Voting begins. Choose who you believe is a Shadow.",
+        },
+        {
+          session_id: sessionId,
+          round_no: session.round_no,
+          phase: "VOTING",
+          scope: "public",
+          event_type: "system",
+          content:
+            session.voting_chat_mode === "open_short"
+              ? "Voting chat is briefly open."
+              : "Voting chat is closed.",
         },
       ]);
       await applyAiVotes(sessionId, session.round_no, roundPlayers);
