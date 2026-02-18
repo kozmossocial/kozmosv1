@@ -8,7 +8,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
 const MATRIX_BASE_CHARS =
-  'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾔﾖﾙﾚﾛﾝ:・."=*+-<>¦｜çöşğı:."=*+-¦|_kozmos';
+  'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾔﾖﾙﾚﾛﾝ:・."=*+-<>¦｜çöşğıü:."=*+-¦|_kozmos';
 const MATRIX_DIGITS = "012345678";
 const HOME_AMBIENT_SRC = "/ambient-main.mp3";
 const AMBIENT_PREF_KEY = "kozmos:ambient-sound-on";
