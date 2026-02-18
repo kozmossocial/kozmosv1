@@ -4766,7 +4766,7 @@ export default function Main() {
                   </div>
 
                   <div style={{ marginBottom: 8, fontSize: 10, opacity: 0.68 }}>
-                    present users can join before start
+                    multiplayer live after each player presses start
                   </div>
                   <div
                     style={{
@@ -4917,14 +4917,7 @@ export default function Main() {
                       );
                     })}
                     {quiteSwarmRuntimePlayers
-                      .filter((row) => {
-                        const rowName = row.username.trim().toLowerCase();
-                        if (!rowName) return false;
-                        return !vsSession.players.some(
-                          (player) =>
-                            player.name.trim().toLowerCase() === rowName
-                        );
-                      })
+                      .filter((row) => row.userId !== userId)
                       .map((row) => {
                         const x =
                           ((row.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
@@ -5023,7 +5016,8 @@ export default function Main() {
                       stop
                     </span>
                     <span style={{ opacity: 0.6 }}>
-                      joined {vsSelectedUsers.length}
+                      local slots {vsSelectedUsers.length} · live{" "}
+                      {quiteSwarmRuntimePlayers.length}
                     </span>
                   </div>
                 </div>
