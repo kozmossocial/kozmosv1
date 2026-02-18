@@ -513,6 +513,7 @@ export default function Main() {
   const [hushLoading, setHushLoading] = useState(false);
   const [hushSending, setHushSending] = useState(false);
   const [hushPanelOpen, setHushPanelOpen] = useState(false);
+  const [hushAlertPulse, setHushAlertPulse] = useState(false);
   const [hushInviteTarget, setHushInviteTarget] = useState<{
     userId: string;
     username: string;
@@ -548,6 +549,10 @@ export default function Main() {
     createVsSession(["user"], false)
   );
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
+  const hushMembersRef = useRef<HushMember[]>([]);
+  const hushAlertTimeoutRef = useRef<number | null>(null);
+  const prevInvitesCountRef = useRef(0);
+  const prevRequestsCountRef = useRef(0);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
   const sharedStickToBottomRef = useRef(true);
   const presentUsersPanelRef = useRef<HTMLDivElement | null>(null);
@@ -932,6 +937,18 @@ export default function Main() {
     );
   }, [hushMembers, userId]);
 
+  const triggerHushAlert = useCallback(() => {
+    if (hushPanelOpen) return;
+    setHushAlertPulse(true);
+    if (hushAlertTimeoutRef.current) {
+      window.clearTimeout(hushAlertTimeoutRef.current);
+    }
+    hushAlertTimeoutRef.current = window.setTimeout(() => {
+      setHushAlertPulse(false);
+      hushAlertTimeoutRef.current = null;
+    }, 2400);
+  }, [hushPanelOpen]);
+
   useEffect(() => {
     if (!userId) return;
 
@@ -974,6 +991,23 @@ export default function Main() {
           if (selectedHushChatId && chatId === selectedHushChatId) {
             void loadHushMessages(selectedHushChatId);
           }
+
+          if (
+            payload.eventType === "INSERT" &&
+            next &&
+            next.user_id !== userId &&
+            chatId
+          ) {
+            const meAcceptedInChat = hushMembersRef.current.some(
+              (member) =>
+                member.chat_id === chatId &&
+                member.user_id === userId &&
+                member.status === "accepted"
+            );
+            if (meAcceptedInChat) {
+              triggerHushAlert();
+            }
+          }
         }
       )
       .subscribe();
@@ -990,7 +1024,25 @@ export default function Main() {
       clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [loadHush, loadHushMessages, selectedHushChatId, userId]);
+  }, [loadHush, loadHushMessages, selectedHushChatId, triggerHushAlert, userId]);
+
+  useEffect(() => {
+    hushMembersRef.current = hushMembers;
+  }, [hushMembers]);
+
+  useEffect(() => {
+    if (hushPanelOpen) {
+      setHushAlertPulse(false);
+    }
+  }, [hushPanelOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (hushAlertTimeoutRef.current) {
+        window.clearTimeout(hushAlertTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedHushChatId || !userId) return;
@@ -1872,6 +1924,20 @@ export default function Main() {
       )
     : [];
 
+  useEffect(() => {
+    const inviteCount = invitesForMe.length;
+    const requestCount = requestsForMe.length;
+    const inviteIncreased = inviteCount > prevInvitesCountRef.current;
+    const requestIncreased = requestCount > prevRequestsCountRef.current;
+
+    if (inviteIncreased || requestIncreased) {
+      triggerHushAlert();
+    }
+
+    prevInvitesCountRef.current = inviteCount;
+    prevRequestsCountRef.current = requestCount;
+  }, [invitesForMe.length, requestsForMe.length, triggerHushAlert]);
+
   const selectedHushMembership = selectedHushChatId
     ? getMyHushMembership(selectedHushChatId)
     : null;
@@ -2096,7 +2162,7 @@ export default function Main() {
         <div className="left-panel-stack" style={leftPanelStackStyle}>
           {/* HUSH PANEL */}
           <div
-            className="hush-panel"
+            className={`hush-panel${hushAlertPulse ? " hush-panel-alert" : ""}`}
             style={hushPanelStyle}
             ref={hushPanelRef}
           >
@@ -2144,7 +2210,7 @@ export default function Main() {
             setHushPanelOpen(true);
           }}
         >
-          tap to open hush chat
+          {`active hushes: ${hushChats.length}`}
         </div>
       ) : (
       <>

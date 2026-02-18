@@ -275,6 +275,32 @@ body {
     0 0 16px rgba(107, 255, 142, 0.5);
 }
 
+@keyframes hushPanelAlertPulse {
+  0% {
+    box-shadow:
+      0 0 20px rgba(107, 255, 142, 0.18),
+      inset 0 0 12px rgba(107, 255, 142, 0.08);
+    border-color: rgba(107, 255, 142, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 28px rgba(107, 255, 142, 0.4),
+      0 0 40px rgba(107, 255, 142, 0.22),
+      inset 0 0 16px rgba(107, 255, 142, 0.16);
+    border-color: rgba(107, 255, 142, 0.5);
+  }
+  100% {
+    box-shadow:
+      0 0 20px rgba(107, 255, 142, 0.18),
+      inset 0 0 12px rgba(107, 255, 142, 0.08);
+    border-color: rgba(107, 255, 142, 0.2);
+  }
+}
+
+.hush-panel-alert {
+  animation: hushPanelAlertPulse 1.3s ease-in-out infinite;
+}
+
 .present-user-chip {
   display: inline-block;
   transition:
