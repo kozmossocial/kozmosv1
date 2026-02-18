@@ -7,6 +7,9 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MATRIX_WORLD_LIMIT = 14;
 const QUITE_SWARM_WORLD_LIMIT = 48;
+const QUITE_SWARM_ROOM_ID = "main";
+const QUITE_SWARM_ROOM_START_DELAY_MS = 1800;
+const QUITE_SWARM_ROOM_DURATION_MS = 75 * 1000;
 
 type TouchLinkRow = {
   id: number;
@@ -103,6 +106,15 @@ type RuntimePresenceSwarmRow = {
   swarm_updated_at: string | null;
 };
 
+type QuiteSwarmRoomRow = {
+  id: string;
+  status: "idle" | "running" | string;
+  seed: number | null;
+  started_at: string | null;
+  host_user_id: string | null;
+  updated_at: string;
+};
+
 type NightSessionRow = {
   id: string;
   session_code: string;
@@ -164,6 +176,19 @@ function clampQuiteSwarm(value: number) {
     -QUITE_SWARM_WORLD_LIMIT,
     Math.min(QUITE_SWARM_WORLD_LIMIT, value)
   );
+}
+
+function isQuiteSwarmRoomSchemaError(message: string) {
+  return /runtime_quite_swarm_room|started_at|host_user_id|status|seed/i.test(
+    message
+  );
+}
+
+function quiteSwarmRoomExpired(startedAt: string | null | undefined) {
+  if (!startedAt) return false;
+  const startedMs = Date.parse(startedAt);
+  if (!Number.isFinite(startedMs)) return false;
+  return Date.now() - startedMs > QUITE_SWARM_ROOM_DURATION_MS;
 }
 
 function isHushActiveMemberStatus(status: string) {
@@ -1605,6 +1630,193 @@ async function listQuiteSwarmWorld() {
   }));
 }
 
+async function getQuiteSwarmRoom() {
+  const { data, error } = await supabaseAdmin
+    .from("runtime_quite_swarm_room")
+    .select("id, status, seed, started_at, host_user_id, updated_at")
+    .eq("id", QUITE_SWARM_ROOM_ID)
+    .maybeSingle();
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (isQuiteSwarmRoomSchemaError(msg)) {
+      throw new Error("quite swarm room schema missing (run migration)");
+    }
+    throw new Error("quite swarm room load failed");
+  }
+
+  const row = (data as QuiteSwarmRoomRow | null) || null;
+  const expired =
+    row &&
+    String(row.status || "idle") === "running" &&
+    quiteSwarmRoomExpired(row.started_at);
+
+  if (expired) {
+    const { error: resetErr } = await supabaseAdmin
+      .from("runtime_quite_swarm_room")
+      .upsert({
+        id: QUITE_SWARM_ROOM_ID,
+        status: "idle",
+        seed: null,
+        started_at: null,
+        host_user_id: null,
+      });
+
+    if (resetErr) {
+      throw new Error("quite swarm room refresh failed");
+    }
+  }
+
+  const effective =
+    expired && row
+      ? {
+          ...row,
+          status: "idle",
+          seed: null,
+          started_at: null,
+          host_user_id: null,
+        }
+      : row;
+
+  return {
+    id: String(effective?.id || QUITE_SWARM_ROOM_ID),
+    status:
+      String(effective?.status || "idle").toLowerCase() === "running"
+        ? "running"
+        : "idle",
+    seed:
+      typeof effective?.seed === "number" && Number.isFinite(effective.seed)
+        ? Number(effective.seed)
+        : null,
+    started_at: effective?.started_at || null,
+    host_user_id: effective?.host_user_id || null,
+    updated_at: effective?.updated_at || null,
+  };
+}
+
+async function startQuiteSwarmRoom(
+  userId: string,
+  payload: { x?: unknown; y?: unknown }
+) {
+  const room = await getQuiteSwarmRoom();
+  if (
+    room.status === "running" &&
+    room.host_user_id &&
+    room.host_user_id !== userId &&
+    !quiteSwarmRoomExpired(room.started_at)
+  ) {
+    throw new Error("room already running by another host");
+  }
+
+  const seed = Math.floor(Math.random() * 2_000_000_000);
+  const startedAt = new Date(Date.now() + QUITE_SWARM_ROOM_START_DELAY_MS).toISOString();
+  const nowIso = new Date().toISOString();
+
+  const roomUpsert = await supabaseAdmin.from("runtime_quite_swarm_room").upsert({
+    id: QUITE_SWARM_ROOM_ID,
+    status: "running",
+    seed,
+    started_at: startedAt,
+    host_user_id: userId,
+  });
+
+  if (roomUpsert.error) {
+    const msg = String(roomUpsert.error.message || "");
+    if (isQuiteSwarmRoomSchemaError(msg)) {
+      throw new Error("quite swarm room schema missing (run migration)");
+    }
+    throw new Error("quite swarm room start failed");
+  }
+
+  const hasX = typeof payload.x === "number" && Number.isFinite(payload.x);
+  const hasY = typeof payload.y === "number" && Number.isFinite(payload.y);
+  const nextX = clampQuiteSwarm(hasX ? Number(payload.x) : 0);
+  const nextY = clampQuiteSwarm(hasY ? Number(payload.y) : 0);
+
+  const presenceErr = await supabaseAdmin
+    .from("runtime_presence")
+    .upsert({
+      user_id: userId,
+      last_seen_at: nowIso,
+      swarm_x: nextX,
+      swarm_y: nextY,
+      swarm_active: true,
+      swarm_updated_at: nowIso,
+    });
+
+  if (presenceErr.error) {
+    const msg = String(presenceErr.error.message || "");
+    if (/swarm_x|swarm_y|swarm_active|swarm_updated_at/i.test(msg)) {
+      throw new Error("quite swarm schema missing (run migration)");
+    }
+    throw new Error("quite swarm state update failed");
+  }
+
+  return {
+    id: QUITE_SWARM_ROOM_ID,
+    status: "running",
+    seed,
+    started_at: startedAt,
+    host_user_id: userId,
+    updated_at: nowIso,
+  };
+}
+
+async function stopQuiteSwarmRoom(userId: string) {
+  const room = await getQuiteSwarmRoom();
+  if (
+    room.status === "running" &&
+    room.host_user_id &&
+    room.host_user_id !== userId &&
+    !quiteSwarmRoomExpired(room.started_at)
+  ) {
+    throw new Error("only host can stop running room");
+  }
+
+  const nowIso = new Date().toISOString();
+  const roomUpsert = await supabaseAdmin.from("runtime_quite_swarm_room").upsert({
+    id: QUITE_SWARM_ROOM_ID,
+    status: "idle",
+    seed: null,
+    started_at: null,
+    host_user_id: null,
+  });
+
+  if (roomUpsert.error) {
+    const msg = String(roomUpsert.error.message || "");
+    if (isQuiteSwarmRoomSchemaError(msg)) {
+      throw new Error("quite swarm room schema missing (run migration)");
+    }
+    throw new Error("quite swarm room stop failed");
+  }
+
+  const presenceUpdate = await supabaseAdmin
+    .from("runtime_presence")
+    .update({
+      last_seen_at: nowIso,
+      swarm_active: false,
+      swarm_updated_at: nowIso,
+    })
+    .eq("user_id", userId);
+
+  if (presenceUpdate.error) {
+    const msg = String(presenceUpdate.error.message || "");
+    if (/swarm_active|swarm_updated_at/i.test(msg)) {
+      throw new Error("quite swarm schema missing (run migration)");
+    }
+    throw new Error("quite swarm state clear failed");
+  }
+
+  return {
+    id: QUITE_SWARM_ROOM_ID,
+    status: "idle",
+    seed: null,
+    started_at: null,
+    host_user_id: null,
+    updated_at: nowIso,
+  };
+}
+
 function listKozmosPlay() {
   return KOZMOS_PLAY_CATALOG.map((game) => ({ ...game }));
 }
@@ -2557,6 +2769,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     matrix,
     matrixPosition,
     quiteSwarmPosition,
+    quiteSwarmRoom,
     present,
   ] = await Promise.all([
     listNotes(actor.userId),
@@ -2566,6 +2779,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     getMatrixProfile(actor.userId),
     getMatrixPosition(actor.userId),
     getQuiteSwarmPosition(actor.userId),
+    getQuiteSwarmRoom(),
     listPresentRuntimeUsers(),
   ]);
 
@@ -2581,6 +2795,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     matrix,
     matrix_position: matrixPosition,
     quite_swarm_position: quiteSwarmPosition,
+    quite_swarm_room: quiteSwarmRoom,
     present_users: present,
     play: listKozmosPlay(),
   };
@@ -2914,6 +3129,23 @@ export async function POST(req: Request) {
     if (action === "quite_swarm.world") {
       const world = await listQuiteSwarmWorld();
       return NextResponse.json({ ok: true, action, data: world });
+    }
+
+    if (action === "quite_swarm.room") {
+      const room = await getQuiteSwarmRoom();
+      return NextResponse.json({ ok: true, action, data: room });
+    }
+
+    if (action === "quite_swarm.room_start") {
+      const x = (payload as { x?: unknown })?.x;
+      const y = (payload as { y?: unknown })?.y;
+      const room = await startQuiteSwarmRoom(actor.userId, { x, y });
+      return NextResponse.json({ ok: true, action, data: room });
+    }
+
+    if (action === "quite_swarm.room_stop") {
+      const room = await stopQuiteSwarmRoom(actor.userId);
+      return NextResponse.json({ ok: true, action, data: room });
     }
 
     if (action === "presence.list") {

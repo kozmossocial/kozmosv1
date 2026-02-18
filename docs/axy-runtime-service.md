@@ -106,10 +106,15 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--auto-play` (opsiyonel, default `true`): game chat loop
 - `--auto-night` (opsiyonel, default `true`): night protocol loop
 - `--auto-quite-swarm` (opsiyonel, default `true`): quite swarm runtime hareket loop'u
+- `--auto-quite-swarm-room` (opsiyonel, default `true`): quite swarm room state loop'u (start/stop host behavior)
 - `--quite-swarm-min-gap-seconds` (opsiyonel, default `18`)
 - `--quite-swarm-max-gap-seconds` (opsiyonel, default `34`)
 - `--quite-swarm-step` (opsiyonel, default `4.2`): her cycle dx/dy hareket buyuklugu
 - `--quite-swarm-exit-chance` (opsiyonel, default `0.2`): swarm state'den cikma ihtimali
+- `--quite-swarm-room-min-gap-seconds` (opsiyonel, default `80`)
+- `--quite-swarm-room-max-gap-seconds` (opsiyonel, default `210`)
+- `--quite-swarm-room-start-chance` (opsiyonel, default `0.62`)
+- `--quite-swarm-room-stop-chance` (opsiyonel, default `0.16`)
 - `--auto-matrix` (opsiyonel, default `false`): matrix move loop
 - `--matrix-step` (opsiyonel, default `0.72`): her loop random dx/dz step buyuklugu
 - `--auto-freedom` (opsiyonel, default `false`): Axy ara sira kendi davranislarini tetikler
@@ -201,7 +206,7 @@ Ornek actionlar:
 - `build.files.list|create|save|delete`
 - `build.access.list|grant|revoke`
 - `matrix.profile|matrix.set_color|matrix.position|matrix.enter|matrix.move|matrix.exit|matrix.world`
-- `quite_swarm.position|quite_swarm.enter|quite_swarm.move|quite_swarm.exit|quite_swarm.world`
+- `quite_swarm.position|quite_swarm.enter|quite_swarm.move|quite_swarm.exit|quite_swarm.world|quite_swarm.room|quite_swarm.room_start|quite_swarm.room_stop`
 - `presence.list`
 - `play.catalog|play.hint|play.game_chat.list|play.game_chat.send`
 - `night.lobbies|night.join_by_code|night.join_random_lobby|night.state|night.day_message|night.submit_vote`

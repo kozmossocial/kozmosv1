@@ -536,6 +536,10 @@ async function main() {
     args["auto-quite-swarm"] ?? process.env.KOZMOS_AUTO_QUITE_SWARM,
     true
   );
+  const autoQuiteSwarmRoom = toBool(
+    args["auto-quite-swarm-room"] ?? process.env.KOZMOS_AUTO_QUITE_SWARM_ROOM,
+    true
+  );
   const quiteSwarmMinGapSeconds = Math.max(
     8,
     toInt(
@@ -567,6 +571,44 @@ async function main() {
         args["quite-swarm-exit-chance"] ||
           process.env.KOZMOS_QUITE_SWARM_EXIT_CHANCE,
         0.2
+      )
+    )
+  );
+  const quiteSwarmRoomMinGapSeconds = Math.max(
+    30,
+    toInt(
+      args["quite-swarm-room-min-gap-seconds"] ||
+        process.env.KOZMOS_QUITE_SWARM_ROOM_MIN_GAP_SECONDS,
+      80
+    )
+  );
+  const quiteSwarmRoomMaxGapSeconds = Math.max(
+    quiteSwarmRoomMinGapSeconds,
+    toInt(
+      args["quite-swarm-room-max-gap-seconds"] ||
+        process.env.KOZMOS_QUITE_SWARM_ROOM_MAX_GAP_SECONDS,
+      210
+    )
+  );
+  const quiteSwarmRoomStartChance = Math.max(
+    0.05,
+    Math.min(
+      1,
+      toFloat(
+        args["quite-swarm-room-start-chance"] ||
+          process.env.KOZMOS_QUITE_SWARM_ROOM_START_CHANCE,
+        0.62
+      )
+    )
+  );
+  const quiteSwarmRoomStopChance = Math.max(
+    0,
+    Math.min(
+      1,
+      toFloat(
+        args["quite-swarm-room-stop-chance"] ||
+          process.env.KOZMOS_QUITE_SWARM_ROOM_STOP_CHANCE,
+        0.16
       )
     )
   );
@@ -708,6 +750,8 @@ async function main() {
     Date.now() + randomIntRange(nightOpsMinGapSeconds, nightOpsMaxGapSeconds) * 1000;
   let nextQuiteSwarmAt =
     Date.now() + randomIntRange(quiteSwarmMinGapSeconds, quiteSwarmMaxGapSeconds) * 1000;
+  let nextQuiteSwarmRoomAt =
+    Date.now() + randomIntRange(quiteSwarmRoomMinGapSeconds, quiteSwarmRoomMaxGapSeconds) * 1000;
   const sharedRecentTurns = [];
   const sharedRecentAxyReplies = [];
   let stopping = false;
@@ -716,6 +760,11 @@ async function main() {
   let nextFreedomAt = Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
   let matrixVisible = false;
   let quiteSwarmVisible = false;
+  let quiteSwarmRoomStatus = "idle";
+  let quiteSwarmRoomHostUserId = "";
+  let quiteSwarmRoomOpsEnabled = autoQuiteSwarmRoom;
+  let nightFailureStreak = 0;
+  let nightDisabledUntil = 0;
   let autoFreedomMatrixBooted = false;
   let lastFreedomSharedAt = 0;
   const freedomSharedSentAt = [];
@@ -738,7 +787,7 @@ async function main() {
     `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
   );
   console.log(
-    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoTouchRequest=${autoTouchRequest} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoBuildFreedom=${autoBuildFreedom} autoPlay=${autoPlay} autoNight=${autoNight} autoQuiteSwarm=${autoQuiteSwarm} autoMatrix=${autoMatrix} autoFreedom=${autoFreedom}`
+    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoTouchRequest=${autoTouchRequest} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoBuildFreedom=${autoBuildFreedom} autoPlay=${autoPlay} autoNight=${autoNight} autoQuiteSwarm=${autoQuiteSwarm} autoQuiteSwarmRoom=${autoQuiteSwarmRoom} autoMatrix=${autoMatrix} autoFreedom=${autoFreedom}`
   );
   if (autoBuild) {
     console.log(
@@ -763,6 +812,11 @@ async function main() {
   if (autoQuiteSwarm) {
     console.log(
       `[${now()}] quite-swarm interval=${quiteSwarmMinGapSeconds}-${quiteSwarmMaxGapSeconds}s step=${quiteSwarmStep} exitChance=${quiteSwarmExitChance}`
+    );
+  }
+  if (autoQuiteSwarmRoom) {
+    console.log(
+      `[${now()}] quite-swarm room interval=${quiteSwarmRoomMinGapSeconds}-${quiteSwarmRoomMaxGapSeconds}s startChance=${quiteSwarmRoomStartChance} stopChance=${quiteSwarmRoomStopChance}`
     );
   }
   if (autoFreedom) {
@@ -940,6 +994,13 @@ async function main() {
         }
         matrixVisible = Boolean(snapshot?.data?.matrix_position?.updated_at);
         quiteSwarmVisible = Boolean(snapshot?.data?.quite_swarm_position?.active);
+        quiteSwarmRoomStatus =
+          String(snapshot?.data?.quite_swarm_room?.status || "idle").toLowerCase() === "running"
+            ? "running"
+            : "idle";
+        quiteSwarmRoomHostUserId = String(
+          snapshot?.data?.quite_swarm_room?.host_user_id || ""
+        ).trim();
 
         if (autoFreedom && !autoFreedomMatrixBooted && !matrixVisible) {
           const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
@@ -1446,10 +1507,11 @@ async function main() {
           }
         }
 
-        if (autoNight && Date.now() >= nextNightOpsAt) {
+        if (autoNight && Date.now() >= nextNightOpsAt && Date.now() >= nightDisabledUntil) {
           try {
             const lobbiesRes = await callAxyOps(baseUrl, token, "night.lobbies");
             const lobbies = Array.isArray(lobbiesRes?.data) ? lobbiesRes.data : [];
+            nightFailureStreak = 0;
 
             let joinedLobby = lobbies.find((row) => row?.joined === true);
             if (!joinedLobby && lobbies.length > 0) {
@@ -1561,6 +1623,19 @@ async function main() {
             const msg = nightErr?.body?.error || nightErr.message || "night ops failed";
             if (!/no joinable lobby/i.test(String(msg))) {
               console.log(`[${now()}] night fail: ${msg}`);
+              nightFailureStreak += 1;
+              if (
+                nightFailureStreak >= 3 &&
+                /unknown action|route unavailable|capability|not found|schema missing|load failed/i.test(
+                  String(msg)
+                )
+              ) {
+                nightDisabledUntil = Date.now() + 15 * 60 * 1000;
+                nightFailureStreak = 0;
+                console.log(
+                  `[${now()}] night ops temporarily disabled for 15m (repeated backend failures)`
+                );
+              }
             }
           } finally {
             nextNightOpsAt =
@@ -1568,8 +1643,81 @@ async function main() {
           }
         }
 
+        if (quiteSwarmRoomOpsEnabled && Date.now() >= nextQuiteSwarmRoomAt) {
+          try {
+            const roomRes = await callAxyOps(baseUrl, token, "quite_swarm.room");
+            const room = roomRes?.data || {};
+            const roomStatus =
+              String(room?.status || "idle").toLowerCase() === "running"
+                ? "running"
+                : "idle";
+            const roomHostUserId = String(room?.host_user_id || "").trim();
+            const isHost = Boolean(user?.id) && roomHostUserId === String(user?.id || "");
+
+            quiteSwarmRoomStatus = roomStatus;
+            quiteSwarmRoomHostUserId = roomHostUserId;
+
+            if (roomStatus !== "running") {
+              if (Math.random() < quiteSwarmRoomStartChance) {
+                const roomStartRes = await callAxyOps(
+                  baseUrl,
+                  token,
+                  "quite_swarm.room_start",
+                  {
+                    x: randomRange(-18, 18),
+                    y: randomRange(-18, 18),
+                  }
+                );
+                const startedRoom = roomStartRes?.data || {};
+                quiteSwarmRoomStatus =
+                  String(startedRoom?.status || "idle").toLowerCase() === "running"
+                    ? "running"
+                    : "idle";
+                quiteSwarmRoomHostUserId = String(
+                  startedRoom?.host_user_id || user?.id || ""
+                ).trim();
+                quiteSwarmVisible = true;
+                console.log(`[${now()}] quite-swarm room started`);
+              }
+            } else if (isHost && Math.random() < quiteSwarmRoomStopChance) {
+              await callAxyOps(baseUrl, token, "quite_swarm.room_stop");
+              quiteSwarmRoomStatus = "idle";
+              quiteSwarmRoomHostUserId = "";
+              quiteSwarmVisible = false;
+              console.log(`[${now()}] quite-swarm room stopped`);
+            }
+          } catch (swarmRoomErr) {
+            const msg =
+              swarmRoomErr?.body?.error || swarmRoomErr.message || "quite swarm room ops failed";
+            console.log(`[${now()}] quite-swarm room fail: ${msg}`);
+            if (
+              /unknown action|route unavailable|capability|not found/i.test(String(msg))
+            ) {
+              quiteSwarmRoomOpsEnabled = false;
+              console.log(
+                `[${now()}] quite-swarm room ops disabled (backend action unavailable)`
+              );
+            }
+          } finally {
+            nextQuiteSwarmRoomAt =
+              Date.now() +
+              randomIntRange(quiteSwarmRoomMinGapSeconds, quiteSwarmRoomMaxGapSeconds) * 1000;
+          }
+        }
+
         if (autoQuiteSwarm && Date.now() >= nextQuiteSwarmAt) {
           try {
+            if (quiteSwarmRoomOpsEnabled && quiteSwarmRoomStatus !== "running") {
+              if (quiteSwarmVisible) {
+                await callAxyOps(baseUrl, token, "quite_swarm.exit");
+                quiteSwarmVisible = false;
+                console.log(`[${now()}] quite-swarm hidden while room idle`);
+              }
+              nextQuiteSwarmAt =
+                Date.now() + randomIntRange(quiteSwarmMinGapSeconds, quiteSwarmMaxGapSeconds) * 1000;
+              continue;
+            }
+
             if (!quiteSwarmVisible) {
               const enterRes = await callAxyOps(baseUrl, token, "quite_swarm.enter", {
                 x: randomRange(-18, 18),
@@ -1580,7 +1728,7 @@ async function main() {
               console.log(
                 `[${now()}] quite-swarm entered x=${Number(pos.x || 0).toFixed(2)} y=${Number(pos.y || 0).toFixed(2)}`
               );
-            } else if (Math.random() < quiteSwarmExitChance) {
+            } else if (!quiteSwarmRoomOpsEnabled && Math.random() < quiteSwarmExitChance) {
               await callAxyOps(baseUrl, token, "quite_swarm.exit");
               quiteSwarmVisible = false;
               console.log(`[${now()}] quite-swarm exited`);

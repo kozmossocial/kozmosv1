@@ -644,6 +644,7 @@ export default function Main() {
   const [gameLoading, setGameLoading] = useState(false);
   const [buildLoading, setBuildLoading] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>("open");
+  const [chatWheelBaseMode, setChatWheelBaseMode] = useState<ChatMode>("open");
   const [chatWheelDragOffset, setChatWheelDragOffset] = useState(0);
   const [chatWheelIsDragging, setChatWheelIsDragging] = useState(false);
   const chatModeRef = useRef<ChatMode>("open");
@@ -855,6 +856,7 @@ export default function Main() {
   }, [nightProtocolState]);
   const gameChatReadOnly =
     !gameChatEnabled || (isNightProtocolPlay && !nightProtocolCanSend);
+  const isChatComposerDisabled = chatMode === "game" && gameChatReadOnly;
   const activeMessages =
     chatMode === "open"
       ? messages
@@ -863,46 +865,102 @@ export default function Main() {
           ? nightProtocolChatMessages
           : gameMessages
         : buildMessages;
-  const activeChatLabel = CHAT_MODE_LABEL[chatMode];
-  const activeChatIndex = CHAT_MODE_ORDER.indexOf(chatMode);
+  const activeChatLabel = CHAT_MODE_LABEL[chatWheelBaseMode];
+  const activeChatIndex = CHAT_MODE_ORDER.indexOf(chatWheelBaseMode);
   const leftChatMode =
     CHAT_MODE_ORDER[
       (activeChatIndex - 1 + CHAT_MODE_ORDER.length) % CHAT_MODE_ORDER.length
     ];
   const rightChatMode =
     CHAT_MODE_ORDER[(activeChatIndex + 1) % CHAT_MODE_ORDER.length];
+  const farLeftChatMode =
+    CHAT_MODE_ORDER[
+      (activeChatIndex - 2 + CHAT_MODE_ORDER.length) % CHAT_MODE_ORDER.length
+    ];
+  const farRightChatMode =
+    CHAT_MODE_ORDER[(activeChatIndex + 2) % CHAT_MODE_ORDER.length];
+  const backChatMode =
+    CHAT_MODE_ORDER[(activeChatIndex + 3) % CHAT_MODE_ORDER.length];
   const leftChatLabel = CHAT_MODE_LABEL[leftChatMode];
   const rightChatLabel = CHAT_MODE_LABEL[rightChatMode];
+  const farLeftChatLabel = CHAT_MODE_LABEL[farLeftChatMode];
+  const farRightChatLabel = CHAT_MODE_LABEL[farRightChatMode];
+  const backChatLabel = CHAT_MODE_LABEL[backChatMode];
   const chatWheelStep = Math.PI / 2.75;
   const chatWheelRadius = 164;
   const chatWheelDepth = 56;
+  const chatWheelFarLeftAngle = (-2 + chatWheelDragOffset) * chatWheelStep;
   const chatWheelLeftAngle = (-1 + chatWheelDragOffset) * chatWheelStep;
   const chatWheelCenterAngle = (0 + chatWheelDragOffset) * chatWheelStep;
   const chatWheelRightAngle = (1 + chatWheelDragOffset) * chatWheelStep;
+  const chatWheelFarRightAngle = (2 + chatWheelDragOffset) * chatWheelStep;
+  const chatWheelFarLeftProminence = (Math.cos(chatWheelFarLeftAngle) + 1) / 2;
   const chatWheelLeftProminence = (Math.cos(chatWheelLeftAngle) + 1) / 2;
   const chatWheelCenterProminence = (Math.cos(chatWheelCenterAngle) + 1) / 2;
   const chatWheelRightProminence = (Math.cos(chatWheelRightAngle) + 1) / 2;
+  const chatWheelFarRightProminence = (Math.cos(chatWheelFarRightAngle) + 1) / 2;
+  const chatWheelFarLeftX = Math.sin(chatWheelFarLeftAngle) * chatWheelRadius;
   const chatWheelLeftX = Math.sin(chatWheelLeftAngle) * chatWheelRadius;
   const chatWheelCenterX = Math.sin(chatWheelCenterAngle) * chatWheelRadius;
   const chatWheelRightX = Math.sin(chatWheelRightAngle) * chatWheelRadius;
+  const chatWheelFarRightX = Math.sin(chatWheelFarRightAngle) * chatWheelRadius;
+  const chatWheelRecede = 48;
+  const chatWheelFarLeftScale = 0.66 + chatWheelFarLeftProminence * 0.2;
   const chatWheelLeftScale = 0.72 + chatWheelLeftProminence * 0.34;
   const chatWheelCenterScale = 0.72 + chatWheelCenterProminence * 0.34;
   const chatWheelRightScale = 0.72 + chatWheelRightProminence * 0.34;
+  const chatWheelFarRightScale = 0.66 + chatWheelFarRightProminence * 0.2;
+  const chatWheelFarLeftOpacity = 0.05 + chatWheelFarLeftProminence * 0.25;
   const chatWheelLeftOpacity = 0.16 + chatWheelLeftProminence * 0.78;
   const chatWheelCenterOpacity = 0.16 + chatWheelCenterProminence * 0.78;
   const chatWheelRightOpacity = 0.16 + chatWheelRightProminence * 0.78;
+  const chatWheelFarRightOpacity = 0.05 + chatWheelFarRightProminence * 0.25;
+  const chatWheelFarLeftBlur = (1 - chatWheelFarLeftProminence) * 2.5 + 0.8;
   const chatWheelLeftBlur = (1 - chatWheelLeftProminence) * 2.1;
   const chatWheelCenterBlur = (1 - chatWheelCenterProminence) * 2.1;
   const chatWheelRightBlur = (1 - chatWheelRightProminence) * 2.1;
-  const chatWheelLeftTilt = (-chatWheelLeftAngle * 180) / Math.PI * 0.85;
-  const chatWheelCenterTilt = (-chatWheelCenterAngle * 180) / Math.PI * 0.85;
-  const chatWheelRightTilt = (-chatWheelRightAngle * 180) / Math.PI * 0.85;
-  const chatWheelLeftZ = Math.cos(chatWheelLeftAngle) * chatWheelDepth;
-  const chatWheelCenterZ = Math.cos(chatWheelCenterAngle) * chatWheelDepth;
-  const chatWheelRightZ = Math.cos(chatWheelRightAngle) * chatWheelDepth;
+  const chatWheelFarRightBlur = (1 - chatWheelFarRightProminence) * 2.5 + 0.8;
+  const chatWheelFarLeftTilt = (-chatWheelFarLeftAngle * 180) / Math.PI * 1.2;
+  const chatWheelLeftTilt = (-chatWheelLeftAngle * 180) / Math.PI * 1.12;
+  const chatWheelCenterTilt = (-chatWheelCenterAngle * 180) / Math.PI * 1.12;
+  const chatWheelRightTilt = (-chatWheelRightAngle * 180) / Math.PI * 1.12;
+  const chatWheelFarRightTilt = (-chatWheelFarRightAngle * 180) / Math.PI * 1.2;
+  const chatWheelFarLeftZ =
+    Math.cos(chatWheelFarLeftAngle) * chatWheelDepth -
+    Math.abs(Math.sin(chatWheelFarLeftAngle)) * (chatWheelRecede + 20);
+  const chatWheelLeftZ =
+    Math.cos(chatWheelLeftAngle) * chatWheelDepth -
+    Math.abs(Math.sin(chatWheelLeftAngle)) * chatWheelRecede;
+  const chatWheelCenterZ =
+    Math.cos(chatWheelCenterAngle) * chatWheelDepth -
+    Math.abs(Math.sin(chatWheelCenterAngle)) * chatWheelRecede;
+  const chatWheelRightZ =
+    Math.cos(chatWheelRightAngle) * chatWheelDepth -
+    Math.abs(Math.sin(chatWheelRightAngle)) * chatWheelRecede;
+  const chatWheelFarRightZ =
+    Math.cos(chatWheelFarRightAngle) * chatWheelDepth -
+    Math.abs(Math.sin(chatWheelFarRightAngle)) * (chatWheelRecede + 20);
+  const chatWheelBackX = Math.sin(chatWheelDragOffset * chatWheelStep + Math.PI) * 36;
+  const chatWheelBackZ = -chatWheelDepth - chatWheelRecede - 24;
+  const chatWheelBackScale = 0.58;
+  const chatWheelBackOpacity = 0.12;
+  const chatWheelBackBlur = 3.2;
+  const chatWheelBackTilt = Math.cos(chatWheelDragOffset * chatWheelStep) * 8;
+  const chatWheelFarLeftColor = `rgba(236,242,255,${0.15 + chatWheelFarLeftProminence * 0.3})`;
+  const chatWheelLeftColor = `rgba(236,242,255,${0.34 + chatWheelLeftProminence * 0.66})`;
+  const chatWheelCenterColor = `rgba(236,242,255,${0.34 + chatWheelCenterProminence * 0.66})`;
+  const chatWheelRightColor = `rgba(236,242,255,${0.34 + chatWheelRightProminence * 0.66})`;
+  const chatWheelFarRightColor = `rgba(236,242,255,${0.15 + chatWheelFarRightProminence * 0.3})`;
+  const chatWheelBackColor = "rgba(236,242,255,0.18)";
+  const chatWheelFarLeftTextShadow = `0 0 ${2 + chatWheelFarLeftProminence * 6}px rgba(200,220,255,${0.08 + chatWheelFarLeftProminence * 0.12})`;
+  const chatWheelLeftTextShadow = `0 0 ${3 + chatWheelLeftProminence * 10}px rgba(235,240,255,${0.2 + chatWheelLeftProminence * 0.34}), 0 0 ${8 + chatWheelLeftProminence * 18}px rgba(190,218,255,${0.14 + chatWheelLeftProminence * 0.26})`;
+  const chatWheelCenterTextShadow = `0 0 ${3 + chatWheelCenterProminence * 10}px rgba(235,240,255,${0.2 + chatWheelCenterProminence * 0.34}), 0 0 ${8 + chatWheelCenterProminence * 18}px rgba(190,218,255,${0.14 + chatWheelCenterProminence * 0.26})`;
+  const chatWheelRightTextShadow = `0 0 ${3 + chatWheelRightProminence * 10}px rgba(235,240,255,${0.2 + chatWheelRightProminence * 0.34}), 0 0 ${8 + chatWheelRightProminence * 18}px rgba(190,218,255,${0.14 + chatWheelRightProminence * 0.26})`;
+  const chatWheelFarRightTextShadow = `0 0 ${2 + chatWheelFarRightProminence * 6}px rgba(200,220,255,${0.08 + chatWheelFarRightProminence * 0.12})`;
+  const chatWheelBackTextShadow = "0 0 6px rgba(190,218,255,0.16)";
   const chatWheelTransition = chatWheelIsDragging
     ? "none"
-    : "transform 560ms cubic-bezier(0.17, 0.8, 0.22, 1), opacity 360ms ease, filter 360ms ease";
+    : "transform 240ms cubic-bezier(0.2, 0.78, 0.24, 1), opacity 180ms ease, filter 180ms ease, color 160ms ease, text-shadow 160ms ease, font-weight 160ms ease";
   const vsJoinableUsers = useMemo(
     () => uniqueNames([currentUsername, ...presentUsers]),
     [currentUsername, presentUsers]
@@ -983,6 +1041,11 @@ export default function Main() {
 
   useEffect(() => {
     chatModeRef.current = chatMode;
+  }, [chatMode]);
+
+  useEffect(() => {
+    if (chatWheelAnimatingRef.current) return;
+    setChatWheelBaseMode(chatMode);
   }, [chatMode]);
 
   useEffect(() => {
@@ -2596,16 +2659,20 @@ export default function Main() {
   function animateChatModeChange(nextMode: ChatMode, direction: 1 | -1) {
     if (chatWheelAnimatingRef.current) return;
     chatWheelAnimatingRef.current = true;
+    // Keep labels continuous and avoid a second spring-back animation at the end.
     setChatWheelIsDragging(false);
-    const targetOffset = direction;
-    setChatWheelDragOffset(targetOffset);
+    setChatMode(nextMode);
+    setChatWheelDragOffset(-direction);
     window.setTimeout(() => {
-      setChatMode(nextMode);
+      // Snap-rebase to the new center mode with transitions disabled.
+      setChatWheelIsDragging(true);
+      setChatWheelBaseMode(nextMode);
       setChatWheelDragOffset(0);
-    }, 520);
-    window.setTimeout(() => {
-      chatWheelAnimatingRef.current = false;
-    }, 620);
+      window.requestAnimationFrame(() => {
+        setChatWheelIsDragging(false);
+        chatWheelAnimatingRef.current = false;
+      });
+    }, 240);
   }
 
   function cycleChatMode(direction: 1 | -1) {
@@ -2623,9 +2690,38 @@ export default function Main() {
     animateChatModeChange(next, direction);
   }
 
-  function selectChatMode(target: ChatMode, direction: 1 | -1) {
+  function stepChatModeImmediate(direction: 1 | -1, normalizedOffset: number) {
+    const current = chatModeRef.current;
+    const currentIndex = CHAT_MODE_ORDER.indexOf(current);
+    if (currentIndex < 0) return;
+    const next =
+      CHAT_MODE_ORDER[
+        (currentIndex + direction + CHAT_MODE_ORDER.length) %
+          CHAT_MODE_ORDER.length
+      ];
+    const threshold = 0.72;
+    const signedThreshold = normalizedOffset >= 0 ? threshold : -threshold;
+    const residual = normalizedOffset - signedThreshold;
+    const carry = Math.max(-0.28, Math.min(0.28, residual * 1.25));
+    chatModeRef.current = next;
+    setChatMode(next);
+    setChatWheelBaseMode(next);
+    setChatWheelDragOffset(carry);
+  }
+
+  function selectChatMode(target: ChatMode) {
     const current = chatModeRef.current;
     if (target === current) return;
+    const currentIndex = CHAT_MODE_ORDER.indexOf(current);
+    const targetIndex = CHAT_MODE_ORDER.indexOf(target);
+    if (currentIndex < 0 || targetIndex < 0) {
+      setChatMode(target);
+      return;
+    }
+    const forwardSteps =
+      (targetIndex - currentIndex + CHAT_MODE_ORDER.length) %
+      CHAT_MODE_ORDER.length;
+    const direction: 1 | -1 = forwardSteps === 1 ? 1 : -1;
     animateChatModeChange(target, direction);
   }
 
@@ -2646,6 +2742,10 @@ export default function Main() {
     const dx = e.clientX - state.startX;
     const normalized = Math.tanh(dx / 150);
     setChatWheelDragOffset(normalized);
+    if (Math.abs(normalized) >= 0.72) {
+      stepChatModeImmediate(normalized > 0 ? -1 : 1, normalized);
+      chatWheelDragRef.current.startX = e.clientX;
+    }
   }
 
   function onChatWheelPointerUp(e: React.PointerEvent<HTMLDivElement>) {
@@ -2663,7 +2763,7 @@ export default function Main() {
       setChatWheelDragOffset(0);
       return;
     }
-    cycleChatMode(finalOffset > 0 ? 1 : -1);
+    cycleChatMode(finalOffset > 0 ? -1 : 1);
   }
 
   function startSignalDrift() {
@@ -3886,7 +3986,12 @@ export default function Main() {
             onWheel={(e) => {
               if (Math.abs(e.deltaY) < 8 && Math.abs(e.deltaX) < 8) return;
               e.preventDefault();
-              cycleChatMode(e.deltaY > 0 || e.deltaX > 0 ? 1 : -1);
+              const horizontalDominant = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+              if (horizontalDominant) {
+                cycleChatMode(e.deltaX > 0 ? 1 : -1);
+                return;
+              }
+              cycleChatMode(e.deltaY > 0 ? 1 : -1);
             }}
             style={{
               width: "min(420px, 84vw)",
@@ -3900,11 +4005,57 @@ export default function Main() {
               perspective: "900px",
             }}
           >
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                color: chatWheelBackColor,
+                fontSize: 15,
+                fontWeight: 300,
+                letterSpacing: "0.12em",
+                textTransform: "none",
+                padding: "0 6px",
+                transform: `translate(-50%, -50%) translateX(${chatWheelBackX}px) translateZ(${chatWheelBackZ}px) rotateY(${chatWheelBackTilt}deg) scale(${chatWheelBackScale})`,
+                transition: chatWheelTransition,
+                opacity: chatWheelBackOpacity,
+                whiteSpace: "nowrap",
+                filter: `blur(${chatWheelBackBlur}px)`,
+                textShadow: chatWheelBackTextShadow,
+                pointerEvents: "none",
+                userSelect: "none",
+              }}
+            >
+              {backChatLabel}
+            </span>
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                color: chatWheelFarLeftColor,
+                fontSize: 16,
+                fontWeight: 290 + chatWheelFarLeftProminence * 45,
+                letterSpacing: "0.12em",
+                textTransform: "none",
+                padding: "0 6px",
+                transform: `translate(-50%, -50%) translateX(${chatWheelFarLeftX}px) translateZ(${chatWheelFarLeftZ}px) rotateY(${chatWheelFarLeftTilt}deg) scale(${chatWheelFarLeftScale})`,
+                transition: chatWheelTransition,
+                opacity: chatWheelFarLeftOpacity,
+                whiteSpace: "nowrap",
+                filter: `blur(${chatWheelFarLeftBlur}px)`,
+                textShadow: chatWheelFarLeftTextShadow,
+                pointerEvents: "none",
+                userSelect: "none",
+              }}
+            >
+              {farLeftChatLabel}
+            </span>
             <button
               type="button"
-              onClick={() =>
-                selectChatMode(leftChatMode, 1)
-              }
+              onClick={() => selectChatMode(leftChatMode)}
               onPointerDown={(e) => e.stopPropagation()}
               style={{
                 position: "absolute",
@@ -3912,9 +4063,9 @@ export default function Main() {
                 top: "50%",
                 border: "none",
                 background: "transparent",
-                color: "rgba(234,234,234,0.42)",
-                fontSize: 14,
-                fontWeight: 320,
+                color: chatWheelLeftColor,
+                fontSize: 18,
+                fontWeight: 300 + chatWheelLeftProminence * 70,
                 letterSpacing: "0.12em",
                 textTransform: "none",
                 cursor: "pointer",
@@ -3925,6 +4076,7 @@ export default function Main() {
                 appearance: "none",
                 whiteSpace: "nowrap",
                 filter: `blur(${chatWheelLeftBlur}px)`,
+                textShadow: chatWheelLeftTextShadow,
                 outline: "none",
               }}
             >
@@ -3935,9 +4087,10 @@ export default function Main() {
                 position: "absolute",
                 left: "50%",
                 top: "50%",
-                fontSize: 20,
+                fontSize: 18,
                 letterSpacing: "0.12em",
-                fontWeight: 340,
+                fontWeight: 300 + chatWheelCenterProminence * 70,
+                color: chatWheelCenterColor,
                 opacity: chatWheelCenterOpacity,
                 textTransform: "none",
                 textAlign: "center",
@@ -3945,16 +4098,14 @@ export default function Main() {
                 transition: chatWheelTransition,
                 whiteSpace: "nowrap",
                 filter: `blur(${chatWheelCenterBlur}px)`,
-                textShadow: "0 0 8px rgba(255,230,170,0.22)",
+                textShadow: chatWheelCenterTextShadow,
               }}
             >
               {activeChatLabel}
             </div>
             <button
               type="button"
-              onClick={() =>
-                selectChatMode(rightChatMode, -1)
-              }
+              onClick={() => selectChatMode(rightChatMode)}
               onPointerDown={(e) => e.stopPropagation()}
               style={{
                 position: "absolute",
@@ -3962,9 +4113,9 @@ export default function Main() {
                 top: "50%",
                 border: "none",
                 background: "transparent",
-                color: "rgba(234,234,234,0.42)",
-                fontSize: 14,
-                fontWeight: 320,
+                color: chatWheelRightColor,
+                fontSize: 18,
+                fontWeight: 300 + chatWheelRightProminence * 70,
                 letterSpacing: "0.12em",
                 textTransform: "none",
                 cursor: "pointer",
@@ -3975,11 +4126,36 @@ export default function Main() {
                 appearance: "none",
                 whiteSpace: "nowrap",
                 filter: `blur(${chatWheelRightBlur}px)`,
+                textShadow: chatWheelRightTextShadow,
                 outline: "none",
               }}
             >
               {rightChatLabel}
             </button>
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                color: chatWheelFarRightColor,
+                fontSize: 16,
+                fontWeight: 290 + chatWheelFarRightProminence * 45,
+                letterSpacing: "0.12em",
+                textTransform: "none",
+                padding: "0 6px",
+                transform: `translate(-50%, -50%) translateX(${chatWheelFarRightX}px) translateZ(${chatWheelFarRightZ}px) rotateY(${chatWheelFarRightTilt}deg) scale(${chatWheelFarRightScale})`,
+                transition: chatWheelTransition,
+                opacity: chatWheelFarRightOpacity,
+                whiteSpace: "nowrap",
+                filter: `blur(${chatWheelFarRightBlur}px)`,
+                textShadow: chatWheelFarRightTextShadow,
+                pointerEvents: "none",
+                userSelect: "none",
+              }}
+            >
+              {farRightChatLabel}
+            </span>
           </div>
           <div
             style={{
@@ -4031,7 +4207,7 @@ export default function Main() {
                           void deleteMessage(m.id);
                         } else if (chatMode === "game") {
                           void deleteGameMessage(m.id);
-                        } else {
+                        } else if (chatMode === "build") {
                           void deleteBuildMessage(m.id);
                         }
                       }}
@@ -4132,7 +4308,7 @@ export default function Main() {
                 : buildInput
           }
           onChange={(e) => {
-            if (chatMode === "game" && gameChatReadOnly) return;
+            if (isChatComposerDisabled) return;
             if (chatMode === "open") {
               setInput(e.target.value);
             } else if (chatMode === "game") {
@@ -4168,7 +4344,7 @@ export default function Main() {
                   : "write game chat..."
                 : "write build chat..."
           }
-          disabled={chatMode === "game" && gameChatReadOnly}
+          disabled={isChatComposerDisabled}
           style={{
             width: "100%",
             minHeight: 80,
@@ -4179,10 +4355,10 @@ export default function Main() {
             resize: "none",
             outline: "none",
             fontSize: 14,
-            cursor: chatMode === "game" && gameChatReadOnly ? "default" : "text",
+            cursor: isChatComposerDisabled ? "default" : "text",
             userSelect: "text",
             WebkitUserSelect: "text",
-            opacity: chatMode === "game" && gameChatReadOnly ? 0.72 : 1,
+            opacity: isChatComposerDisabled ? 0.72 : 1,
           }}
         />
 
@@ -4192,8 +4368,7 @@ export default function Main() {
             fontSize: 12,
             letterSpacing: "0.12em",
             opacity: 0.6,
-            cursor:
-              chatMode === "game" && gameChatReadOnly ? "default" : "pointer",
+            cursor: isChatComposerDisabled ? "default" : "pointer",
           }}
           onClick={() => {
             if (chatMode === "open") {
