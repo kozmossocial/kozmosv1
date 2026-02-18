@@ -31,6 +31,89 @@ type AxyTurn = {
   content: string;
 };
 
+const ROOM_MANIFEST_PATH = "matrix.room.json";
+const ROOM_COORD_LIMIT = 13;
+const ROOM_AURAS = ["calm", "bright", "heavy", "fast"] as const;
+const ROOM_VISIBILITIES = ["public", "unlisted", "private"] as const;
+const ROOM_ENTRIES = ["click", "proximity"] as const;
+const ROOM_ICONS = ["dot", "square", "ring"] as const;
+
+type RoomAura = (typeof ROOM_AURAS)[number];
+type RoomVisibility = (typeof ROOM_VISIBILITIES)[number];
+type RoomEntry = (typeof ROOM_ENTRIES)[number];
+type RoomIcon = (typeof ROOM_ICONS)[number];
+
+type RoomManifest = {
+  version: 1;
+  room: {
+    title: string;
+    subtitle?: string;
+    spawn?: { x: number; z: number };
+    aura: RoomAura;
+    visibility: RoomVisibility;
+    entry: RoomEntry;
+    icon: RoomIcon;
+  };
+};
+
+function clipText(value: string | null | undefined, maxLength: number) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed ? trimmed.slice(0, maxLength) : "";
+}
+
+function normalizeEnum<T extends readonly string[]>(
+  value: unknown,
+  allowed: T
+): T[number] | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return (allowed as readonly string[]).includes(normalized)
+    ? (normalized as T[number])
+    : null;
+}
+
+function normalizeSpawn(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const x = (value as { x?: unknown }).x;
+  const z = (value as { z?: unknown }).z;
+  if (typeof x !== "number" || typeof z !== "number") return null;
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+  return {
+    x: Math.max(-ROOM_COORD_LIMIT, Math.min(ROOM_COORD_LIMIT, x)),
+    z: Math.max(-ROOM_COORD_LIMIT, Math.min(ROOM_COORD_LIMIT, z)),
+  };
+}
+
+function parseExistingRoomManifest(content: string | undefined) {
+  if (!content) return {};
+  try {
+    const parsed = JSON.parse(content) as { version?: unknown; room?: unknown };
+    if (typeof parsed !== "object" || !parsed) return {};
+    if (typeof parsed.version !== "number" || parsed.version !== 1) return {};
+    if (!parsed.room || typeof parsed.room !== "object") return {};
+    const room = parsed.room as {
+      title?: unknown;
+      subtitle?: unknown;
+      spawn?: unknown;
+      aura?: unknown;
+      visibility?: unknown;
+      entry?: unknown;
+      icon?: unknown;
+    };
+    return {
+      title: clipText(typeof room.title === "string" ? room.title : "", 32) || null,
+      subtitle: clipText(typeof room.subtitle === "string" ? room.subtitle : "", 48) || null,
+      spawn: normalizeSpawn(room.spawn),
+      aura: normalizeEnum(room.aura, ROOM_AURAS),
+      visibility: normalizeEnum(room.visibility, ROOM_VISIBILITIES),
+      entry: normalizeEnum(room.entry, ROOM_ENTRIES),
+      icon: normalizeEnum(room.icon, ROOM_ICONS),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export default function BuildPage() {
   const router = useRouter();
 
@@ -56,6 +139,7 @@ export default function BuildPage() {
   const [creatingFile, setCreatingFile] = useState(false);
   const [deletingFile, setDeletingFile] = useState(false);
   const [savingFile, setSavingFile] = useState(false);
+  const [publishingRoom, setPublishingRoom] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [infoText, setInfoText] = useState<string | null>(null);
   const [axyInput, setAxyInput] = useState("");
@@ -64,6 +148,7 @@ export default function BuildPage() {
   const axyScrollRef = useRef<HTMLDivElement | null>(null);
   const [previewAutoRefresh, setPreviewAutoRefresh] = useState(true);
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
+  const [requestedSpaceId, setRequestedSpaceId] = useState<string | null>(null);
 
   const selectedSpace = useMemo(
     () => spaces.find((space) => space.id === selectedSpaceId) ?? null,
@@ -235,6 +320,13 @@ export default function BuildPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("spaceId");
+    const normalized = typeof raw === "string" ? raw.trim() : "";
+    setRequestedSpaceId(normalized || null);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
     const media = window.matchMedia("(min-width: 1024px)");
     const update = () => setIsDesktop(media.matches);
@@ -262,6 +354,12 @@ export default function BuildPage() {
     void loadFiles(selectedSpaceId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSpaceId]);
+
+  useEffect(() => {
+    if (!requestedSpaceId) return;
+    if (!spaces.some((space) => space.id === requestedSpaceId)) return;
+    setSelectedSpaceId(requestedSpaceId);
+  }, [requestedSpaceId, spaces]);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -435,6 +533,66 @@ export default function BuildPage() {
       setInfoText("file saved");
     } finally {
       setSavingFile(false);
+    }
+  }
+
+  async function publishRoomToMatrix() {
+    if (!selectedSpaceId || !selectedSpace) {
+      setErrorText("select a subspace first");
+      return;
+    }
+    if (!canEditSelectedSpace) {
+      setErrorText("read-only subspace");
+      return;
+    }
+
+    setPublishingRoom(true);
+    setErrorText(null);
+    setInfoText(null);
+
+    try {
+      const manifestFile = files.find(
+        (file) => file.path.trim().toLowerCase() === ROOM_MANIFEST_PATH
+      );
+      const existing = parseExistingRoomManifest(manifestFile?.content);
+      const fallbackTitle = clipText(selectedSpace.title, 32) || "untitled room";
+      const fallbackSubtitle = clipText(selectedSpace.description, 48);
+
+      const roomPayload: RoomManifest["room"] = {
+        title: existing.title || fallbackTitle,
+        aura: existing.aura || "calm",
+        visibility:
+          existing.visibility || (selectedSpace.is_public ? "public" : "unlisted"),
+        entry: existing.entry || "proximity",
+        icon: existing.icon || "ring",
+      };
+      const subtitle = existing.subtitle || fallbackSubtitle;
+      if (subtitle) roomPayload.subtitle = subtitle;
+      if (existing.spawn) roomPayload.spawn = existing.spawn;
+
+      const manifest: RoomManifest = {
+        version: 1,
+        room: roomPayload,
+      };
+
+      const { res, data } = await fetchAuthedJson("/api/build/files", {
+        method: "PUT",
+        body: JSON.stringify({
+          spaceId: selectedSpaceId,
+          path: ROOM_MANIFEST_PATH,
+          content: JSON.stringify(manifest, null, 2),
+          language: "json",
+        }),
+      });
+      if (!res.ok) {
+        setErrorText(data?.error || "publish failed");
+        return;
+      }
+
+      await loadFiles(selectedSpaceId, selectedFilePath);
+      setInfoText("room published to matrix");
+    } finally {
+      setPublishingRoom(false);
     }
   }
 
@@ -832,6 +990,24 @@ export default function BuildPage() {
                     }}
                   >
                     {savingFile ? "saving..." : "save file"}
+                  </button>
+                  <button
+                    onClick={publishRoomToMatrix}
+                    disabled={publishingRoom || !selectedSpaceId || !canEditSelectedSpace}
+                    style={{
+                      border: "1px solid rgba(121,193,255,0.48)",
+                      borderRadius: 8,
+                      background: "rgba(121,193,255,0.14)",
+                      color: "#cfe8ff",
+                      padding: "7px 10px",
+                      cursor:
+                        publishingRoom || !selectedSpaceId || !canEditSelectedSpace
+                          ? "default"
+                          : "pointer",
+                      fontSize: 12,
+                    }}
+                  >
+                    {publishingRoom ? "publishing..." : "publish room"}
                   </button>
                 </div>
               </div>
