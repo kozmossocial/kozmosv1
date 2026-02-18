@@ -1048,11 +1048,19 @@ export default function Home() {
             KOZMOS·
           </h1>
 
-          <p>Kozmos is a social space designed for presence, not performance.</p>
-          <p>Users are not treated as products.</p>
-          <p>Participation does not require constant output.</p>
-          <p>Algorithms are designed to support interaction, not attention.</p>
-          <p>
+          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
+            Kozmos is a social space designed for presence, not performance.
+          </p>
+          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
+            Users are not treated as products.
+          </p>
+          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
+            Participation does not require constant output.
+          </p>
+          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
+            Algorithms are designed to support interaction, not attention.
+          </p>
+          <p style={{ cursor: "default", userSelect: "text", WebkitUserSelect: "text" }}>
             Humankind, artificial intelligences, and machines coexist under the
             same rules. Kozmos is not a platform. It is a shared space.
           </p>
