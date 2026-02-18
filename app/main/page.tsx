@@ -658,9 +658,14 @@ export default function Main() {
   const [realtimePresentUsers, setRealtimePresentUsers] = useState<string[]>(
     []
   );
+  const [realtimePresencePrimed, setRealtimePresencePrimed] = useState(false);
   const [realtimePresentUserIdsByName, setRealtimePresentUserIdsByName] =
     useState<Record<string, string>>({});
   const [runtimePresentUsers, setRuntimePresentUsers] = useState<string[]>([]);
+  const [runtimePresencePrimed, setRuntimePresencePrimed] = useState(false);
+  const [showPresenceEmptyState, setShowPresenceEmptyState] = useState(false);
+  const [presentUsersDisplay, setPresentUsersDisplay] = useState<string[]>([]);
+  const [presenceVisualReady, setPresenceVisualReady] = useState(false);
   const [presentUserGlow, setPresentUserGlow] = useState<string | null>(null);
   const [presentUserOpen, setPresentUserOpen] = useState<string | null>(null);
   const [presentUserAvatars, setPresentUserAvatars] = useState<
@@ -794,13 +799,20 @@ export default function Main() {
   const currentUsername = username?.trim() ? username.trim() : "user";
   const displayUsername = username?.trim() ? username.trim() : "\u00A0";
   const presentUsers = useMemo(() => {
-    const normalized = [...realtimePresentUsers, ...runtimePresentUsers]
-      .map((name) => name.trim())
-      .filter((name) => name.length > 0);
-    return Array.from(new Set(normalized)).sort((a, b) =>
+    const merged = new Map<string, string>();
+    [...realtimePresentUsers, ...runtimePresentUsers].forEach((name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!merged.has(key)) {
+        merged.set(key, trimmed);
+      }
+    });
+    return Array.from(merged.values()).sort((a, b) =>
       a.localeCompare(b, "en", { sensitivity: "base" })
     );
   }, [realtimePresentUsers, runtimePresentUsers]);
+  const presenceReady = realtimePresencePrimed && runtimePresencePrimed;
   const gameChatEnabled = Boolean(
     playOpen && activePlay && CHAT_REQUIRED_PLAYS.has(activePlay)
   );
@@ -1045,6 +1057,42 @@ export default function Main() {
   useEffect(() => {
     chatModeRef.current = chatMode;
   }, [chatMode]);
+
+  useEffect(() => {
+    if (!userId) {
+      setRealtimePresencePrimed(false);
+      setRuntimePresencePrimed(false);
+      setShowPresenceEmptyState(false);
+      setPresenceVisualReady(false);
+      setPresentUsersDisplay([]);
+      return;
+    }
+    setRealtimePresencePrimed(false);
+    setRuntimePresencePrimed(false);
+    setShowPresenceEmptyState(false);
+    setPresenceVisualReady(false);
+    setPresentUsersDisplay([]);
+    const timer = window.setTimeout(() => {
+      setShowPresenceEmptyState(true);
+    }, 900);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!presenceReady) return;
+    if (!presenceVisualReady) {
+      const timer = window.setTimeout(() => {
+        setPresentUsersDisplay(presentUsers);
+        setPresenceVisualReady(true);
+      }, 280);
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }
+    setPresentUsersDisplay(presentUsers);
+  }, [presenceReady, presenceVisualReady, presentUsers]);
 
   useEffect(() => {
     if (chatWheelAnimatingRef.current) return;
@@ -1315,6 +1363,7 @@ export default function Main() {
 
       if (runtimeErr || !runtimeRows || runtimeRows.length === 0) {
         setRuntimePresentUsers([]);
+        setRuntimePresencePrimed(true);
         return;
       }
 
@@ -1324,8 +1373,10 @@ export default function Main() {
         .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
 
       setRuntimePresentUsers(names);
+      setRuntimePresencePrimed(true);
     } catch {
       setRuntimePresentUsers([]);
+      setRuntimePresencePrimed(true);
     }
   }, []);
 
@@ -2390,6 +2441,7 @@ export default function Main() {
       );
       setRealtimePresentUsers(names);
       setRealtimePresentUserIdsByName(idsByName);
+      setRealtimePresencePrimed(true);
     };
 
     channel
@@ -2403,6 +2455,7 @@ export default function Main() {
           username: currentUsername,
           online_at: new Date().toISOString(),
         });
+        syncPresentUsers();
       });
 
     return () => {
@@ -4450,10 +4503,14 @@ export default function Main() {
               alignItems: "center",
             }}
           >
-            {presentUsers.length === 0 ? (
-              <span style={{ fontSize: 11, opacity: 0.4 }}>nobody visible</span>
+            {!presenceReady || !presenceVisualReady ? (
+              <span style={{ fontSize: 11, opacity: 0.24 }}>syncing...</span>
+            ) : presentUsersDisplay.length === 0 ? (
+              <span style={{ fontSize: 11, opacity: showPresenceEmptyState ? 0.4 : 0.24 }}>
+                {showPresenceEmptyState ? "nobody visible" : "syncing..."}
+              </span>
             ) : (
-              presentUsers.map((name) => {
+              presentUsersDisplay.map((name) => {
                 const normalizedName = name.trim().toLowerCase();
                 const isSelf = normalizedName === currentUsername.toLowerCase();
                 const avatarUrl =
@@ -5966,7 +6023,7 @@ const chatColumnStyle: React.CSSProperties = {
 };
 
 const sharedMessagesScrollStyle: React.CSSProperties = {
-  maxHeight: "clamp(360px, 45vh, 540px)",
+  height: "clamp(360px, 45vh, 540px)",
   overflowY: "auto",
   overflowX: "hidden",
   paddingRight: 8,
