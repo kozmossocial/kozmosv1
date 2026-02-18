@@ -1028,6 +1028,7 @@ body {
     width: 75% !important;
     max-width: 75% !important;
     height: auto !important;
+    margin-top: 8px !important;
   }
 
   .home-screen-1 {
