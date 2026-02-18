@@ -194,6 +194,17 @@ type VsSession = {
   lastProjectileId: number;
 };
 
+type QuiteSwarmRuntimePlayer = {
+  userId: string;
+  username: string;
+  color: string;
+  x: number;
+  y: number;
+  active: boolean;
+  updatedAt: string;
+  lastSeenAt: string;
+};
+
 const VS_PLAYER_COLORS = [
   "#7df9ff",
   "#8cb8ff",
@@ -653,6 +664,9 @@ export default function Main() {
   const [vsSession, setVsSession] = useState<VsSession>(() =>
     createVsSession(["user"], false)
   );
+  const [quiteSwarmRuntimePlayers, setQuiteSwarmRuntimePlayers] = useState<
+    QuiteSwarmRuntimePlayer[]
+  >([]);
   const [nightProtocolSessionId, setNightProtocolSessionId] = useState("");
   const [nightProtocolSessionCodeInput, setNightProtocolSessionCodeInput] =
     useState("");
@@ -691,6 +705,7 @@ export default function Main() {
     left: boolean;
     right: boolean;
   }>({ up: false, down: false, left: false, right: false });
+  const quiteSwarmLastSyncRef = useRef(0);
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
   const currentUsername = username?.trim() ? username.trim() : "user";
   const displayUsername = username?.trim() ? username.trim() : "\u00A0";
@@ -1123,6 +1138,32 @@ export default function Main() {
       setRuntimePresentUsers([]);
     }
   }, []);
+
+  async function fetchQuiteSwarmJson(
+    path: string,
+    init?: RequestInit
+  ): Promise<Record<string, unknown>> {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("session missing");
+    }
+
+    const headers = new Headers(init?.headers || {});
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+    if (init?.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const res = await fetch(path, { ...init, headers });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      throw new Error(String(body.error || "quite swarm request failed"));
+    }
+    return body;
+  }
 
   async function fetchNightProtocolJson(
     path: string,
@@ -1575,6 +1616,82 @@ export default function Main() {
       resetKeys();
     };
   }, [playOpen, activePlay, vsSession.running]);
+
+  useEffect(() => {
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE) {
+      setQuiteSwarmRuntimePlayers([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRuntimeSwarm = async () => {
+      try {
+        const body = await fetchQuiteSwarmJson("/api/quite-swarm/state");
+        if (cancelled) return;
+        const rows = Array.isArray(body.players)
+          ? (body.players as Array<Record<string, unknown>>)
+          : [];
+        const parsed: QuiteSwarmRuntimePlayer[] = rows
+          .map((row) => ({
+            userId: String(row.userId || "").trim(),
+            username: String(row.username || "user").trim() || "user",
+            color: String(row.color || "#7df9ff").trim() || "#7df9ff",
+            x:
+              typeof row.x === "number" && Number.isFinite(row.x) ? row.x : 0,
+            y:
+              typeof row.y === "number" && Number.isFinite(row.y) ? row.y : 0,
+            active: row.active === true,
+            updatedAt: String(row.updatedAt || ""),
+            lastSeenAt: String(row.lastSeenAt || ""),
+          }))
+          .filter((row) => row.userId.length > 0 && row.active);
+        setQuiteSwarmRuntimePlayers(parsed);
+      } catch {
+        if (!cancelled) {
+          setQuiteSwarmRuntimePlayers([]);
+        }
+      }
+    };
+
+    void loadRuntimeSwarm();
+    const timer = window.setInterval(() => {
+      void loadRuntimeSwarm();
+    }, 850);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      setQuiteSwarmRuntimePlayers([]);
+    };
+  }, [activePlay, playOpen]);
+
+  useEffect(() => {
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !vsSession.running) return;
+
+    const me = vsSession.players.find(
+      (player) =>
+        player.name.trim().toLowerCase() === currentUsername.trim().toLowerCase()
+    );
+    if (!me) return;
+
+    const now = Date.now();
+    if (now - quiteSwarmLastSyncRef.current < 120) return;
+    quiteSwarmLastSyncRef.current = now;
+
+    void fetchQuiteSwarmJson("/api/quite-swarm/state", {
+      method: "POST",
+      body: JSON.stringify({ x: me.x, y: me.y, active: true }),
+    }).catch(() => null);
+  }, [activePlay, currentUsername, playOpen, vsSession.players, vsSession.running]);
+
+  useEffect(() => {
+    if (playOpen && activePlay === QUITE_SWARM_MODE && vsSession.running) return;
+
+    void fetchQuiteSwarmJson("/api/quite-swarm/state", {
+      method: "DELETE",
+    }).catch(() => null);
+  }, [activePlay, playOpen, vsSession.running]);
 
   const syncSharedStickToBottom = useCallback(() => {
     const el = sharedMessagesRef.current;
@@ -4799,6 +4916,54 @@ export default function Main() {
                         </div>
                       );
                     })}
+                    {quiteSwarmRuntimePlayers
+                      .filter((row) => {
+                        const rowName = row.username.trim().toLowerCase();
+                        if (!rowName) return false;
+                        return !vsSession.players.some(
+                          (player) =>
+                            player.name.trim().toLowerCase() === rowName
+                        );
+                      })
+                      .map((row) => {
+                        const x =
+                          ((row.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                        const y =
+                          ((row.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                        return (
+                          <div key={`runtime-swarm-${row.userId}`}>
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: `${x}%`,
+                                top: `${y}%`,
+                                width: 12,
+                                height: 12,
+                                transform: "translate(-50%, -50%)",
+                                borderRadius: "999px",
+                                border: "1px solid rgba(220,240,255,0.76)",
+                                background: row.color,
+                                boxShadow: `0 0 12px ${row.color}`,
+                                opacity: 0.9,
+                              }}
+                            />
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: `${x}%`,
+                                top: `calc(${y}% - 11px)`,
+                                transform: "translate(-50%, -100%)",
+                                fontSize: 9,
+                                opacity: 0.72,
+                                whiteSpace: "nowrap",
+                                textShadow: "0 0 6px rgba(0,0,0,0.8)",
+                              }}
+                            >
+                              {row.username} rt
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
 
                   <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 8 }}>

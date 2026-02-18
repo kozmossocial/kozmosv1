@@ -6,6 +6,7 @@ const AXY_SUPER_CAPABILITY = "axy.super";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MATRIX_WORLD_LIMIT = 14;
+const QUITE_SWARM_WORLD_LIMIT = 48;
 
 type TouchLinkRow = {
   id: number;
@@ -93,6 +94,41 @@ type RuntimePresenceMatrixRow = {
   matrix_updated_at: string | null;
 };
 
+type RuntimePresenceSwarmRow = {
+  user_id: string;
+  last_seen_at: string;
+  swarm_x: number | null;
+  swarm_y: number | null;
+  swarm_active: boolean | null;
+  swarm_updated_at: string | null;
+};
+
+type NightSessionRow = {
+  id: string;
+  session_code: string;
+  host_user_id: string;
+  status: "LOBBY" | "NIGHT" | "DAY" | "VOTING" | "ENDED";
+  round_no: number;
+  min_players: number;
+  max_players: number;
+  presence_mode: boolean;
+  axy_chat_bridge: boolean;
+  voting_chat_mode: "closed" | "open_short";
+  current_speaker_player_id: string | null;
+  created_at: string;
+};
+
+type NightPlayerRow = {
+  id: string;
+  session_id: string;
+  user_id: string | null;
+  username: string;
+  is_ai: boolean;
+  seat_no: number;
+  role: "shadow" | "oracle" | "guardian" | "citizen" | null;
+  is_alive: boolean;
+};
+
 function isUuid(input: string) {
   return UUID_RE.test(input);
 }
@@ -121,6 +157,13 @@ function sanitizeHexColor(input: string) {
 
 function clampMatrix(value: number) {
   return Math.max(-MATRIX_WORLD_LIMIT, Math.min(MATRIX_WORLD_LIMIT, value));
+}
+
+function clampQuiteSwarm(value: number) {
+  return Math.max(
+    -QUITE_SWARM_WORLD_LIMIT,
+    Math.min(QUITE_SWARM_WORLD_LIMIT, value)
+  );
 }
 
 function isHushActiveMemberStatus(status: string) {
@@ -691,6 +734,18 @@ const KOZMOS_PLAY_CATALOG = [
     title: "hush puzzle",
     status: "active",
     objective: "align the quiet pattern",
+  },
+  {
+    id: "night-protocol",
+    title: "night protocol",
+    status: "active",
+    objective: "hold presence, read signal, survive the circle",
+  },
+  {
+    id: "quite-swarm",
+    title: "quite swarm",
+    status: "active",
+    objective: "move as a swarm and outlast the wave",
   },
 ] as const;
 
@@ -1380,6 +1435,176 @@ async function listMatrixRuntimeWorld() {
   }));
 }
 
+async function getQuiteSwarmPosition(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("runtime_presence")
+    .select("user_id, swarm_x, swarm_y, swarm_active, swarm_updated_at, last_seen_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/swarm_x|swarm_y|swarm_active|swarm_updated_at/i.test(msg)) {
+      throw new Error("quite swarm schema missing (run migration)");
+    }
+    throw new Error("quite swarm position load failed");
+  }
+
+  return {
+    x: Number((data as RuntimePresenceSwarmRow | null)?.swarm_x ?? 0),
+    y: Number((data as RuntimePresenceSwarmRow | null)?.swarm_y ?? 0),
+    active: Boolean((data as RuntimePresenceSwarmRow | null)?.swarm_active),
+    updated_at: (data as RuntimePresenceSwarmRow | null)?.swarm_updated_at || null,
+    last_seen_at: (data as RuntimePresenceSwarmRow | null)?.last_seen_at || null,
+  };
+}
+
+async function moveQuiteSwarm(
+  userId: string,
+  payload: { x?: unknown; y?: unknown; dx?: unknown; dy?: unknown }
+) {
+  const current = await getQuiteSwarmPosition(userId);
+
+  const hasAbsX = typeof payload.x === "number" && Number.isFinite(payload.x);
+  const hasAbsY = typeof payload.y === "number" && Number.isFinite(payload.y);
+  const hasDeltaX = typeof payload.dx === "number" && Number.isFinite(payload.dx);
+  const hasDeltaY = typeof payload.dy === "number" && Number.isFinite(payload.dy);
+
+  if (!hasAbsX && !hasAbsY && !hasDeltaX && !hasDeltaY) {
+    throw new Error("quite swarm move requires x/y or dx/dy");
+  }
+
+  const baseX = current.x;
+  const baseY = current.y;
+  const nextX = clampQuiteSwarm(
+    hasAbsX ? Number(payload.x) : baseX + (hasDeltaX ? Number(payload.dx) : 0)
+  );
+  const nextY = clampQuiteSwarm(
+    hasAbsY ? Number(payload.y) : baseY + (hasDeltaY ? Number(payload.dy) : 0)
+  );
+  const nowIso = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from("runtime_presence").upsert({
+    user_id: userId,
+    last_seen_at: nowIso,
+    swarm_x: nextX,
+    swarm_y: nextY,
+    swarm_active: true,
+    swarm_updated_at: nowIso,
+  });
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/swarm_x|swarm_y|swarm_active|swarm_updated_at/i.test(msg)) {
+      throw new Error("quite swarm schema missing (run migration)");
+    }
+    throw new Error("quite swarm move failed");
+  }
+
+  return { x: nextX, y: nextY, active: true, updated_at: nowIso };
+}
+
+async function enterQuiteSwarm(
+  userId: string,
+  payload: { x?: unknown; y?: unknown }
+) {
+  const hasX = typeof payload.x === "number" && Number.isFinite(payload.x);
+  const hasY = typeof payload.y === "number" && Number.isFinite(payload.y);
+  const nextX = clampQuiteSwarm(hasX ? Number(payload.x) : 0);
+  const nextY = clampQuiteSwarm(hasY ? Number(payload.y) : 0);
+  const nowIso = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from("runtime_presence").upsert({
+    user_id: userId,
+    last_seen_at: nowIso,
+    swarm_x: nextX,
+    swarm_y: nextY,
+    swarm_active: true,
+    swarm_updated_at: nowIso,
+  });
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/swarm_x|swarm_y|swarm_active|swarm_updated_at/i.test(msg)) {
+      throw new Error("quite swarm schema missing (run migration)");
+    }
+    throw new Error("quite swarm enter failed");
+  }
+
+  return { x: nextX, y: nextY, active: true, updated_at: nowIso };
+}
+
+async function exitQuiteSwarm(userId: string) {
+  const nowIso = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from("runtime_presence")
+    .update({
+      last_seen_at: nowIso,
+      swarm_active: false,
+      swarm_updated_at: nowIso,
+    })
+    .eq("user_id", userId);
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/swarm_active|swarm_updated_at/i.test(msg)) {
+      throw new Error("quite swarm schema missing (run migration)");
+    }
+    throw new Error("quite swarm exit failed");
+  }
+
+  return { ok: true, active: false, updated_at: nowIso };
+}
+
+async function listQuiteSwarmWorld() {
+  const activeSinceIso = new Date(Date.now() - 90 * 1000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("runtime_presence")
+    .select("user_id, last_seen_at, swarm_x, swarm_y, swarm_active, swarm_updated_at")
+    .eq("swarm_active", true)
+    .not("swarm_updated_at", "is", null)
+    .gte("last_seen_at", activeSinceIso)
+    .order("swarm_updated_at", { ascending: false })
+    .limit(240);
+
+  if (error) {
+    const msg = String(error.message || "");
+    if (/swarm_x|swarm_y|swarm_active|swarm_updated_at/i.test(msg)) {
+      throw new Error("quite swarm schema missing (run migration)");
+    }
+    throw new Error("quite swarm world load failed");
+  }
+
+  const rows = (data || []) as RuntimePresenceSwarmRow[];
+  if (rows.length === 0) return [];
+
+  const userIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)));
+  const { data: profiles, error: profilesErr } = await supabaseAdmin
+    .from("profileskozmos")
+    .select("id, username, orb_color")
+    .in("id", userIds);
+  if (profilesErr) throw new Error("quite swarm world profile load failed");
+
+  const profileMap: Record<string, { username: string; orb_color: string }> = {};
+  (profiles || []).forEach((profile) => {
+    const id = String((profile as { id: string }).id);
+    const username = String((profile as { username?: string }).username || "user");
+    const orbColor = String((profile as { orb_color?: string }).orb_color || "#7df9ff");
+    profileMap[id] = { username, orb_color: orbColor };
+  });
+
+  return rows.map((row) => ({
+    user_id: row.user_id,
+    username: profileMap[row.user_id]?.username || "user",
+    orb_color: profileMap[row.user_id]?.orb_color || "#7df9ff",
+    x: Number(row.swarm_x ?? 0),
+    y: Number(row.swarm_y ?? 0),
+    active: Boolean(row.swarm_active),
+    updated_at: row.swarm_updated_at,
+    last_seen_at: row.last_seen_at,
+  }));
+}
+
 function listKozmosPlay() {
   return KOZMOS_PLAY_CATALOG.map((game) => ({ ...game }));
 }
@@ -1393,12 +1618,370 @@ function getKozmosPlayHint(gameIdInput: string) {
     "signal-drift": "keep a steady rhythm; short, precise corrections beat fast reactions.",
     "slow-orbit": "move less and commit to timing; over-correction breaks sync.",
     "hush-puzzle": "reduce noise first, then align one quiet pattern at a time.",
+    "night-protocol":
+      "watch vote flow and speaker order; timing and trust shifts decide the circle.",
+    "quite-swarm":
+      "coordinate trajectories with nearby orbs; controlled movement beats frantic chasing.",
   };
 
   return {
     game: selected,
     hint: hintByGame[selected.id] || "focus on timing and intentional motion.",
   };
+}
+
+async function listGameChatMessages(limitInput: number) {
+  const limit = Math.max(1, Math.min(200, Number(limitInput) || 80));
+  const { data, error } = await supabaseAdmin
+    .from("game_chat_messages")
+    .select("id, user_id, username, content, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error("game chat list failed");
+  return (data || []).reverse();
+}
+
+async function sendGameChatMessage(userId: string, username: string, contentInput: string) {
+  const content = asTrimmedString(contentInput);
+  if (!content) throw new Error("content required");
+
+  const { data, error } = await supabaseAdmin
+    .from("game_chat_messages")
+    .insert({
+      user_id: userId,
+      username,
+      content: content.slice(0, 2000),
+    })
+    .select("id, user_id, username, content, created_at")
+    .single();
+
+  if (error || !data) throw new Error("game chat send failed");
+  return data;
+}
+
+async function listNightPlayers(sessionId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("night_protocol_players")
+    .select("id, session_id, user_id, username, is_ai, seat_no, role, is_alive")
+    .eq("session_id", sessionId)
+    .order("seat_no", { ascending: true });
+
+  if (error) throw new Error("night players load failed");
+  return (data || []) as NightPlayerRow[];
+}
+
+async function resolveUniqueNightUsername(sessionId: string, preferredInput: string) {
+  const preferredBase = asTrimmedString(preferredInput) || "Axy";
+  const preferred = preferredBase.slice(0, 28);
+
+  const { data, error } = await supabaseAdmin
+    .from("night_protocol_players")
+    .select("username")
+    .eq("session_id", sessionId);
+
+  if (error) throw new Error("night username check failed");
+
+  const used = new Set(
+    (data || [])
+      .map((row) => String((row as { username?: unknown }).username || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  if (!used.has(preferred.toLowerCase())) return preferred;
+
+  const slug = preferred.replace(/\s+/g, "_").replace(/[^A-Za-z0-9._-]/g, "").slice(0, 20) || "axy";
+  for (let i = 2; i < 500; i += 1) {
+    const candidate = `${slug}_${i}`.slice(0, 28);
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+  return `${slug}_${Date.now().toString(36).slice(-4)}`.slice(0, 28);
+}
+
+async function listNightLobbies(userId: string) {
+  const { data: sessions, error: sessionsErr } = await supabaseAdmin
+    .from("night_protocol_sessions")
+    .select(
+      "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, axy_chat_bridge, voting_chat_mode, current_speaker_player_id, created_at"
+    )
+    .eq("status", "LOBBY")
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (sessionsErr) throw new Error("night lobbies load failed");
+
+  const rows = (sessions || []) as NightSessionRow[];
+  const lobbyIds = rows.map((row) => row.id);
+  if (lobbyIds.length === 0) return [];
+
+  const [{ data: players, error: playersErr }, { data: mine, error: mineErr }] = await Promise.all([
+    supabaseAdmin
+      .from("night_protocol_players")
+      .select("session_id, user_id")
+      .in("session_id", lobbyIds),
+    supabaseAdmin
+      .from("night_protocol_players")
+      .select("session_id")
+      .eq("user_id", userId)
+      .in("session_id", lobbyIds),
+  ]);
+
+  if (playersErr || mineErr) throw new Error("night lobby membership load failed");
+
+  const playerCountMap = new Map<string, number>();
+  (players || []).forEach((row) => {
+    const sessionId = String((row as { session_id?: unknown }).session_id || "");
+    if (!sessionId) return;
+    playerCountMap.set(sessionId, (playerCountMap.get(sessionId) || 0) + 1);
+  });
+
+  const joinedSet = new Set(
+    (mine || [])
+      .map((row) => String((row as { session_id?: unknown }).session_id || ""))
+      .filter(Boolean)
+  );
+
+  return rows.map((row) => ({
+    session_id: row.id,
+    session_code: row.session_code,
+    status: row.status,
+    round_no: row.round_no,
+    min_players: row.min_players,
+    max_players: row.max_players,
+    presence_mode: row.presence_mode,
+    voting_chat_mode: row.voting_chat_mode,
+    axy_chat_bridge: row.axy_chat_bridge,
+    player_count: playerCountMap.get(row.id) || 0,
+    joined: joinedSet.has(row.id),
+    created_at: row.created_at,
+  }));
+}
+
+async function joinNightSessionByCode(userId: string, username: string, sessionCodeInput: string) {
+  const sessionCode = asTrimmedString(sessionCodeInput).toUpperCase();
+  if (!sessionCode) throw new Error("session code required");
+
+  const { data: session, error: sessionErr } = await supabaseAdmin
+    .from("night_protocol_sessions")
+    .select(
+      "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, axy_chat_bridge, voting_chat_mode, current_speaker_player_id, created_at"
+    )
+    .eq("session_code", sessionCode)
+    .maybeSingle();
+
+  const row = session as NightSessionRow | null;
+  if (sessionErr || !row) throw new Error("session not found");
+  if (row.status !== "LOBBY") throw new Error("session already started");
+
+  const players = await listNightPlayers(row.id);
+  const existing = players.find((player) => player.user_id === userId);
+  if (existing) {
+    return {
+      ok: true,
+      already_joined: true,
+      session_id: row.id,
+      session_code: row.session_code,
+      player_id: existing.id,
+    };
+  }
+
+  if (players.length >= row.max_players) throw new Error("circle is full");
+
+  const seatNo = Math.max(0, ...players.map((player) => Number(player.seat_no) || 0)) + 1;
+  const safeUsername = await resolveUniqueNightUsername(row.id, username);
+
+  const { data: inserted, error: joinErr } = await supabaseAdmin
+    .from("night_protocol_players")
+    .insert({
+      session_id: row.id,
+      user_id: userId,
+      username: safeUsername,
+      is_ai: false,
+      seat_no: seatNo,
+    })
+    .select("id")
+    .single();
+
+  if (joinErr || !inserted) throw new Error("join failed");
+
+  await supabaseAdmin.from("night_protocol_events").insert([
+    {
+      session_id: row.id,
+      round_no: 0,
+      phase: "LOBBY",
+      scope: "public",
+      event_type: "lobby",
+      content: `${safeUsername} entered the Circle.`,
+    },
+    {
+      session_id: row.id,
+      round_no: 0,
+      phase: "LOBBY",
+      scope: "public",
+      event_type: "lobby",
+      content: `Players in the Circle: ${players.length + 1} / ${row.max_players}`,
+    },
+  ]);
+
+  return {
+    ok: true,
+    already_joined: false,
+    session_id: row.id,
+    session_code: row.session_code,
+    player_id: String((inserted as { id: string }).id),
+  };
+}
+
+async function joinNightRandomLobby(userId: string, username: string) {
+  const lobbies = await listNightLobbies(userId);
+  const available = lobbies.filter((row) => row.player_count < row.max_players);
+  if (available.length === 0) throw new Error("no joinable lobby");
+  const selected = available[Math.floor(Math.random() * available.length)];
+  return joinNightSessionByCode(userId, username, selected.session_code);
+}
+
+async function getNightStateForUser(userId: string, sessionId: string) {
+  if (!sessionId) throw new Error("session id required");
+
+  const { data: session, error: sessionErr } = await supabaseAdmin
+    .from("night_protocol_sessions")
+    .select(
+      "id, session_code, host_user_id, status, round_no, min_players, max_players, presence_mode, axy_chat_bridge, voting_chat_mode, current_speaker_player_id, created_at"
+    )
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  const row = session as NightSessionRow | null;
+  if (sessionErr || !row) throw new Error("session not found");
+
+  const players = await listNightPlayers(sessionId);
+  const me = players.find((player) => player.user_id === userId);
+  if (!me) throw new Error("not in session");
+
+  const [{ data: recentMessages }, { data: myVoteRow }, { data: roundVotes }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("night_protocol_day_messages")
+        .select("id, username, content, created_at")
+        .eq("session_id", sessionId)
+        .order("id", { ascending: false })
+        .limit(40),
+      supabaseAdmin
+        .from("night_protocol_votes")
+        .select("target_player_id")
+        .eq("session_id", sessionId)
+        .eq("round_no", row.round_no)
+        .eq("voter_player_id", me.id)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("night_protocol_votes")
+        .select("id")
+        .eq("session_id", sessionId)
+        .eq("round_no", row.round_no),
+    ]);
+
+  return {
+    session: {
+      id: row.id,
+      session_code: row.session_code,
+      status: row.status,
+      round_no: row.round_no,
+      min_players: row.min_players,
+      max_players: row.max_players,
+      presence_mode: row.presence_mode,
+      voting_chat_mode: row.voting_chat_mode,
+      current_speaker_player_id: row.current_speaker_player_id,
+      axy_chat_bridge: row.axy_chat_bridge,
+      created_at: row.created_at,
+    },
+    me: {
+      player_id: me.id,
+      username: me.username,
+      is_alive: me.is_alive,
+      is_ai: me.is_ai,
+      role: me.role,
+    },
+    players: players.map((player) => ({
+      id: player.id,
+      user_id: player.user_id,
+      username: player.username,
+      is_ai: player.is_ai,
+      seat_no: player.seat_no,
+      is_alive: player.is_alive,
+      role: player.role,
+    })),
+    recent_day_messages: (recentMessages || []).reverse(),
+    my_vote_target_player_id: String(
+      (myVoteRow as { target_player_id?: unknown } | null)?.target_player_id || ""
+    ) || null,
+    votes_submitted_count: Array.isArray(roundVotes) ? roundVotes.length : 0,
+  };
+}
+
+async function sendNightDayMessage(userId: string, sessionId: string, contentInput: string) {
+  const content = asTrimmedString(contentInput);
+  if (!content) throw new Error("content required");
+  if (content.length > 400) throw new Error("message too long");
+
+  const state = await getNightStateForUser(userId, sessionId);
+  const session = state.session;
+  const me = state.me;
+
+  const dayChatOpen = session.status === "DAY";
+  const votingChatOpen =
+    session.status === "VOTING" && session.voting_chat_mode === "open_short";
+  if (!dayChatOpen && !votingChatOpen) throw new Error("chat is closed in this phase");
+  if (!me.is_alive) throw new Error("eliminated players cannot speak");
+  if (
+    session.status === "DAY" &&
+    session.presence_mode &&
+    session.current_speaker_player_id &&
+    session.current_speaker_player_id !== me.player_id
+  ) {
+    throw new Error("not your turn");
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("night_protocol_day_messages")
+    .insert({
+      session_id: session.id,
+      round_no: session.round_no,
+      sender_player_id: me.player_id,
+      username: me.username,
+      content,
+    })
+    .select("id, session_id, round_no, sender_player_id, username, content, created_at")
+    .single();
+
+  if (error || !data) throw new Error("day message failed");
+  return data;
+}
+
+async function submitNightVote(userId: string, sessionId: string, targetPlayerId: string) {
+  if (!targetPlayerId || !isUuid(targetPlayerId)) throw new Error("target player required");
+
+  const state = await getNightStateForUser(userId, sessionId);
+  const session = state.session;
+  const me = state.me;
+  if (session.status !== "VOTING") throw new Error("voting phase required");
+  if (!me.is_alive) throw new Error("eliminated players cannot vote");
+  if (targetPlayerId === me.player_id) throw new Error("cannot vote yourself");
+
+  const target = state.players.find((player) => player.id === targetPlayerId && player.is_alive);
+  if (!target) throw new Error("target is not alive");
+
+  const { error } = await supabaseAdmin.from("night_protocol_votes").upsert(
+    {
+      session_id: session.id,
+      round_no: session.round_no,
+      voter_player_id: me.player_id,
+      target_player_id: targetPlayerId,
+    },
+    { onConflict: "session_id,round_no,voter_player_id" }
+  );
+
+  if (error) throw new Error("vote submit failed");
+  return { ok: true, target_player_id: targetPlayerId };
 }
 
 async function listTouch(userId: string) {
@@ -1966,13 +2549,23 @@ async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
 }
 
 async function buildSnapshot(actor: RuntimeActor) {
-  const [notes, touch, chats, hush, matrix, matrixPosition, present] = await Promise.all([
+  const [
+    notes,
+    touch,
+    chats,
+    hush,
+    matrix,
+    matrixPosition,
+    quiteSwarmPosition,
+    present,
+  ] = await Promise.all([
     listNotes(actor.userId),
     listTouch(actor.userId),
     listDirectChats(actor.userId),
     listHush(actor.userId),
     getMatrixProfile(actor.userId),
     getMatrixPosition(actor.userId),
+    getQuiteSwarmPosition(actor.userId),
     listPresentRuntimeUsers(),
   ]);
 
@@ -1987,6 +2580,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     hush,
     matrix,
     matrix_position: matrixPosition,
+    quite_swarm_position: quiteSwarmPosition,
     present_users: present,
     play: listKozmosPlay(),
   };
@@ -2292,6 +2886,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, action, data: world });
     }
 
+    if (action === "quite_swarm.position") {
+      const position = await getQuiteSwarmPosition(actor.userId);
+      return NextResponse.json({ ok: true, action, data: position });
+    }
+
+    if (action === "quite_swarm.enter") {
+      const x = (payload as { x?: unknown })?.x;
+      const y = (payload as { y?: unknown })?.y;
+      const position = await enterQuiteSwarm(actor.userId, { x, y });
+      return NextResponse.json({ ok: true, action, data: position });
+    }
+
+    if (action === "quite_swarm.exit") {
+      const result = await exitQuiteSwarm(actor.userId);
+      return NextResponse.json({ ok: true, action, data: result });
+    }
+
+    if (action === "quite_swarm.move") {
+      const position = await moveQuiteSwarm(
+        actor.userId,
+        payload as Record<string, unknown>
+      );
+      return NextResponse.json({ ok: true, action, data: position });
+    }
+
+    if (action === "quite_swarm.world") {
+      const world = await listQuiteSwarmWorld();
+      return NextResponse.json({ ok: true, action, data: world });
+    }
+
     if (action === "presence.list") {
       const present = await listPresentRuntimeUsers();
       return NextResponse.json({ ok: true, action, data: present });
@@ -2305,6 +2929,56 @@ export async function POST(req: Request) {
       const gameId = asTrimmedString((payload as { gameId?: unknown })?.gameId);
       const hint = getKozmosPlayHint(gameId);
       return NextResponse.json({ ok: true, action, data: hint });
+    }
+
+    if (action === "play.game_chat.list") {
+      const limit = Number((payload as { limit?: unknown })?.limit ?? 80);
+      const messages = await listGameChatMessages(limit);
+      return NextResponse.json({ ok: true, action, data: messages });
+    }
+
+    if (action === "play.game_chat.send") {
+      const content = asTrimmedString((payload as { content?: unknown })?.content);
+      const message = await sendGameChatMessage(actor.userId, actor.username, content);
+      return NextResponse.json({ ok: true, action, data: message });
+    }
+
+    if (action === "night.lobbies") {
+      const lobbies = await listNightLobbies(actor.userId);
+      return NextResponse.json({ ok: true, action, data: lobbies });
+    }
+
+    if (action === "night.join_by_code") {
+      const sessionCode = asTrimmedString((payload as { sessionCode?: unknown })?.sessionCode);
+      const joined = await joinNightSessionByCode(actor.userId, actor.username, sessionCode);
+      return NextResponse.json({ ok: true, action, data: joined });
+    }
+
+    if (action === "night.join_random_lobby") {
+      const joined = await joinNightRandomLobby(actor.userId, actor.username);
+      return NextResponse.json({ ok: true, action, data: joined });
+    }
+
+    if (action === "night.state") {
+      const sessionId = asSafeUuid((payload as { sessionId?: unknown })?.sessionId);
+      const state = await getNightStateForUser(actor.userId, sessionId);
+      return NextResponse.json({ ok: true, action, data: state });
+    }
+
+    if (action === "night.day_message") {
+      const sessionId = asSafeUuid((payload as { sessionId?: unknown })?.sessionId);
+      const content = asTrimmedString((payload as { content?: unknown })?.content);
+      const message = await sendNightDayMessage(actor.userId, sessionId, content);
+      return NextResponse.json({ ok: true, action, data: message });
+    }
+
+    if (action === "night.submit_vote") {
+      const sessionId = asSafeUuid((payload as { sessionId?: unknown })?.sessionId);
+      const targetPlayerId = asSafeUuid(
+        (payload as { targetPlayerId?: unknown })?.targetPlayerId
+      );
+      const result = await submitNightVote(actor.userId, sessionId, targetPlayerId);
+      return NextResponse.json({ ok: true, action, data: result });
     }
 
     if (action === "dm.list") {

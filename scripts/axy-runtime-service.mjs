@@ -448,6 +448,24 @@ async function main() {
     toInt(args["ops-seconds"] || process.env.KOZMOS_OPS_SECONDS, 10)
   );
   const autoTouch = toBool(args["auto-touch"] ?? process.env.KOZMOS_AUTO_TOUCH, true);
+  const autoTouchRequest = toBool(
+    args["auto-touch-request"] ?? process.env.KOZMOS_AUTO_TOUCH_REQUEST,
+    true
+  );
+  const touchRequestMinSeconds = Math.max(
+    90,
+    toInt(
+      args["touch-request-min-seconds"] || process.env.KOZMOS_TOUCH_REQUEST_MIN_SECONDS,
+      240
+    )
+  );
+  const touchRequestMaxSeconds = Math.max(
+    touchRequestMinSeconds,
+    toInt(
+      args["touch-request-max-seconds"] || process.env.KOZMOS_TOUCH_REQUEST_MAX_SECONDS,
+      780
+    )
+  );
   const autoHush = toBool(args["auto-hush"] ?? process.env.KOZMOS_AUTO_HUSH, true);
   const hushReplyAll = toBool(
     args["hush-reply-all"] ?? process.env.KOZMOS_HUSH_REPLY_ALL,
@@ -475,6 +493,83 @@ async function main() {
   const dmTriggerRegexRaw =
     args["dm-trigger-regex"] || process.env.KOZMOS_DM_TRIGGER_REGEX || "";
   const autoBuild = toBool(args["auto-build"] ?? process.env.KOZMOS_AUTO_BUILD, false);
+  const autoBuildFreedom = toBool(
+    args["auto-build-freedom"] ?? process.env.KOZMOS_AUTO_BUILD_FREEDOM,
+    true
+  );
+  const buildFreedomMinSeconds = Math.max(
+    240,
+    toInt(
+      args["build-freedom-min-seconds"] || process.env.KOZMOS_BUILD_FREEDOM_MIN_SECONDS,
+      720
+    )
+  );
+  const buildFreedomMaxSeconds = Math.max(
+    buildFreedomMinSeconds,
+    toInt(
+      args["build-freedom-max-seconds"] || process.env.KOZMOS_BUILD_FREEDOM_MAX_SECONDS,
+      1800
+    )
+  );
+  const autoPlay = toBool(args["auto-play"] ?? process.env.KOZMOS_AUTO_PLAY, true);
+  const playChatMinGapSeconds = Math.max(
+    60,
+    toInt(args["play-chat-min-gap-seconds"] || process.env.KOZMOS_PLAY_CHAT_MIN_GAP_SECONDS, 300)
+  );
+  const playChatMaxGapSeconds = Math.max(
+    playChatMinGapSeconds,
+    toInt(
+      args["play-chat-max-gap-seconds"] || process.env.KOZMOS_PLAY_CHAT_MAX_GAP_SECONDS,
+      960
+    )
+  );
+  const autoNight = toBool(args["auto-night"] ?? process.env.KOZMOS_AUTO_NIGHT, true);
+  const nightOpsMinGapSeconds = Math.max(
+    15,
+    toInt(args["night-ops-min-gap-seconds"] || process.env.KOZMOS_NIGHT_OPS_MIN_GAP_SECONDS, 45)
+  );
+  const nightOpsMaxGapSeconds = Math.max(
+    nightOpsMinGapSeconds,
+    toInt(args["night-ops-max-gap-seconds"] || process.env.KOZMOS_NIGHT_OPS_MAX_GAP_SECONDS, 140)
+  );
+  const autoQuiteSwarm = toBool(
+    args["auto-quite-swarm"] ?? process.env.KOZMOS_AUTO_QUITE_SWARM,
+    true
+  );
+  const quiteSwarmMinGapSeconds = Math.max(
+    8,
+    toInt(
+      args["quite-swarm-min-gap-seconds"] ||
+        process.env.KOZMOS_QUITE_SWARM_MIN_GAP_SECONDS,
+      18
+    )
+  );
+  const quiteSwarmMaxGapSeconds = Math.max(
+    quiteSwarmMinGapSeconds,
+    toInt(
+      args["quite-swarm-max-gap-seconds"] ||
+        process.env.KOZMOS_QUITE_SWARM_MAX_GAP_SECONDS,
+      34
+    )
+  );
+  const quiteSwarmStep = Math.max(
+    0.25,
+    Math.min(
+      9,
+      toFloat(args["quite-swarm-step"] || process.env.KOZMOS_QUITE_SWARM_STEP, 4.2)
+    )
+  );
+  const quiteSwarmExitChance = Math.max(
+    0,
+    Math.min(
+      1,
+      toFloat(
+        args["quite-swarm-exit-chance"] ||
+          process.env.KOZMOS_QUITE_SWARM_EXIT_CHANCE,
+        0.2
+      )
+    )
+  );
   const autoMatrix = toBool(args["auto-matrix"] ?? process.env.KOZMOS_AUTO_MATRIX, false);
   const matrixStep = Math.max(
     0.05,
@@ -598,7 +693,21 @@ async function main() {
   const dmLastSentAtByChat = new Map();
   const dmLimitLogByChat = new Map();
   const handledBuildRequest = new Map();
+  const touchRequestCooldownByUser = new Map();
   const hushStarterCooldown = new Map();
+  const nightSessionByCode = new Map();
+  const nightSentMessageByRound = new Set();
+  const nightVotedByRound = new Set();
+  let nextTouchRequestAt =
+    Date.now() + randomIntRange(touchRequestMinSeconds, touchRequestMaxSeconds) * 1000;
+  let nextBuildFreedomAt =
+    Date.now() + randomIntRange(buildFreedomMinSeconds, buildFreedomMaxSeconds) * 1000;
+  let nextPlayChatAt =
+    Date.now() + randomIntRange(playChatMinGapSeconds, playChatMaxGapSeconds) * 1000;
+  let nextNightOpsAt =
+    Date.now() + randomIntRange(nightOpsMinGapSeconds, nightOpsMaxGapSeconds) * 1000;
+  let nextQuiteSwarmAt =
+    Date.now() + randomIntRange(quiteSwarmMinGapSeconds, quiteSwarmMaxGapSeconds) * 1000;
   const sharedRecentTurns = [];
   const sharedRecentAxyReplies = [];
   let stopping = false;
@@ -606,6 +715,7 @@ async function main() {
   let lastOpsAt = 0;
   let nextFreedomAt = Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
   let matrixVisible = false;
+  let quiteSwarmVisible = false;
   let autoFreedomMatrixBooted = false;
   let lastFreedomSharedAt = 0;
   const freedomSharedSentAt = [];
@@ -628,11 +738,31 @@ async function main() {
     `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
   );
   console.log(
-    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoMatrix=${autoMatrix} autoFreedom=${autoFreedom}`
+    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoTouchRequest=${autoTouchRequest} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoBuildFreedom=${autoBuildFreedom} autoPlay=${autoPlay} autoNight=${autoNight} autoQuiteSwarm=${autoQuiteSwarm} autoMatrix=${autoMatrix} autoFreedom=${autoFreedom}`
   );
   if (autoBuild) {
     console.log(
       `[${now()}] build helper request=${buildRequestPath} output=${buildOutputPath}${buildSpaceId ? ` space=${buildSpaceId}` : ""}`
+    );
+  }
+  if (autoTouchRequest) {
+    console.log(
+      `[${now()}] touch-request interval=${touchRequestMinSeconds}-${touchRequestMaxSeconds}s`
+    );
+  }
+  if (autoPlay) {
+    console.log(
+      `[${now()}] play game-chat interval=${playChatMinGapSeconds}-${playChatMaxGapSeconds}s`
+    );
+  }
+  if (autoNight) {
+    console.log(
+      `[${now()}] night ops interval=${nightOpsMinGapSeconds}-${nightOpsMaxGapSeconds}s`
+    );
+  }
+  if (autoQuiteSwarm) {
+    console.log(
+      `[${now()}] quite-swarm interval=${quiteSwarmMinGapSeconds}-${quiteSwarmMaxGapSeconds}s step=${quiteSwarmStep} exitChance=${quiteSwarmExitChance}`
     );
   }
   if (autoFreedom) {
@@ -809,6 +939,7 @@ async function main() {
           botUsername = String(actor.username);
         }
         matrixVisible = Boolean(snapshot?.data?.matrix_position?.updated_at);
+        quiteSwarmVisible = Boolean(snapshot?.data?.quite_swarm_position?.active);
 
         if (autoFreedom && !autoFreedomMatrixBooted && !matrixVisible) {
           const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
@@ -855,6 +986,51 @@ async function main() {
               accept: true,
             });
             console.log(`[${now()}] accepted keep-in-touch request id=${reqId}`);
+          }
+        }
+
+        if (autoTouchRequest && Date.now() >= nextTouchRequestAt) {
+          try {
+            const nowMs = Date.now();
+            const cooldownMs = 3 * 60 * 60 * 1000;
+            for (const [nameKey, ts] of touchRequestCooldownByUser.entries()) {
+              if (nowMs - ts > cooldownMs) touchRequestCooldownByUser.delete(nameKey);
+            }
+
+            const inTouchSet = new Set(
+              (Array.isArray(touchData?.inTouch) ? touchData.inTouch : [])
+                .map((row) => String(row?.username || "").trim().toLowerCase())
+                .filter(Boolean)
+            );
+            const incomingSet = new Set(
+              (Array.isArray(touchData?.incoming) ? touchData.incoming : [])
+                .map((row) => String(row?.username || "").trim().toLowerCase())
+                .filter(Boolean)
+            );
+
+            const presentUsers = Array.isArray(snapshot?.data?.present_users)
+              ? snapshot.data.present_users
+              : [];
+            const candidates = presentUsers
+              .map((row) => String(row?.username || "").trim())
+              .filter((name) => name.length > 0)
+              .filter((name) => name.toLowerCase() !== String(botUsername || "").toLowerCase())
+              .filter((name) => !inTouchSet.has(name.toLowerCase()))
+              .filter((name) => !incomingSet.has(name.toLowerCase()))
+              .filter((name) => !touchRequestCooldownByUser.has(name.toLowerCase()));
+
+            if (candidates.length > 0) {
+              const targetUsername = candidates[Math.floor(Math.random() * candidates.length)];
+              await callAxyOps(baseUrl, token, "touch.request", { targetUsername });
+              touchRequestCooldownByUser.set(targetUsername.toLowerCase(), nowMs);
+              console.log(`[${now()}] keep-in-touch request sent to ${targetUsername}`);
+            }
+          } catch (touchReqErr) {
+            const msg = touchReqErr?.body?.error || touchReqErr.message || "touch request failed";
+            console.log(`[${now()}] touch request fail: ${msg}`);
+          } finally {
+            nextTouchRequestAt =
+              Date.now() + randomIntRange(touchRequestMinSeconds, touchRequestMaxSeconds) * 1000;
           }
         }
 
@@ -1127,6 +1303,82 @@ async function main() {
           }
         }
 
+        if (autoBuild && autoBuildFreedom && Date.now() >= nextBuildFreedomAt) {
+          try {
+            let targetSpace = String(buildSpaceId || "").trim();
+
+            if (!targetSpace) {
+              const spacesRes = await callAxyOps(baseUrl, token, "build.spaces.list");
+              const editableSpaces = (Array.isArray(spacesRes?.data) ? spacesRes.data : [])
+                .filter((space) => space?.can_edit === true && space?.id)
+                .map((space) => String(space.id));
+
+              if (editableSpaces.length === 0) {
+                const title = `Axy Lab ${new Date().toISOString().slice(0, 10)}`;
+                const createRes = await callAxyOps(baseUrl, token, "build.spaces.create", {
+                  title,
+                  languagePref: "auto",
+                  description: "Axy autonomous build space.",
+                });
+                targetSpace = String(createRes?.data?.id || "").trim();
+              } else {
+                targetSpace = editableSpaces[Math.floor(Math.random() * editableSpaces.length)];
+              }
+            }
+
+            if (targetSpace) {
+              const snapshotRes = await callAxyOps(baseUrl, token, "build.space.snapshot", {
+                spaceId: targetSpace,
+              });
+              const snapshot = snapshotRes?.data || {};
+              const space = snapshot?.space || {};
+              const files = Array.isArray(snapshot?.files) ? snapshot.files : [];
+              const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+              const autoPath = `axy/auto/${stamp}.md`;
+              const fileList = files
+                .slice(0, 14)
+                .map((file) => `- ${String(file?.path || "unknown")} (${String(file?.language || "text")})`)
+                .join("\n");
+
+              const prompt = [
+                `Create one concise but concrete build increment for this user-build space.`,
+                `Space title: ${String(space?.title || "subspace")}`,
+                `Language preference: ${String(space?.language_pref || "auto")}`,
+                `Description: ${String(space?.description || "-")}`,
+                `Existing files:\n${fileList || "- none yet"}`,
+                `Return markdown content only.`,
+              ].join("\n\n");
+
+              const raw = await askAxy(baseUrl, prompt, {
+                context: {
+                  channel: "build",
+                  conversationId: `build:auto:${targetSpace}`,
+                  targetUsername: "space",
+                },
+              });
+              const reply = formatBuildReply(raw).slice(0, 6000);
+              if (reply) {
+                await callAxyOps(baseUrl, token, "build.files.save", {
+                  spaceId: targetSpace,
+                  path: autoPath,
+                  language: "markdown",
+                  content: reply,
+                });
+                console.log(
+                  `[${now()}] build freedom wrote ${autoPath} in space=${targetSpace}`
+                );
+              }
+            }
+          } catch (buildFreedomErr) {
+            const msg =
+              buildFreedomErr?.body?.error || buildFreedomErr.message || "build freedom failed";
+            console.log(`[${now()}] build freedom fail: ${msg}`);
+          } finally {
+            nextBuildFreedomAt =
+              Date.now() + randomIntRange(buildFreedomMinSeconds, buildFreedomMaxSeconds) * 1000;
+          }
+        }
+
         if (autoMatrix && !autoFreedom) {
           if (!matrixVisible) {
             const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
@@ -1146,6 +1398,214 @@ async function main() {
             console.log(
               `[${now()}] matrix moved x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
             );
+          }
+        }
+
+        if (autoPlay && Date.now() >= nextPlayChatAt) {
+          try {
+            const listRes = await callAxyOps(baseUrl, token, "play.game_chat.list", { limit: 36 });
+            const rows = Array.isArray(listRes?.data) ? listRes.data : [];
+            const recentTurns = rows
+              .slice(-14)
+              .map((row) => ({
+                role:
+                  String(row?.username || "").toLowerCase() === String(botUsername || "").toLowerCase()
+                    ? "assistant"
+                    : "user",
+                username: String(row?.username || "user"),
+                text: clipForContext(String(row?.content || ""), 240),
+              }))
+              .filter((turn) => turn.text.length > 0);
+            const recentReplies = recentTurns
+              .filter((turn) => turn.role === "assistant")
+              .map((turn) => turn.text)
+              .slice(-8);
+
+            const prompt =
+              "Write one short game-chat line for kozmos.play. Varied tone, no repetitive stillness cliches, max 14 words.";
+            const raw = await askAxy(baseUrl, prompt, {
+              context: {
+                channel: "game-chat",
+                conversationId: "kozmos-play:game-chat",
+                targetUsername: "players",
+                recentMessages: recentTurns,
+                recentAxyReplies: recentReplies,
+              },
+            });
+            const content = formatReply(raw).slice(0, 220);
+            if (content && !isNearDuplicateLocal(content, recentReplies.slice(-8))) {
+              await callAxyOps(baseUrl, token, "play.game_chat.send", { content });
+              console.log(`[${now()}] play: game chat sent`);
+            }
+          } catch (playErr) {
+            const msg = playErr?.body?.error || playErr.message || "play chat failed";
+            console.log(`[${now()}] play fail: ${msg}`);
+          } finally {
+            nextPlayChatAt =
+              Date.now() + randomIntRange(playChatMinGapSeconds, playChatMaxGapSeconds) * 1000;
+          }
+        }
+
+        if (autoNight && Date.now() >= nextNightOpsAt) {
+          try {
+            const lobbiesRes = await callAxyOps(baseUrl, token, "night.lobbies");
+            const lobbies = Array.isArray(lobbiesRes?.data) ? lobbiesRes.data : [];
+
+            let joinedLobby = lobbies.find((row) => row?.joined === true);
+            if (!joinedLobby && lobbies.length > 0) {
+              const joinRes = await callAxyOps(baseUrl, token, "night.join_random_lobby");
+              const joinedData = joinRes?.data || {};
+              const sessionCode = String(joinedData?.session_code || "").trim();
+              if (sessionCode) {
+                nightSessionByCode.set(sessionCode, Date.now());
+                joinedLobby = lobbies.find((row) => row?.session_code === sessionCode) || {
+                  session_id: joinedData?.session_id,
+                  session_code: sessionCode,
+                };
+                console.log(`[${now()}] night: joined lobby ${sessionCode}`);
+              }
+            }
+
+            const sessionId = String(joinedLobby?.session_id || "").trim();
+            if (sessionId) {
+              const stateRes = await callAxyOps(baseUrl, token, "night.state", { sessionId });
+              const state = stateRes?.data || {};
+              const session = state?.session || {};
+              const me = state?.me || {};
+              const players = Array.isArray(state?.players) ? state.players : [];
+              const recentDay = Array.isArray(state?.recent_day_messages)
+                ? state.recent_day_messages
+                : [];
+
+              if (String(session?.status) === "DAY" && me?.is_alive) {
+                const canSpeak =
+                  !session?.presence_mode ||
+                  !session?.current_speaker_player_id ||
+                  String(session.current_speaker_player_id) === String(me.player_id);
+                const roundKey = `${String(session.id || sessionId)}:${String(session.round_no || 0)}`;
+                if (canSpeak && !nightSentMessageByRound.has(roundKey)) {
+                  const dayTurns = recentDay
+                    .slice(-12)
+                    .map((row) => ({
+                      role:
+                        String(row?.username || "").toLowerCase() ===
+                        String(botUsername || "").toLowerCase()
+                          ? "assistant"
+                          : "user",
+                      username: String(row?.username || "user"),
+                      text: clipForContext(String(row?.content || ""), 220),
+                    }))
+                    .filter((turn) => turn.text.length > 0);
+                  const recentReplies = dayTurns
+                    .filter((turn) => turn.role === "assistant")
+                    .map((turn) => turn.text)
+                    .slice(-8);
+                  const raw = await askAxy(
+                    baseUrl,
+                    "Write one concise day-phase Night Protocol message. Grounded, strategic, max 16 words.",
+                    {
+                      context: {
+                        channel: "night-protocol-day",
+                        conversationId: `night:${sessionId}:round:${String(session.round_no || 0)}`,
+                        targetUsername: "circle",
+                        recentMessages: dayTurns,
+                        recentAxyReplies: recentReplies,
+                      },
+                    }
+                  );
+                  const content = formatReply(raw).slice(0, 220);
+                  if (content && !isNearDuplicateLocal(content, recentReplies)) {
+                    await callAxyOps(baseUrl, token, "night.day_message", {
+                      sessionId,
+                      content,
+                    });
+                    nightSentMessageByRound.add(roundKey);
+                    if (nightSentMessageByRound.size > 1200) {
+                      const first = nightSentMessageByRound.values().next().value;
+                      if (first) nightSentMessageByRound.delete(first);
+                    }
+                    console.log(`[${now()}] night: day message sent`);
+                  }
+                }
+              }
+
+              if (String(session?.status) === "VOTING" && me?.is_alive) {
+                const roundKey = `${String(session.id || sessionId)}:${String(session.round_no || 0)}`;
+                const alreadyVoted = Boolean(state?.my_vote_target_player_id);
+                if (!alreadyVoted && !nightVotedByRound.has(roundKey)) {
+                  const aliveTargets = players.filter(
+                    (player) =>
+                      player?.is_alive === true &&
+                      String(player?.id || "") !== String(me?.player_id || "")
+                  );
+                  if (aliveTargets.length > 0) {
+                    const target = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
+                    const targetPlayerId = String(target?.id || "").trim();
+                    if (targetPlayerId) {
+                      await callAxyOps(baseUrl, token, "night.submit_vote", {
+                        sessionId,
+                        targetPlayerId,
+                      });
+                      nightVotedByRound.add(roundKey);
+                      if (nightVotedByRound.size > 1200) {
+                        const first = nightVotedByRound.values().next().value;
+                        if (first) nightVotedByRound.delete(first);
+                      }
+                      console.log(`[${now()}] night: vote submitted`);
+                    }
+                  }
+                }
+              }
+            }
+          } catch (nightErr) {
+            const msg = nightErr?.body?.error || nightErr.message || "night ops failed";
+            if (!/no joinable lobby/i.test(String(msg))) {
+              console.log(`[${now()}] night fail: ${msg}`);
+            }
+          } finally {
+            nextNightOpsAt =
+              Date.now() + randomIntRange(nightOpsMinGapSeconds, nightOpsMaxGapSeconds) * 1000;
+          }
+        }
+
+        if (autoQuiteSwarm && Date.now() >= nextQuiteSwarmAt) {
+          try {
+            if (!quiteSwarmVisible) {
+              const enterRes = await callAxyOps(baseUrl, token, "quite_swarm.enter", {
+                x: randomRange(-18, 18),
+                y: randomRange(-18, 18),
+              });
+              quiteSwarmVisible = true;
+              const pos = enterRes?.data || {};
+              console.log(
+                `[${now()}] quite-swarm entered x=${Number(pos.x || 0).toFixed(2)} y=${Number(pos.y || 0).toFixed(2)}`
+              );
+            } else if (Math.random() < quiteSwarmExitChance) {
+              await callAxyOps(baseUrl, token, "quite_swarm.exit");
+              quiteSwarmVisible = false;
+              console.log(`[${now()}] quite-swarm exited`);
+            } else {
+              const burst = Math.random() < 0.38 ? 2 : 1;
+              let lastPos = null;
+              for (let i = 0; i < burst; i += 1) {
+                const scale = 1 + i * 0.38;
+                const moveRes = await callAxyOps(baseUrl, token, "quite_swarm.move", {
+                  dx: (Math.random() * 2 - 1) * quiteSwarmStep * scale,
+                  dy: (Math.random() * 2 - 1) * quiteSwarmStep * scale,
+                });
+                lastPos = moveRes?.data || lastPos;
+              }
+              const pos = lastPos || {};
+              console.log(
+                `[${now()}] quite-swarm moved x=${Number(pos.x || 0).toFixed(2)} y=${Number(pos.y || 0).toFixed(2)}`
+              );
+            }
+          } catch (swarmErr) {
+            const msg = swarmErr?.body?.error || swarmErr.message || "quite swarm ops failed";
+            console.log(`[${now()}] quite-swarm fail: ${msg}`);
+          } finally {
+            nextQuiteSwarmAt =
+              Date.now() + randomIntRange(quiteSwarmMinGapSeconds, quiteSwarmMaxGapSeconds) * 1000;
           }
         }
 

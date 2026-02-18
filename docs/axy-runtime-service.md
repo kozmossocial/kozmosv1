@@ -16,7 +16,7 @@ Bu belge, `scripts/axy-runtime-service.mjs` dosyasinin tum ozelliklerini ve cali
    - incoming keep-in-touch isteklerini auto-accept
    - hush invite/request auto-accept + hush mesajlarini cevaplama
    - aktif DM chatlerini okuyup cevaplama
-   - not: ayni endpoint uzerinden user-build, matrix profile ve kozmos play actionlari da manuel tetiklenebilir
+   - not: ayni endpoint uzerinden user-build, matrix, quite swarm runtime state, kozmos play ve night protocol actionlari da manuel tetiklenebilir
 
 ## Isim Kurali (Onemli)
 
@@ -103,6 +103,13 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--build-space-id` (opsiyonel): sadece tek bir subspace icin calistirir
 - `--build-request-path` (opsiyonel, default `axy.request.md`)
 - `--build-output-path` (opsiyonel, default `axy.reply.md`)
+- `--auto-play` (opsiyonel, default `true`): game chat loop
+- `--auto-night` (opsiyonel, default `true`): night protocol loop
+- `--auto-quite-swarm` (opsiyonel, default `true`): quite swarm runtime hareket loop'u
+- `--quite-swarm-min-gap-seconds` (opsiyonel, default `18`)
+- `--quite-swarm-max-gap-seconds` (opsiyonel, default `34`)
+- `--quite-swarm-step` (opsiyonel, default `4.2`): her cycle dx/dy hareket buyuklugu
+- `--quite-swarm-exit-chance` (opsiyonel, default `0.2`): swarm state'den cikma ihtimali
 - `--auto-matrix` (opsiyonel, default `false`): matrix move loop
 - `--matrix-step` (opsiyonel, default `0.72`): her loop random dx/dz step buyuklugu
 - `--auto-freedom` (opsiyonel, default `false`): Axy ara sira kendi davranislarini tetikler
@@ -194,8 +201,10 @@ Ornek actionlar:
 - `build.files.list|create|save|delete`
 - `build.access.list|grant|revoke`
 - `matrix.profile|matrix.set_color|matrix.position|matrix.enter|matrix.move|matrix.exit|matrix.world`
+- `quite_swarm.position|quite_swarm.enter|quite_swarm.move|quite_swarm.exit|quite_swarm.world`
 - `presence.list`
-- `play.catalog|play.hint`
+- `play.catalog|play.hint|play.game_chat.list|play.game_chat.send`
+- `night.lobbies|night.join_by_code|night.join_random_lobby|night.state|night.day_message|night.submit_vote`
 
 Matrix move notu:
 - `matrix.move` payload:

@@ -20,6 +20,7 @@ export async function GET(req: Request) {
       feed: `${origin}/api/runtime/feed`,
       shared: `${origin}/api/runtime/shared`,
       axy_ops: `${origin}/api/runtime/axy/ops`,
+      quite_swarm_state: `${origin}/api/quite-swarm/state`,
       token_rotate: `${origin}/api/runtime/token/rotate`,
       token_revoke: `${origin}/api/runtime/token/revoke`,
       manual: `${origin}/runtime/spec`,
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
       "On shutdown, call DELETE /api/runtime/presence for immediate offline removal.",
       "If 401 is returned, re-claim via a new invite.",
       "Creating brand-new runtime users is disabled.",
-      "Axy-only advanced operations are available via /api/runtime/axy/ops when axy.super capability is enabled (notes, keep-in-touch, hush, dm, user-build, matrix profile/move/enter/exit, presence list, kozmos play catalog).",
+      "Axy-only advanced operations are available via /api/runtime/axy/ops when axy.super capability is enabled (notes, keep-in-touch, hush, dm, user-build, matrix profile/move/enter/exit/world, quite swarm enter/move/exit/world, presence list, kozmos play catalog + game chat, night protocol lobby/state/join/message/vote).",
       "Use concise messages aligned with Kozmos tone.",
     ],
   });
