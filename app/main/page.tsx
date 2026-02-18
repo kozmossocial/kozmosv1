@@ -961,11 +961,14 @@ export default function Main() {
   const chatWheelTransition = chatWheelIsDragging
     ? "none"
     : "transform 240ms cubic-bezier(0.2, 0.78, 0.24, 1), opacity 180ms ease, filter 180ms ease, color 160ms ease, text-shadow 160ms ease, font-weight 160ms ease";
-  const vsJoinableUsers = useMemo(
-    () => uniqueNames([currentUsername, ...presentUsers]),
-    [currentUsername, presentUsers]
-  );
   const isQuiteSwarmMultiMode = quiteSwarmMode === "multi";
+  const vsJoinableUsers = useMemo(() => {
+    if (!isQuiteSwarmMultiMode) {
+      return uniqueNames([currentUsername]);
+    }
+    const swarmNames = quiteSwarmRuntimePlayers.map((row) => row.username);
+    return uniqueNames([currentUsername, ...swarmNames]);
+  }, [currentUsername, isQuiteSwarmMultiMode, quiteSwarmRuntimePlayers]);
   const quiteSwarmRoomStartMs = useMemo(() => {
     if (!quiteSwarmRoom?.startedAt) return 0;
     const parsed = Date.parse(quiteSwarmRoom.startedAt);
@@ -1994,7 +1997,7 @@ export default function Main() {
             if (mergedIds.has(row.userId)) return;
             const freshnessMs = parseTsMs(row.updatedAt || row.lastSeenAt);
             if (!freshnessMs) return;
-            if (now - freshnessMs > 2200) return;
+            if (now - freshnessMs > 650) return;
             merged.push(row);
           });
           return merged;
@@ -4704,107 +4707,58 @@ export default function Main() {
               <>
               <div style={{ marginBottom: 10 }}>
                 <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 6,
+                  className="kozmos-tap"
+                  style={{ opacity: 0.78, cursor: "pointer", marginBottom: 6 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPlay(NIGHT_PROTOCOL_MODE);
                   }}
                 >
-                  <span>night protocol 🐺</span>
-                  <span
-                    className="kozmos-tap"
-                    style={{ opacity: 0.78, cursor: "pointer" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openPlay(NIGHT_PROTOCOL_MODE);
-                    }}
-                  >
-                    enter circle
-                  </span>
+                  night protocol 🐺
                 </div>
 
                 <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 6,
+                  className="kozmos-tap"
+                  style={{ opacity: 0.7, cursor: "pointer", marginBottom: 6 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPlay(QUITE_SWARM_MODE);
                   }}
                 >
-                  <span>signal drift</span>
-                  <span
-                    className="kozmos-tap"
-                    style={{ opacity: 0.6, cursor: "pointer" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openPlay("signal-drift");
-                    }}
-                  >
-                    enter
-                  </span>
+                  quite swarm
                 </div>
 
                 <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 6,
+                  className="kozmos-tap"
+                  style={{ opacity: 0.64, cursor: "pointer", marginBottom: 6 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPlay("signal-drift");
                   }}
                 >
-                  <span>slow orbit</span>
-                  <span
-                    className="kozmos-tap"
-                    style={{ opacity: 0.6, cursor: "pointer" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openPlay("slow-orbit");
-                    }}
-                  >
-                    enter
-                  </span>
+                  signal drift
                 </div>
 
                 <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 6,
+                  className="kozmos-tap"
+                  style={{ opacity: 0.64, cursor: "pointer", marginBottom: 6 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPlay("slow-orbit");
                   }}
                 >
-                  <span>quite swarm</span>
-                  <span
-                    className="kozmos-tap"
-                    style={{ opacity: 0.6, cursor: "pointer" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openPlay(QUITE_SWARM_MODE);
-                    }}
-                  >
-                    enter
-                  </span>
+                  slow orbit
                 </div>
 
                 <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                  className="kozmos-tap"
+                  style={{ opacity: 0.64, cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPlay("hush-puzzle");
                   }}
                 >
-                  <span>hush puzzle</span>
-                  <span
-                    className="kozmos-tap"
-                    style={{ opacity: 0.6, cursor: "pointer" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openPlay("hush-puzzle");
-                    }}
-                  >
-                    enter
-                  </span>
+                  hush puzzle
                 </div>
               </div>
 
@@ -5519,7 +5473,7 @@ export default function Main() {
                         ? quiteSwarmStartCountdownSeconds > 0
                           ? `synced start in ${quiteSwarmStartCountdownSeconds}s`
                           : "synced room active"
-                        : "host triggers one synced start for everyone"
+                        : "available users = active quite swarm users only"
                       : "singleplayer runs local simulation"}
                   </div>
                   <div
