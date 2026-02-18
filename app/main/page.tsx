@@ -174,9 +174,9 @@ function advanceVsSession(
   const enemies = prev.enemies.map((enemy) => ({ ...enemy }));
   const projectiles = prev.projectiles.map((projectile) => ({ ...projectile }));
 
-  let timeLeft = Math.max(0, prev.timeLeft - dt);
+  const timeLeft = Math.max(0, prev.timeLeft - dt);
   const elapsed = VS_MATCH_SECONDS - timeLeft;
-  let wave = 1 + Math.floor(elapsed / 12);
+  const wave = 1 + Math.floor(elapsed / 12);
   let spawnCooldown = prev.spawnCooldown - dt;
   let modCooldown = prev.modCooldown - dt;
   let lastEnemyId = prev.lastEnemyId;
@@ -3371,6 +3371,27 @@ export default function Main() {
             {playOpen && (
               <>
               <div style={{ marginBottom: 10 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <span>night protocol</span>
+                  <span
+                    className="kozmos-tap"
+                    style={{ opacity: 0.78, cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push("/main/night-protocol");
+                    }}
+                  >
+                    enter circle
+                  </span>
+                </div>
+
                 <div
                   style={{
                     display: "flex",
