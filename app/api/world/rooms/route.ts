@@ -6,7 +6,12 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const ROOM_LIMIT = 13;
-const ROOM_PATHS = ["matrix.room.json", "kozmos.matrix.json"] as const;
+const ROOM_PATHS = [
+  "space.room.json",
+  "kozmos.space.json",
+  "matrix.room.json",
+  "kozmos.matrix.json",
+] as const;
 const ROOM_AURAS = ["calm", "bright", "heavy", "fast"] as const;
 const ROOM_VISIBILITIES = ["public", "unlisted", "private"] as const;
 const ROOM_ENTRIES = ["click", "proximity"] as const;

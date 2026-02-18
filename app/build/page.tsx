@@ -31,7 +31,8 @@ type AxyTurn = {
   content: string;
 };
 
-const ROOM_MANIFEST_PATH = "matrix.room.json";
+const ROOM_MANIFEST_PATH = "space.room.json";
+const LEGACY_ROOM_MANIFEST_PATHS = ["matrix.room.json", "kozmos.matrix.json"] as const;
 const ROOM_COORD_LIMIT = 13;
 const ROOM_AURAS = ["calm", "bright", "heavy", "fast"] as const;
 const ROOM_VISIBILITIES = ["public", "unlisted", "private"] as const;
@@ -552,7 +553,11 @@ export default function BuildPage() {
 
     try {
       const manifestFile = files.find(
-        (file) => file.path.trim().toLowerCase() === ROOM_MANIFEST_PATH
+        (file) => {
+          const normalizedPath = file.path.trim().toLowerCase();
+          if (normalizedPath === ROOM_MANIFEST_PATH) return true;
+          return LEGACY_ROOM_MANIFEST_PATHS.some((legacy) => legacy === normalizedPath);
+        }
       );
       const existing = parseExistingRoomManifest(manifestFile?.content);
       const fallbackTitle = clipText(selectedSpace.title, 32) || "untitled room";
@@ -590,7 +595,7 @@ export default function BuildPage() {
       }
 
       await loadFiles(selectedSpaceId, selectedFilePath);
-      setInfoText("room published to matrix");
+      setInfoText("room published to space");
     } finally {
       setPublishingRoom(false);
     }

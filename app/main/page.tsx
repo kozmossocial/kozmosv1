@@ -1273,9 +1273,9 @@ export default function Main() {
         /{" "}
         <span
           style={{ cursor: "pointer" }}
-          onClick={() => router.push("/main/matrix")}
+          onClick={() => router.push("/main/space")}
         >
-          matrix
+          space
         </span>
         {" / "}
         <span
@@ -1755,13 +1755,13 @@ export default function Main() {
             style={{
               fontSize: 20,
               letterSpacing: "0.12em",
-              fontWeight: 500,
+              fontWeight: 380,
               opacity: 0.6,
               textTransform: "none",
               textAlign: "center",
             }}
           >
-            shared space
+            open chat
           </div>
           <div
             style={{
