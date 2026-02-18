@@ -38,6 +38,8 @@ type DirectMessage = {
   created_at: string;
 };
 
+const DIRECT_CHAT_SEEN_STORAGE_PREFIX = "kozmos:dm-seen:";
+
 export default function MyHome() {
   const router = useRouter();
 
@@ -81,6 +83,7 @@ export default function MyHome() {
   const lastDirectScrollKeyRef = useRef<string>("");
   const directChatsInitializedRef = useRef(false);
   const directChatUpdatedAtRef = useRef<Record<string, string>>({});
+  const directChatSeenAtRef = useRef<Record<string, string>>({});
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
@@ -154,8 +157,10 @@ export default function MyHome() {
 
       if (!res.ok) return;
       const nextChats = Array.isArray(body.chats) ? body.chats : [];
+      const seenMap = directChatSeenAtRef.current;
 
-      if (!directChatsInitializedRef.current) {
+      const isFirstLoad = !directChatsInitializedRef.current;
+      if (isFirstLoad) {
         directChatsInitializedRef.current = true;
         directChatUpdatedAtRef.current = nextChats.reduce<Record<string, string>>(
           (acc, chat) => {
@@ -174,12 +179,20 @@ export default function MyHome() {
         const nextUnread: Record<string, true> = {};
         nextChats.forEach((chat) => {
           if (chat.chat_id === selectedDirectChatId) return;
-          const prevTs = Date.parse(previous[chat.chat_id] || "");
           const nextTs = Date.parse(chat.updated_at || "");
+          if (!Number.isFinite(nextTs)) return;
+
+          const seenTs = Date.parse(seenMap[chat.chat_id] || "");
+          if (Number.isFinite(seenTs)) {
+            if (nextTs > seenTs) nextUnread[chat.chat_id] = true;
+            return;
+          }
+
+          if (isFirstLoad) return;
+
+          const prevTs = Date.parse(previous[chat.chat_id] || "");
           const isNewChat = !previous[chat.chat_id];
-          const isUpdated =
-            Number.isFinite(nextTs) &&
-            (!Number.isFinite(prevTs) || nextTs > prevTs);
+          const isUpdated = !Number.isFinite(prevTs) || nextTs > prevTs;
           if (isNewChat || isUpdated) {
             nextUnread[chat.chat_id] = true;
           }
@@ -202,6 +215,35 @@ export default function MyHome() {
     } catch {
       // ignore transient fetch failures
     }
+  }
+
+  function persistDirectSeenMap(nextMap: Record<string, string>) {
+    if (!userId) return;
+    try {
+      window.localStorage.setItem(
+        `${DIRECT_CHAT_SEEN_STORAGE_PREFIX}${userId}`,
+        JSON.stringify(nextMap)
+      );
+    } catch {
+      // ignore localStorage write failures
+    }
+  }
+
+  function markDirectChatSeen(chatId: string, seenAtIso: string) {
+    if (!chatId || !seenAtIso) return;
+    const current = directChatSeenAtRef.current[chatId];
+    const currentTs = Date.parse(current || "");
+    const nextTs = Date.parse(seenAtIso);
+    if (Number.isFinite(currentTs) && Number.isFinite(nextTs) && currentTs >= nextTs) {
+      return;
+    }
+
+    const nextMap = {
+      ...directChatSeenAtRef.current,
+      [chatId]: seenAtIso,
+    };
+    directChatSeenAtRef.current = nextMap;
+    persistDirectSeenMap(nextMap);
   }
 
   async function loadDirectMessages(chatId: string) {
@@ -482,6 +524,19 @@ export default function MyHome() {
       }
 
       setUserId(user.id);
+      try {
+        const raw = window.localStorage.getItem(
+          `${DIRECT_CHAT_SEEN_STORAGE_PREFIX}${user.id}`
+        );
+        if (raw) {
+          const parsed = JSON.parse(raw) as Record<string, string>;
+          if (parsed && typeof parsed === "object") {
+            directChatSeenAtRef.current = parsed;
+          }
+        }
+      } catch {
+        directChatSeenAtRef.current = {};
+      }
 
       const { data: profile } = await supabase
         .from("profileskozmos")
@@ -536,6 +591,8 @@ useEffect(() => {
       return;
     }
 
+    markDirectChatSeen(selectedDirectChatId, new Date().toISOString());
+
     setDirectUnreadChatIds((prev) => {
       if (!prev[selectedDirectChatId]) return prev;
       const copy = { ...prev };
@@ -564,6 +621,9 @@ useEffect(() => {
     if (!selectedDirectChatId) return;
 
     const lastMessage = directMessages[directMessages.length - 1];
+    if (lastMessage?.created_at) {
+      markDirectChatSeen(selectedDirectChatId, String(lastMessage.created_at));
+    }
     const scrollKey = `${selectedDirectChatId}:${lastMessage?.id ?? "none"}:${directMessages.length}`;
 
     if (scrollKey === lastDirectScrollKeyRef.current) return;
