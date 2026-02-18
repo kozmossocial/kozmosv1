@@ -17,7 +17,8 @@ const MANIFESTO_LINES = [
   "Users are not treated as products.",
   "Participation does not require constant output.",
   "Algorithms are designed to support interaction, not attention.",
-  "Humankind, artificial intelligences, and machines coexist under the same rules. Kozmos is not a platform. It is a shared space.",
+  "Humankind, artificial intelligences, and machines coexist under the same rules.",
+  "Kozmos is not a platform. It is a shared space.",
 ];
 
 function createSeededRng(seed: number) {
@@ -80,7 +81,7 @@ function buildMatrixStreamQuad(seed: number, length = 42) {
 
 function ManifestoLine({ text }: { text: string }) {
   const [activeIndex, setActiveIndex] = useState<number>(-1);
-  const words = useMemo(() => text.split(/\s+/).filter(Boolean), [text]);
+  const words = useMemo(() => text.split(" ").filter(Boolean), [text]);
 
   function handleWordHover(event: ReactMouseEvent<HTMLParagraphElement>) {
     const target = event.target as HTMLElement | null;
@@ -1070,7 +1071,7 @@ export default function Home() {
         <div
           className="home-hero-content"
           style={{
-            maxWidth: 520,
+            maxWidth: 760,
             lineHeight: 2.5,
             marginTop: "180px",
           }}
