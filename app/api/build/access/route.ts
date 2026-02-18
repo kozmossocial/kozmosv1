@@ -46,6 +46,18 @@ async function resolveUserIdByUsername(username: string) {
   return data?.id ?? null;
 }
 
+async function areUsersInTouch(a: string, b: string) {
+  const pairFilter = `and(requester_id.eq.${a},requested_id.eq.${b}),and(requester_id.eq.${b},requested_id.eq.${a})`;
+  const { data, error } = await supabaseAdmin
+    .from("keep_in_touch_requests")
+    .select("id")
+    .eq("status", "accepted")
+    .or(pairFilter)
+    .limit(1);
+  if (error) return { ok: false, error };
+  return { ok: Array.isArray(data) && data.length > 0, error: null };
+}
+
 export async function GET(req: Request) {
   try {
     const { user } = await authenticateUser(req);
@@ -128,6 +140,14 @@ export async function POST(req: Request) {
 
     if (targetUserId === user.id) {
       return NextResponse.json({ error: "cannot grant yourself" }, { status: 400 });
+    }
+
+    const inTouch = await areUsersInTouch(user.id, targetUserId);
+    if (inTouch.error) {
+      return NextResponse.json({ error: "in-touch check failed" }, { status: 500 });
+    }
+    if (!inTouch.ok) {
+      return NextResponse.json({ error: "user is not in touch" }, { status: 403 });
     }
 
     const { error } = await supabaseAdmin.from("user_build_space_access").upsert(

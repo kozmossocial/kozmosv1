@@ -23,6 +23,18 @@ type BuildFile = {
   updated_at: string;
 };
 
+type InTouchUser = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+};
+
+type SpaceAccessEntry = {
+  userId: string;
+  username: string;
+  canEdit: boolean;
+};
+
 const LANGUAGE_OPTIONS = ["text", "ts", "tsx", "js", "json", "md", "sql", "py"];
 
 type AxyTurn = {
@@ -152,6 +164,10 @@ export default function BuildPage() {
   const [savingFile, setSavingFile] = useState(false);
   const [publishingRoom, setPublishingRoom] = useState(false);
   const [updatingSpaceVisibility, setUpdatingSpaceVisibility] = useState(false);
+  const [loadingAccess, setLoadingAccess] = useState(false);
+  const [inTouchUsers, setInTouchUsers] = useState<InTouchUser[]>([]);
+  const [spaceAccessEntries, setSpaceAccessEntries] = useState<SpaceAccessEntry[]>([]);
+  const [updatingAccessUsername, setUpdatingAccessUsername] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [infoText, setInfoText] = useState<string | null>(null);
   const [axyInput, setAxyInput] = useState("");
@@ -178,6 +194,19 @@ export default function BuildPage() {
   const isOwnerSelectedSpace = Boolean(
     selectedSpace && userId && selectedSpace.owner_id === userId
   );
+  const editableAccessByUsername = useMemo(() => {
+    const map = new Map<string, SpaceAccessEntry>();
+    spaceAccessEntries.forEach((entry) => {
+      map.set(entry.username.toLowerCase(), entry);
+    });
+    return map;
+  }, [spaceAccessEntries]);
+  const orphanEditableAccess = useMemo(() => {
+    const touchSet = new Set(inTouchUsers.map((user) => user.username.toLowerCase()));
+    return spaceAccessEntries.filter(
+      (entry) => entry.canEdit && !touchSet.has(entry.username.toLowerCase())
+    );
+  }, [inTouchUsers, spaceAccessEntries]);
   const previewDoc = useMemo(() => {
     const workingFiles = previewAutoRefresh
       ? files.map((file) =>
@@ -304,6 +333,44 @@ export default function BuildPage() {
     });
   }
 
+  async function loadAccessData(spaceId: string) {
+    if (!isOwnerSelectedSpace) {
+      setInTouchUsers([]);
+      setSpaceAccessEntries([]);
+      return;
+    }
+
+    setLoadingAccess(true);
+    try {
+      const [touchRes, accessRes] = await Promise.all([
+        fetchAuthedJson("/api/keep-in-touch"),
+        fetchAuthedJson(`/api/build/access?spaceId=${encodeURIComponent(spaceId)}`),
+      ]);
+
+      if (touchRes.res.ok) {
+        const nextInTouch = (Array.isArray(touchRes.data?.inTouch)
+          ? touchRes.data.inTouch
+          : []) as InTouchUser[];
+        setInTouchUsers(nextInTouch);
+      } else {
+        setInTouchUsers([]);
+      }
+
+      if (accessRes.res.ok) {
+        const nextEntries = (Array.isArray(accessRes.data?.entries)
+          ? accessRes.data.entries
+          : []) as SpaceAccessEntry[];
+        setSpaceAccessEntries(nextEntries);
+      } else if (accessRes.res.status === 403) {
+        setSpaceAccessEntries([]);
+      } else {
+        setErrorText(accessRes.data?.error || "access list failed");
+      }
+    } finally {
+      setLoadingAccess(false);
+    }
+  }
+
   useEffect(() => {
     async function boot() {
       const {
@@ -390,6 +457,16 @@ export default function BuildPage() {
     if (!axyScrollRef.current) return;
     axyScrollRef.current.scrollTop = axyScrollRef.current.scrollHeight;
   }, [axyTurns, axyLoading]);
+
+  useEffect(() => {
+    if (!selectedSpaceId || !isOwnerSelectedSpace) {
+      setInTouchUsers([]);
+      setSpaceAccessEntries([]);
+      return;
+    }
+    void loadAccessData(selectedSpaceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwnerSelectedSpace, selectedSpaceId]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -672,6 +749,46 @@ export default function BuildPage() {
       setInfoText(nextIsPublic ? "space is now public" : "space is now private");
     } finally {
       setUpdatingSpaceVisibility(false);
+    }
+  }
+
+  async function setInTouchEditAccess(targetUsername: string, canEdit: boolean) {
+    if (!selectedSpaceId || !isOwnerSelectedSpace) {
+      setErrorText("only owner can manage access");
+      return;
+    }
+
+    const usernameValue = targetUsername.trim();
+    if (!usernameValue) return;
+
+    setUpdatingAccessUsername(usernameValue.toLowerCase());
+    setErrorText(null);
+    setInfoText(null);
+
+    try {
+      const payload = JSON.stringify({
+        spaceId: selectedSpaceId,
+        username: usernameValue,
+        ...(canEdit ? { canEdit: true } : {}),
+      });
+      const { res, data } = await fetchAuthedJson("/api/build/access", {
+        method: canEdit ? "POST" : "DELETE",
+        body: payload,
+      });
+
+      if (!res.ok) {
+        setErrorText(data?.error || "access update failed");
+        return;
+      }
+
+      await loadAccessData(selectedSpaceId);
+      setInfoText(
+        canEdit
+          ? `${usernameValue} can now edit this subspace`
+          : `${usernameValue} access removed`
+      );
+    } finally {
+      setUpdatingAccessUsername(null);
     }
   }
 
@@ -966,6 +1083,100 @@ export default function BuildPage() {
                     </button>
                   ))
                 )}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  fontSize: 12,
+                  opacity: 0.74,
+                  letterSpacing: "0.1em",
+                }}
+              >
+                in touch access
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  border: "1px solid rgba(121,193,255,0.24)",
+                  borderRadius: 8,
+                  padding: 8,
+                  background: "rgba(10,22,30,0.34)",
+                  display: "grid",
+                  gap: 6,
+                  maxHeight: 168,
+                  overflowY: "auto",
+                }}
+              >
+                {!selectedSpaceId ? (
+                  <div style={{ fontSize: 11, opacity: 0.56 }}>select a subspace</div>
+                ) : !isOwnerSelectedSpace ? (
+                  <div style={{ fontSize: 11, opacity: 0.56 }}>
+                    only owner can manage editors
+                  </div>
+                ) : loadingAccess ? (
+                  <div style={{ fontSize: 11, opacity: 0.56 }}>loading access...</div>
+                ) : inTouchUsers.length === 0 ? (
+                  <div style={{ fontSize: 11, opacity: 0.56 }}>
+                    no in touch users yet
+                  </div>
+                ) : (
+                  inTouchUsers.map((touchUser) => {
+                    const key = touchUser.username.toLowerCase();
+                    const current = editableAccessByUsername.get(key);
+                    const canEdit = current?.canEdit === true;
+                    const busy = updatingAccessUsername === key;
+                    return (
+                      <div
+                        key={touchUser.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 7px",
+                          borderRadius: 7,
+                          background: "rgba(8,18,14,0.52)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                        }}
+                      >
+                        <div style={{ fontSize: 11 }}>{touchUser.username}</div>
+                        <button
+                          onClick={() =>
+                            void setInTouchEditAccess(touchUser.username, !canEdit)
+                          }
+                          disabled={busy || Boolean(updatingAccessUsername)}
+                          style={{
+                            border: `1px solid ${
+                              canEdit
+                                ? "rgba(255,150,150,0.44)"
+                                : "rgba(121,193,255,0.5)"
+                            }`,
+                            borderRadius: 7,
+                            background: canEdit
+                              ? "rgba(255,90,90,0.12)"
+                              : "rgba(121,193,255,0.16)",
+                            color: canEdit ? "#ffd1d1" : "#d7ebff",
+                            padding: "4px 8px",
+                            fontSize: 10,
+                            cursor:
+                              busy || Boolean(updatingAccessUsername)
+                                ? "default"
+                                : "pointer",
+                          }}
+                        >
+                          {busy ? "..." : canEdit ? "revoke edit" : "allow edit"}
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+                {isOwnerSelectedSpace && orphanEditableAccess.length > 0 ? (
+                  <div style={{ fontSize: 10, opacity: 0.62, paddingTop: 2 }}>
+                    legacy editors:{" "}
+                    {orphanEditableAccess.map((entry) => entry.username).join(", ")}
+                  </div>
+                ) : null}
               </div>
 
               <div
