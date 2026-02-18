@@ -551,7 +551,7 @@ export default function Home() {
     if (!user) {
       setRuntimeConnectClosed(false);
       setRuntimeInviteError("login required to generate invite");
-      router.push("/login");
+      router.push("/login?redirect=/");
       return;
     }
 
