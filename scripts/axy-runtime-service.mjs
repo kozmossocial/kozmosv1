@@ -77,6 +77,22 @@ function normalizeBuildPath(input) {
   return String(input || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
 }
 
+function shouldDisableOps(err) {
+  const status = Number(err?.status || 0);
+  const bodyError = String(err?.body?.error || "").trim().toLowerCase();
+  const message = String(err?.message || "").trim().toLowerCase();
+
+  if (status === 403) return true;
+  if (status !== 404) return false;
+
+  if (bodyError.includes("profile not found")) return false;
+  if (message === "http 404" || message.includes("http 404")) return true;
+  if (bodyError.includes("not found") && !bodyError.includes("target user not found")) {
+    return true;
+  }
+  return false;
+}
+
 function pickWeightedAction(weightMap) {
   const entries = Object.entries(weightMap)
     .map(([key, value]) => [key, Number(value)])
@@ -1316,7 +1332,7 @@ async function main() {
       } catch (err) {
         const msg = err?.body?.error || err.message || "ops loop error";
         console.log(`[${now()}] ops fail: ${msg}`);
-        if (err?.status === 403 || err?.status === 404) {
+        if (shouldDisableOps(err)) {
           opsEnabled = false;
           console.log(`[${now()}] ops disabled (capability/route unavailable)`);
         }
