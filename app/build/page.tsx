@@ -115,6 +115,16 @@ function parseExistingRoomManifest(content: string | undefined) {
   }
 }
 
+function isRoomManifestPath(path: string) {
+  const normalizedPath = path.trim().toLowerCase();
+  if (normalizedPath === ROOM_MANIFEST_PATH) return true;
+  return LEGACY_ROOM_MANIFEST_PATHS.some((legacy) => legacy === normalizedPath);
+}
+
+function findRoomManifestFile(files: BuildFile[]) {
+  return files.find((file) => isRoomManifestPath(file.path));
+}
+
 export default function BuildPage() {
   const router = useRouter();
 
@@ -141,6 +151,7 @@ export default function BuildPage() {
   const [deletingFile, setDeletingFile] = useState(false);
   const [savingFile, setSavingFile] = useState(false);
   const [publishingRoom, setPublishingRoom] = useState(false);
+  const [updatingSpaceVisibility, setUpdatingSpaceVisibility] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [infoText, setInfoText] = useState<string | null>(null);
   const [axyInput, setAxyInput] = useState("");
@@ -163,6 +174,9 @@ export default function BuildPage() {
     selectedSpace &&
       userId &&
       (selectedSpace.owner_id === userId || selectedSpace.can_edit === true)
+  );
+  const isOwnerSelectedSpace = Boolean(
+    selectedSpace && userId && selectedSpace.owner_id === userId
   );
   const previewDoc = useMemo(() => {
     const workingFiles = previewAutoRefresh
@@ -537,6 +551,47 @@ export default function BuildPage() {
     }
   }
 
+  function buildRoomManifest(
+    space: BuildSpace,
+    sourceContent: string | undefined,
+    visibilityOverride?: RoomVisibility
+  ): RoomManifest {
+    const existing = parseExistingRoomManifest(sourceContent);
+    const fallbackTitle = clipText(space.title, 32) || "untitled room";
+    const fallbackSubtitle = clipText(space.description, 48);
+
+    const roomPayload: RoomManifest["room"] = {
+      title: existing.title || fallbackTitle,
+      aura: existing.aura || "calm",
+      visibility:
+        visibilityOverride ||
+        existing.visibility ||
+        (space.is_public ? "public" : "unlisted"),
+      entry: existing.entry || "proximity",
+      icon: existing.icon || "ring",
+    };
+    const subtitle = existing.subtitle || fallbackSubtitle;
+    if (subtitle) roomPayload.subtitle = subtitle;
+    if (existing.spawn) roomPayload.spawn = existing.spawn;
+
+    return {
+      version: 1,
+      room: roomPayload,
+    };
+  }
+
+  async function writeRoomManifest(spaceId: string, manifest: RoomManifest) {
+    return fetchAuthedJson("/api/build/files", {
+      method: "PUT",
+      body: JSON.stringify({
+        spaceId,
+        path: ROOM_MANIFEST_PATH,
+        content: JSON.stringify(manifest, null, 2),
+        language: "json",
+      }),
+    });
+  }
+
   async function publishRoomToMatrix() {
     if (!selectedSpaceId || !selectedSpace) {
       setErrorText("select a subspace first");
@@ -552,43 +607,10 @@ export default function BuildPage() {
     setInfoText(null);
 
     try {
-      const manifestFile = files.find(
-        (file) => {
-          const normalizedPath = file.path.trim().toLowerCase();
-          if (normalizedPath === ROOM_MANIFEST_PATH) return true;
-          return LEGACY_ROOM_MANIFEST_PATHS.some((legacy) => legacy === normalizedPath);
-        }
-      );
-      const existing = parseExistingRoomManifest(manifestFile?.content);
-      const fallbackTitle = clipText(selectedSpace.title, 32) || "untitled room";
-      const fallbackSubtitle = clipText(selectedSpace.description, 48);
+      const manifestFile = findRoomManifestFile(files);
+      const manifest = buildRoomManifest(selectedSpace, manifestFile?.content);
 
-      const roomPayload: RoomManifest["room"] = {
-        title: existing.title || fallbackTitle,
-        aura: existing.aura || "calm",
-        visibility:
-          existing.visibility || (selectedSpace.is_public ? "public" : "unlisted"),
-        entry: existing.entry || "proximity",
-        icon: existing.icon || "ring",
-      };
-      const subtitle = existing.subtitle || fallbackSubtitle;
-      if (subtitle) roomPayload.subtitle = subtitle;
-      if (existing.spawn) roomPayload.spawn = existing.spawn;
-
-      const manifest: RoomManifest = {
-        version: 1,
-        room: roomPayload,
-      };
-
-      const { res, data } = await fetchAuthedJson("/api/build/files", {
-        method: "PUT",
-        body: JSON.stringify({
-          spaceId: selectedSpaceId,
-          path: ROOM_MANIFEST_PATH,
-          content: JSON.stringify(manifest, null, 2),
-          language: "json",
-        }),
-      });
+      const { res, data } = await writeRoomManifest(selectedSpaceId, manifest);
       if (!res.ok) {
         setErrorText(data?.error || "publish failed");
         return;
@@ -598,6 +620,58 @@ export default function BuildPage() {
       setInfoText("room published to space");
     } finally {
       setPublishingRoom(false);
+    }
+  }
+
+  async function setSelectedSpacePublic(nextIsPublic: boolean) {
+    if (!selectedSpaceId || !selectedSpace || !userId) {
+      setErrorText("select a subspace first");
+      return;
+    }
+    if (selectedSpace.owner_id !== userId) {
+      setErrorText("only owner can change visibility");
+      return;
+    }
+
+    setUpdatingSpaceVisibility(true);
+    setErrorText(null);
+    setInfoText(null);
+
+    try {
+      const { res, data } = await fetchAuthedJson("/api/build/spaces", {
+        method: "PATCH",
+        body: JSON.stringify({
+          spaceId: selectedSpaceId,
+          isPublic: nextIsPublic,
+        }),
+      });
+      if (!res.ok) {
+        setErrorText(data?.error || "visibility update failed");
+        return;
+      }
+
+      const manifestFile = findRoomManifestFile(files);
+      const manifest = buildRoomManifest(
+        selectedSpace,
+        manifestFile?.content,
+        nextIsPublic ? "public" : "private"
+      );
+      const manifestSave = await writeRoomManifest(selectedSpaceId, manifest);
+
+      await loadSpaces(selectedSpaceId);
+      await loadFiles(selectedSpaceId, selectedFilePath);
+
+      if (!manifestSave.res.ok) {
+        setErrorText(
+          manifestSave.data?.error ||
+            "visibility changed but room manifest sync failed (run publish room)"
+        );
+        return;
+      }
+
+      setInfoText(nextIsPublic ? "space is now public" : "space is now private");
+    } finally {
+      setUpdatingSpaceVisibility(false);
     }
   }
 
@@ -821,6 +895,38 @@ export default function BuildPage() {
                   {deletingSpace ? "deleting..." : "delete selected subspace"}
                 </button>
               </div>
+              <div style={{ marginTop: 8 }}>
+                <button
+                  onClick={() => {
+                    if (!selectedSpace) return;
+                    void setSelectedSpacePublic(!selectedSpace.is_public);
+                  }}
+                  disabled={
+                    !selectedSpaceId ||
+                    !isOwnerSelectedSpace ||
+                    updatingSpaceVisibility
+                  }
+                  style={{
+                    width: "100%",
+                    border: "1px solid rgba(121,193,255,0.42)",
+                    borderRadius: 8,
+                    background: "rgba(121,193,255,0.12)",
+                    color: "#cfe8ff",
+                    padding: "7px 10px",
+                    cursor:
+                      !selectedSpaceId || !isOwnerSelectedSpace || updatingSpaceVisibility
+                        ? "default"
+                        : "pointer",
+                    fontSize: 11,
+                  }}
+                >
+                  {updatingSpaceVisibility
+                    ? "updating..."
+                    : selectedSpace?.is_public
+                      ? "make private"
+                      : "make public"}
+                </button>
+              </div>
               <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
                 {loadingSpaces ? (
                   <div style={{ fontSize: 11, opacity: 0.56 }}>loading...</div>
@@ -848,7 +954,9 @@ export default function BuildPage() {
                       {space.title}
                       <span style={{ marginLeft: 8, opacity: 0.48, fontSize: 10 }}>
                         {space.owner_id === userId
-                          ? "mine"
+                          ? space.is_public
+                            ? "mine/public"
+                            : "mine/private"
                           : space.can_edit
                             ? "editable"
                             : space.is_public

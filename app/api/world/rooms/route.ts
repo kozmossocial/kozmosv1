@@ -25,6 +25,7 @@ type RoomIcon = (typeof ROOM_ICONS)[number];
 type SpaceRow = {
   id: string;
   owner_id: string;
+  is_public: boolean;
   title: string;
   description: string;
   updated_at: string;
@@ -131,6 +132,7 @@ function defaultSpawn(spaceId: string) {
 function parseRoomManifest(file: BuildFileRow | undefined, space: SpaceRow): RoomManifest {
   const fallbackTitle = normalizeText(space.title, 32) || "untitled room";
   const fallbackSubtitle = normalizeText(space.description, 48);
+  const fallbackVisibility: RoomVisibility = space.is_public ? "public" : "private";
 
   if (!file?.content) {
     return {
@@ -138,7 +140,7 @@ function parseRoomManifest(file: BuildFileRow | undefined, space: SpaceRow): Roo
       subtitle: fallbackSubtitle,
       spawn: null,
       aura: "calm",
-      visibility: "public",
+      visibility: fallbackVisibility,
       entry: "proximity",
       icon: "ring",
     };
@@ -190,8 +192,8 @@ export async function GET(req: Request) {
 
     const { data: spaces, error: spacesErr } = await supabaseAdmin
       .from("user_build_spaces")
-      .select("id, owner_id, title, description, updated_at")
-      .eq("is_public", true)
+      .select("id, owner_id, is_public, title, description, updated_at")
+      .or(`is_public.eq.true,owner_id.eq.${user.id}`)
       .order("updated_at", { ascending: false })
       .limit(300);
 
@@ -245,6 +247,7 @@ export async function GET(req: Request) {
 
     const rooms = typedSpaces
       .map((space) => {
+        const isOwner = space.owner_id === user.id;
         const manifestFile = manifestBySpaceId.get(space.id);
         let manifest: RoomManifest;
         try {
@@ -255,13 +258,13 @@ export async function GET(req: Request) {
             subtitle: normalizeText(space.description, 48),
             spawn: null,
             aura: "calm",
-            visibility: "public",
+            visibility: space.is_public ? "public" : "private",
             entry: "proximity",
             icon: "ring",
           };
         }
 
-        if (manifest.visibility === "private") {
+        if (!isOwner && manifest.visibility !== "public") {
           return null;
         }
 
