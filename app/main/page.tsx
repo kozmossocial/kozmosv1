@@ -44,6 +44,356 @@ type HushMessage = {
 };
 
 const ORBIT_TRACK_SIZE = 12;
+const QUITE_SWARM_MODE = "quite-swarm";
+const VS_ARENA_LIMIT = 48;
+const VS_MATCH_SECONDS = 60;
+const VS_STEP_SECONDS = 0.1;
+
+type VsPlayer = {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  hp: number;
+  alive: boolean;
+  reload: number;
+  kills: number;
+  phase: number;
+  color: string;
+};
+
+type VsEnemy = {
+  id: string;
+  x: number;
+  y: number;
+  hp: number;
+  speed: number;
+};
+
+type VsProjectile = {
+  id: string;
+  ownerId: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  ttl: number;
+};
+
+type VsSession = {
+  running: boolean;
+  timeLeft: number;
+  wave: number;
+  tick: number;
+  players: VsPlayer[];
+  enemies: VsEnemy[];
+  projectiles: VsProjectile[];
+  moderatorLine: string;
+  spawnCooldown: number;
+  modCooldown: number;
+  lastEnemyId: number;
+  lastProjectileId: number;
+};
+
+const VS_PLAYER_COLORS = [
+  "#7df9ff",
+  "#8cb8ff",
+  "#b6c6ff",
+  "#9bffdf",
+  "#ffd28f",
+  "#c2a7ff",
+];
+
+function uniqueNames(names: string[]) {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  names.forEach((name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    next.push(trimmed);
+  });
+  return next;
+}
+
+function vsClamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function createVsSession(participants: string[], running = false): VsSession {
+  const roster = uniqueNames(participants);
+  const players = roster.map((name, index) => {
+    const angle = (index / Math.max(1, roster.length)) * Math.PI * 2;
+    return {
+      id: `${name.toLowerCase().replace(/\s+/g, "-")}-${index}`,
+      name,
+      x: Math.cos(angle) * 16,
+      y: Math.sin(angle) * 16,
+      hp: 100,
+      alive: true,
+      reload: 0.2 + Math.random() * 0.45,
+      kills: 0,
+      phase: angle,
+      color: VS_PLAYER_COLORS[index % VS_PLAYER_COLORS.length],
+    } as VsPlayer;
+  });
+
+  return {
+    running,
+    timeLeft: VS_MATCH_SECONDS,
+    wave: 1,
+    tick: 0,
+    players,
+    enemies: [],
+    projectiles: [],
+    moderatorLine: running
+      ? `Axy moderator: ${players.length} survivors entered the hush field.`
+      : "Axy moderator: choose present users, then start the hunt.",
+    spawnCooldown: 0.8,
+    modCooldown: 2.4,
+    lastEnemyId: 0,
+    lastProjectileId: 0,
+  };
+}
+
+function advanceVsSession(
+  prev: VsSession,
+  options?: {
+    controlledName?: string;
+    controls?: { up: boolean; down: boolean; left: boolean; right: boolean };
+  }
+): VsSession {
+  if (!prev.running) return prev;
+
+  const dt = VS_STEP_SECONDS;
+  const players = prev.players.map((player) => ({ ...player }));
+  const enemies = prev.enemies.map((enemy) => ({ ...enemy }));
+  const projectiles = prev.projectiles.map((projectile) => ({ ...projectile }));
+
+  let timeLeft = Math.max(0, prev.timeLeft - dt);
+  const elapsed = VS_MATCH_SECONDS - timeLeft;
+  let wave = 1 + Math.floor(elapsed / 12);
+  let spawnCooldown = prev.spawnCooldown - dt;
+  let modCooldown = prev.modCooldown - dt;
+  let lastEnemyId = prev.lastEnemyId;
+  let lastProjectileId = prev.lastProjectileId;
+  let moderatorLine = prev.moderatorLine;
+  const controlledName = options?.controlledName?.trim().toLowerCase() || "";
+  const controls = options?.controls;
+
+  if (spawnCooldown <= 0) {
+    const spawnCount = 1 + Math.floor(elapsed / 18) + Math.floor(Math.random() * 2);
+    for (let i = 0; i < spawnCount; i += 1) {
+      const side = Math.floor(Math.random() * 4);
+      const edge = VS_ARENA_LIMIT - 1;
+      let x = 0;
+      let y = 0;
+      if (side === 0) {
+        x = -edge;
+        y = (Math.random() * 2 - 1) * edge;
+      } else if (side === 1) {
+        x = edge;
+        y = (Math.random() * 2 - 1) * edge;
+      } else if (side === 2) {
+        x = (Math.random() * 2 - 1) * edge;
+        y = -edge;
+      } else {
+        x = (Math.random() * 2 - 1) * edge;
+        y = edge;
+      }
+      lastEnemyId += 1;
+      enemies.push({
+        id: `foe-${lastEnemyId}`,
+        x,
+        y,
+        hp: 18 + wave * 4,
+        speed: 5.8 + wave * 0.65,
+      });
+    }
+    spawnCooldown = Math.max(0.28, 1.05 - wave * 0.08);
+  }
+
+  const alivePlayers = players.filter((player) => player.alive);
+
+  for (const player of alivePlayers) {
+    player.phase += dt * 1.7;
+    const isControlled =
+      Boolean(controls) && player.name.trim().toLowerCase() === controlledName;
+    if (isControlled && controls) {
+      const horizontal =
+        Number(Boolean(controls.right)) - Number(Boolean(controls.left));
+      const vertical = Number(Boolean(controls.down)) - Number(Boolean(controls.up));
+      if (horizontal !== 0 || vertical !== 0) {
+        const norm = Math.hypot(horizontal, vertical) || 1;
+        const speed = 16;
+        player.x = vsClamp(
+          player.x + (horizontal / norm) * speed * dt,
+          -VS_ARENA_LIMIT + 2,
+          VS_ARENA_LIMIT - 2
+        );
+        player.y = vsClamp(
+          player.y + (vertical / norm) * speed * dt,
+          -VS_ARENA_LIMIT + 2,
+          VS_ARENA_LIMIT - 2
+        );
+      } else {
+        player.x = vsClamp(
+          player.x + Math.cos(player.phase) * 0.5 * dt,
+          -VS_ARENA_LIMIT + 2,
+          VS_ARENA_LIMIT - 2
+        );
+        player.y = vsClamp(
+          player.y + Math.sin(player.phase) * 0.5 * dt,
+          -VS_ARENA_LIMIT + 2,
+          VS_ARENA_LIMIT - 2
+        );
+      }
+    } else {
+      player.x = vsClamp(
+        player.x + Math.cos(player.phase * 0.9) * 2.2 * dt + (Math.random() - 0.5) * 0.25,
+        -VS_ARENA_LIMIT + 2,
+        VS_ARENA_LIMIT - 2
+      );
+      player.y = vsClamp(
+        player.y + Math.sin(player.phase * 1.2) * 2.2 * dt + (Math.random() - 0.5) * 0.25,
+        -VS_ARENA_LIMIT + 2,
+        VS_ARENA_LIMIT - 2
+      );
+    }
+
+    player.reload -= dt;
+    if (player.reload <= 0 && enemies.length > 0) {
+      let target: VsEnemy | null = null;
+      let bestDist = Number.POSITIVE_INFINITY;
+      for (const enemy of enemies) {
+        const dx = enemy.x - player.x;
+        const dy = enemy.y - player.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < bestDist) {
+          bestDist = dist;
+          target = enemy;
+        }
+      }
+      if (target) {
+        const dx = target.x - player.x;
+        const dy = target.y - player.y;
+        const norm = Math.hypot(dx, dy) || 1;
+        const speed = 34;
+        lastProjectileId += 1;
+        projectiles.push({
+          id: `shot-${lastProjectileId}`,
+          ownerId: player.id,
+          x: player.x,
+          y: player.y,
+          vx: (dx / norm) * speed,
+          vy: (dy / norm) * speed,
+          ttl: 1.35,
+        });
+      }
+      player.reload = Math.max(0.2, 0.58 - player.kills * 0.012);
+    }
+  }
+
+  const killsByPlayer: Record<string, number> = {};
+  const nextProjectiles: VsProjectile[] = [];
+  for (const projectile of projectiles) {
+    projectile.x += projectile.vx * dt;
+    projectile.y += projectile.vy * dt;
+    projectile.ttl -= dt;
+    if (projectile.ttl <= 0) continue;
+
+    let hit = false;
+    for (const enemy of enemies) {
+      if (enemy.hp <= 0) continue;
+      const dist = Math.hypot(enemy.x - projectile.x, enemy.y - projectile.y);
+      if (dist > 3.2) continue;
+      enemy.hp -= 22;
+      hit = true;
+      if (enemy.hp <= 0) {
+        killsByPlayer[projectile.ownerId] =
+          (killsByPlayer[projectile.ownerId] || 0) + 1;
+      }
+      break;
+    }
+    if (!hit) nextProjectiles.push(projectile);
+  }
+
+  for (const enemy of enemies) {
+    if (enemy.hp <= 0) continue;
+    let target: VsPlayer | null = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const player of players) {
+      if (!player.alive) continue;
+      const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        target = player;
+      }
+    }
+    if (!target) continue;
+
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
+    const norm = Math.hypot(dx, dy) || 1;
+    enemy.x = vsClamp(
+      enemy.x + (dx / norm) * enemy.speed * dt,
+      -VS_ARENA_LIMIT,
+      VS_ARENA_LIMIT
+    );
+    enemy.y = vsClamp(
+      enemy.y + (dy / norm) * enemy.speed * dt,
+      -VS_ARENA_LIMIT,
+      VS_ARENA_LIMIT
+    );
+
+    if (bestDist < 3.6) {
+      target.hp -= 19 * dt;
+      if (target.hp <= 0) {
+        target.hp = 0;
+        target.alive = false;
+      }
+    }
+  }
+
+  for (const player of players) {
+    player.kills += killsByPlayer[player.id] || 0;
+  }
+
+  const nextEnemies = enemies.filter((enemy) => enemy.hp > 0);
+  const aliveCount = players.filter((player) => player.alive).length;
+  const ended = timeLeft <= 0 || aliveCount === 0;
+  const running = !ended;
+
+  if (!running) {
+    if (aliveCount > 0) {
+      moderatorLine = `Axy moderator: extraction complete. ${aliveCount} survivors held the line.`;
+    } else {
+      moderatorLine = "Axy moderator: field collapsed. regroup and retry.";
+    }
+  } else if (modCooldown <= 0) {
+    const topKiller = [...players].sort((a, b) => b.kills - a.kills)[0];
+    moderatorLine = `Axy moderator: wave ${wave}. ${aliveCount} alive, ${nextEnemies.length} swarm, top ${topKiller?.name || "none"} ${topKiller?.kills || 0}k.`;
+    modCooldown = 2.6;
+  }
+
+  return {
+    ...prev,
+    running,
+    timeLeft,
+    wave,
+    tick: prev.tick + 1,
+    players,
+    enemies: nextEnemies,
+    projectiles: nextProjectiles,
+    moderatorLine,
+    spawnCooldown,
+    modCooldown,
+    lastEnemyId,
+    lastProjectileId,
+  };
+}
 
 function nextOrbitTarget(prev: number) {
   let next = prev;
@@ -152,7 +502,7 @@ export default function Main() {
   } | null>(null);
   const [playOpen, setPlayOpen] = useState(false);
   const [activePlay, setActivePlay] = useState<
-    "signal-drift" | "slow-orbit" | "hush-puzzle" | null
+    "signal-drift" | "slow-orbit" | "hush-puzzle" | typeof QUITE_SWARM_MODE | null
   >(null);
   const [driftRunning, setDriftRunning] = useState(false);
   const [driftScore, setDriftScore] = useState(0);
@@ -173,10 +523,20 @@ export default function Main() {
   );
   const [puzzleMoves, setPuzzleMoves] = useState(0);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [vsSelectedUsers, setVsSelectedUsers] = useState<string[]>([]);
+  const [vsSession, setVsSession] = useState<VsSession>(() =>
+    createVsSession(["user"], false)
+  );
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
   const sharedStickToBottomRef = useRef(true);
   const presentUsersPanelRef = useRef<HTMLDivElement | null>(null);
+  const vsMoveKeysRef = useRef<{
+    up: boolean;
+    down: boolean;
+    left: boolean;
+    right: boolean;
+  }>({ up: false, down: false, left: false, right: false });
   const [playClosedHeight, setPlayClosedHeight] = useState<number | null>(null);
   const currentUsername = username?.trim() ? username.trim() : "user";
   const displayUsername = username?.trim() ? username.trim() : "\u00A0";
@@ -188,6 +548,32 @@ export default function Main() {
       a.localeCompare(b, "en", { sensitivity: "base" })
     );
   }, [realtimePresentUsers, runtimePresentUsers]);
+  const vsJoinableUsers = useMemo(
+    () => uniqueNames([currentUsername, ...presentUsers]),
+    [currentUsername, presentUsers]
+  );
+
+  useEffect(() => {
+    setVsSelectedUsers((prev) => {
+      const availableSet = new Set(vsJoinableUsers.map((name) => name.toLowerCase()));
+      const selfKey = currentUsername.toLowerCase();
+      let next = prev.filter((name) => availableSet.has(name.toLowerCase()));
+      if (!next.some((name) => name.toLowerCase() === selfKey)) {
+        next = [currentUsername, ...next];
+      }
+      if (next.length === 0) {
+        next = vsJoinableUsers.slice(0, Math.min(5, vsJoinableUsers.length));
+      }
+      const deduped = uniqueNames(next);
+      if (
+        deduped.length === prev.length &&
+        deduped.every((value, idx) => value === prev[idx])
+      ) {
+        return prev;
+      }
+      return deduped;
+    });
+  }, [currentUsername, vsJoinableUsers]);
 
   useEffect(() => {
     if (!presentUserOpen) return;
@@ -613,6 +999,87 @@ export default function Main() {
     };
   }, [playOpen, activePlay, orbitRunning]);
 
+  useEffect(() => {
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !vsSession.running) return;
+
+    const timer = window.setInterval(() => {
+      const controls = vsMoveKeysRef.current;
+      setVsSession((prev) =>
+        advanceVsSession(prev, {
+          controlledName: currentUsername,
+          controls,
+        })
+      );
+    }, VS_STEP_SECONDS * 1000);
+
+    return () => window.clearInterval(timer);
+  }, [playOpen, activePlay, currentUsername, vsSession.running]);
+
+  useEffect(() => {
+    if (activePlay !== QUITE_SWARM_MODE || vsSession.running) return;
+    const roster = uniqueNames(
+      vsSelectedUsers.length > 0 ? vsSelectedUsers : [currentUsername]
+    );
+    const currentRoster = vsSession.players.map((player) => player.name);
+    if (
+      roster.length === currentRoster.length &&
+      roster.every((name, idx) => name === currentRoster[idx])
+    ) {
+      return;
+    }
+    setVsSession(createVsSession(roster, false));
+  }, [activePlay, currentUsername, vsSelectedUsers, vsSession.players, vsSession.running]);
+
+  useEffect(() => {
+    if (!playOpen || activePlay !== QUITE_SWARM_MODE || !vsSession.running) return;
+
+    function resetKeys() {
+      vsMoveKeysRef.current.up = false;
+      vsMoveKeysRef.current.down = false;
+      vsMoveKeysRef.current.left = false;
+      vsMoveKeysRef.current.right = false;
+    }
+
+    function applyKey(key: string, pressed: boolean) {
+      const normalized = key.toLowerCase();
+      if (normalized === "w" || normalized === "arrowup") {
+        vsMoveKeysRef.current.up = pressed;
+      } else if (normalized === "s" || normalized === "arrowdown") {
+        vsMoveKeysRef.current.down = pressed;
+      } else if (normalized === "a" || normalized === "arrowleft") {
+        vsMoveKeysRef.current.left = pressed;
+      } else if (normalized === "d" || normalized === "arrowright") {
+        vsMoveKeysRef.current.right = pressed;
+      } else {
+        return false;
+      }
+      return true;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (applyKey(event.key, true)) {
+        event.preventDefault();
+      }
+    }
+
+    function onKeyUp(event: KeyboardEvent) {
+      if (applyKey(event.key, false)) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", resetKeys);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", resetKeys);
+      resetKeys();
+    };
+  }, [playOpen, activePlay, vsSession.running]);
+
   const syncSharedStickToBottom = useCallback(() => {
     const el = sharedMessagesRef.current;
     if (!el) return;
@@ -860,7 +1327,9 @@ export default function Main() {
     setAxyMsgLoadingId(null);
   }
 
-  function openPlay(game: "signal-drift" | "slow-orbit" | "hush-puzzle") {
+  function openPlay(
+    game: "signal-drift" | "slow-orbit" | "hush-puzzle" | typeof QUITE_SWARM_MODE
+  ) {
     setActivePlay(game);
     if (game === "signal-drift") {
       setDriftRunning(false);
@@ -884,6 +1353,11 @@ export default function Main() {
       setPuzzleMoves(0);
       setPuzzleSolved(false);
     }
+    if (game === QUITE_SWARM_MODE) {
+      const roster =
+        vsSelectedUsers.length > 0 ? vsSelectedUsers : [currentUsername];
+      setVsSession(createVsSession(roster, false));
+    }
   }
 
   function togglePlayPanel() {
@@ -893,6 +1367,7 @@ export default function Main() {
         setActivePlay(null);
         setDriftRunning(false);
         setOrbitRunning(false);
+        setVsSession((prev) => ({ ...prev, running: false }));
       }
       return next;
     });
@@ -959,6 +1434,38 @@ export default function Main() {
       return next;
     });
     setPuzzleMoves((prev) => prev + 1);
+  }
+
+  function toggleVsParticipant(name: string) {
+    if (vsSession.running) return;
+    const key = name.toLowerCase();
+    const selfKey = currentUsername.toLowerCase();
+    if (key === selfKey) return;
+
+    setVsSelectedUsers((prev) => {
+      const exists = prev.some((item) => item.toLowerCase() === key);
+      if (exists) {
+        return prev.filter((item) => item.toLowerCase() !== key);
+      }
+      if (prev.length >= 8) return prev;
+      return [...prev, name];
+    });
+  }
+
+  function startAxyVampire() {
+    const roster = uniqueNames(
+      vsSelectedUsers.length > 0 ? vsSelectedUsers : [currentUsername]
+    );
+    if (roster.length === 0) return;
+    setVsSession(createVsSession(roster, true));
+  }
+
+  function stopAxyVampire() {
+    setVsSession((prev) => ({
+      ...prev,
+      running: false,
+      moderatorLine: "Axy moderator: session paused.",
+    }));
   }
 
   async function createHushWith(targetUserId: string) {
@@ -2304,6 +2811,27 @@ export default function Main() {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <span>Quite Swarm</span>
+                  <span
+                    className="kozmos-tap"
+                    style={{ opacity: 0.6, cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPlay(QUITE_SWARM_MODE);
+                    }}
+                  >
+                    enter
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                   }}
                 >
                   <span>hush puzzle</span>
@@ -2509,6 +3037,250 @@ export default function Main() {
                       }}
                     >
                       reset
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {activePlay === QUITE_SWARM_MODE && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    marginTop: 12,
+                    border: "1px solid rgba(116,186,255,0.36)",
+                    borderRadius: 10,
+                    padding: 10,
+                    background: "rgba(7, 14, 28, 0.8)",
+                    boxShadow:
+                      "0 0 18px rgba(84,160,255,0.2), inset 0 0 10px rgba(110,184,255,0.12)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
+                      fontSize: 11,
+                    }}
+                  >
+                    <span>Axy mod: survive the quiet swarm</span>
+                    <span style={{ opacity: 0.74 }}>
+                      wave {vsSession.wave} · {Math.ceil(vsSession.timeLeft)}s
+                    </span>
+                  </div>
+
+                  <div style={{ marginBottom: 8, fontSize: 10, opacity: 0.68 }}>
+                    present users can join before start
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {vsJoinableUsers.length === 0 ? (
+                      <span style={{ fontSize: 10, opacity: 0.48 }}>nobody visible</span>
+                    ) : (
+                      vsJoinableUsers.map((name) => {
+                        const key = name.toLowerCase();
+                        const isSelf = key === currentUsername.toLowerCase();
+                        const selected = vsSelectedUsers.some(
+                          (item) => item.toLowerCase() === key
+                        );
+                        return (
+                          <button
+                            key={`vs-user-${name}`}
+                            onClick={() => toggleVsParticipant(name)}
+                            disabled={isSelf || vsSession.running}
+                            style={{
+                              border: selected
+                                ? "1px solid rgba(136,201,255,0.9)"
+                                : "1px solid rgba(255,255,255,0.18)",
+                              borderRadius: 999,
+                              background: selected
+                                ? "rgba(110,182,255,0.24)"
+                                : "rgba(255,255,255,0.03)",
+                              color: "#eaf4ff",
+                              padding: "3px 8px",
+                              fontSize: 10,
+                              opacity: isSelf ? 0.86 : 0.74,
+                              cursor:
+                                isSelf || vsSession.running ? "default" : "pointer",
+                            }}
+                          >
+                            {isSelf ? `${name} (you)` : selected ? `✓ ${name}` : name}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      position: "relative",
+                      height: 184,
+                      borderRadius: 8,
+                      border: "1px solid rgba(255,255,255,0.14)",
+                      background:
+                        "radial-gradient(circle at 50% 40%, rgba(24,49,86,0.42), rgba(6,10,18,0.86) 72%)",
+                      overflow: "hidden",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        backgroundImage:
+                          "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
+                        backgroundSize: "20px 20px",
+                        opacity: 0.38,
+                      }}
+                    />
+                    {vsSession.enemies.map((enemy) => {
+                      const x = ((enemy.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                      const y = ((enemy.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                      return (
+                        <div
+                          key={enemy.id}
+                          style={{
+                            position: "absolute",
+                            left: `${x}%`,
+                            top: `${y}%`,
+                            width: 9,
+                            height: 9,
+                            transform: "translate(-50%, -50%)",
+                            borderRadius: "999px",
+                            background: "rgba(255,116,128,0.92)",
+                            boxShadow: "0 0 8px rgba(255,116,128,0.6)",
+                          }}
+                        />
+                      );
+                    })}
+                    {vsSession.projectiles.map((projectile) => {
+                      const x = ((projectile.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                      const y = ((projectile.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                      return (
+                        <div
+                          key={projectile.id}
+                          style={{
+                            position: "absolute",
+                            left: `${x}%`,
+                            top: `${y}%`,
+                            width: 4,
+                            height: 4,
+                            transform: "translate(-50%, -50%)",
+                            borderRadius: "999px",
+                            background: "rgba(174,224,255,0.96)",
+                            boxShadow: "0 0 8px rgba(168,223,255,0.8)",
+                          }}
+                        />
+                      );
+                    })}
+                    {vsSession.players.map((player) => {
+                      const x = ((player.x + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                      const y = ((player.y + VS_ARENA_LIMIT) / (VS_ARENA_LIMIT * 2)) * 100;
+                      return (
+                        <div key={player.id}>
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: `${x}%`,
+                              top: `${y}%`,
+                              width: player.alive ? 12 : 10,
+                              height: player.alive ? 12 : 10,
+                              transform: "translate(-50%, -50%)",
+                              borderRadius: "999px",
+                              border: "1px solid rgba(255,255,255,0.46)",
+                              background: player.alive
+                                ? player.color
+                                : "rgba(160,170,184,0.36)",
+                              boxShadow: player.alive
+                                ? `0 0 9px ${player.color}`
+                                : "none",
+                              opacity: player.alive ? 1 : 0.64,
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: `${x}%`,
+                              top: `calc(${y}% - 10px)`,
+                              transform: "translate(-50%, -100%)",
+                              fontSize: 9,
+                              opacity: 0.8,
+                              whiteSpace: "nowrap",
+                              textShadow: "0 0 6px rgba(0,0,0,0.8)",
+                            }}
+                          >
+                            {player.name}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 8 }}>
+                    {vsSession.moderatorLine}
+                  </div>
+                  <div style={{ fontSize: 10, opacity: 0.62, marginBottom: 8 }}>
+                    control: WASD or Arrow keys (you)
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 4,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {[...vsSession.players]
+                      .sort((a, b) => b.kills - a.kills)
+                      .map((player) => (
+                        <div
+                          key={`score-${player.id}`}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 10,
+                            opacity: player.alive ? 0.86 : 0.5,
+                          }}
+                        >
+                          <span>{player.name}</span>
+                          <span>
+                            {player.kills} kill · {Math.ceil(player.hp)} hp
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      fontSize: 11,
+                      opacity: 0.84,
+                    }}
+                  >
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer" }}
+                      onClick={startAxyVampire}
+                    >
+                      {vsSession.running ? "restart" : "start"}
+                    </span>
+                    <span
+                      className="kozmos-tap"
+                      style={{ cursor: "pointer" }}
+                      onClick={stopAxyVampire}
+                    >
+                      stop
+                    </span>
+                    <span style={{ opacity: 0.6 }}>
+                      joined {vsSelectedUsers.length}
                     </span>
                   </div>
                 </div>
