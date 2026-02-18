@@ -3393,7 +3393,7 @@ export default function Main() {
                   )}
                 </div>
 
-                {axyMsgReflection[reflectionKey] && (
+                {chatMode === "open" && axyMsgReflection[reflectionKey] && (
                   <div
                     style={{
                       marginTop: 6,
@@ -3430,37 +3430,39 @@ export default function Main() {
                 )}
               </div>
 
-              <Image
-                src="/axy-logofav.png"
-                alt="Axy"
-                width={22}
-                height={22}
-                style={{
-                  width: 22,
-                  height: 22,
-                  cursor: "pointer",
-                  opacity: axyMsgFadeId === reflectionKey ? 0.25 : 0.6,
-                  transform:
-                    axyMsgPulseId === reflectionKey ? "scale(1.2)" : "scale(1)",
-                  transition:
-                    "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.filter =
-                    "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.filter = "none";
-                }}
-                onClick={() => {
-                  setAxyMsgPulseId(reflectionKey);
-                  askAxyOnMessage(chatMode, m.id, m.content);
+              {chatMode === "open" ? (
+                <Image
+                  src="/axy-logofav.png"
+                  alt="Axy"
+                  width={22}
+                  height={22}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    cursor: "pointer",
+                    opacity: axyMsgFadeId === reflectionKey ? 0.25 : 0.6,
+                    transform:
+                      axyMsgPulseId === reflectionKey ? "scale(1.2)" : "scale(1)",
+                    transition:
+                      "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.filter =
+                      "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.filter = "none";
+                  }}
+                  onClick={() => {
+                    setAxyMsgPulseId(reflectionKey);
+                    askAxyOnMessage(chatMode, m.id, m.content);
 
-                  setTimeout(() => {
-                    setAxyMsgPulseId(null);
-                  }, 300);
-                }}
-              />
+                    setTimeout(() => {
+                      setAxyMsgPulseId(null);
+                    }, 300);
+                  }}
+                />
+              ) : null}
             </div>
             );
           })}
