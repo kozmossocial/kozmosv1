@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { markMyHomeVisited } from "@/lib/myHomeAttention";
 
 type Note = {
   id: string;
@@ -581,6 +582,11 @@ useEffect(() => {
     subscription.unsubscribe();
   };
 }, [router]);
+
+  useEffect(() => {
+    if (!userId) return;
+    markMyHomeVisited(userId);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;

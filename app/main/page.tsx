@@ -5,6 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  getMyHomeAttentionPending,
+  refreshMyHomeAttention,
+} from "@/lib/myHomeAttention";
 
 type Message = {
   id: string;
@@ -676,6 +680,7 @@ export default function Main() {
   const [touchPromptUser, setTouchPromptUser] = useState<string | null>(null);
   const [touchBusy, setTouchBusy] = useState(false);
   const [inTouchByName, setInTouchByName] = useState<Record<string, boolean>>({});
+  const [myHomeAttentionPending, setMyHomeAttentionPending] = useState(false);
 
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
@@ -1275,6 +1280,36 @@ export default function Main() {
 
     load();
   }, [router]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    setMyHomeAttentionPending(getMyHomeAttentionPending(userId));
+
+    let cancelled = false;
+
+    const checkAttention = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token || cancelled) return;
+      const nextPending = await refreshMyHomeAttention(userId, session.access_token);
+      if (!cancelled) {
+        setMyHomeAttentionPending(nextPending);
+      }
+    };
+
+    void checkAttention();
+    const poll = window.setInterval(() => {
+      void checkAttention();
+    }, 12000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+    };
+  }, [userId]);
 
   const loadHush = useCallback(async () => {
     const { data: chats } = await supabase
@@ -3392,6 +3427,7 @@ export default function Main() {
         </span>
         {" / "}
         <span
+          className={myHomeAttentionPending ? "my-home-attention-glow" : undefined}
           style={{ cursor: "pointer" }}
           onClick={() => router.push("/my-home")}
         >

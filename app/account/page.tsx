@@ -4,6 +4,10 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  getMyHomeAttentionPending,
+  refreshMyHomeAttention,
+} from "@/lib/myHomeAttention";
 
 const CROP_PREVIEW_SIZE = 220;
 const AVATAR_OUTPUT_SIZE = 1024;
@@ -32,6 +36,7 @@ export default function AccountPage() {
   const [cropScale, setCropScale] = useState(1);
   const [cropX, setCropX] = useState(0);
   const [cropY, setCropY] = useState(0);
+  const [myHomeAttentionPending, setMyHomeAttentionPending] = useState(false);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -72,6 +77,36 @@ export default function AccountPage() {
 
     loadAccount();
   }, [router]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    setMyHomeAttentionPending(getMyHomeAttentionPending(userId));
+
+    let cancelled = false;
+
+    const checkAttention = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token || cancelled) return;
+      const nextPending = await refreshMyHomeAttention(userId, session.access_token);
+      if (!cancelled) {
+        setMyHomeAttentionPending(nextPending);
+      }
+    };
+
+    void checkAttention();
+    const poll = window.setInterval(() => {
+      void checkAttention();
+    }, 12000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+    };
+  }, [userId]);
 
   useEffect(() => {
     return () => {
@@ -474,6 +509,7 @@ export default function AccountPage() {
         </span>{" "}
         /{" "}
         <span
+          className={myHomeAttentionPending ? "my-home-attention-glow" : undefined}
           style={{ cursor: "pointer" }}
           onClick={() => router.push("/my-home")}
         >

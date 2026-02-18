@@ -7,6 +7,8 @@ type LinkRow = {
   requester_id: string;
   requested_id: string;
   status: "pending" | "accepted" | "declined";
+  created_at: string;
+  updated_at: string;
 };
 
 type ProfileRow = {
@@ -29,7 +31,7 @@ export async function GET(req: Request) {
 
     const { data: links, error: linksErr } = await supabaseAdmin
       .from("keep_in_touch_requests")
-      .select("id, requester_id, requested_id, status")
+      .select("id, requester_id, requested_id, status, created_at, updated_at")
       .or(`requester_id.eq.${user.id},requested_id.eq.${user.id}`)
       .order("updated_at", { ascending: false });
 
@@ -38,7 +40,12 @@ export async function GET(req: Request) {
     }
 
     const touchIds = new Set<string>();
-    const incomingRequests: Array<{ id: number; userId: string }> = [];
+    const incomingRequests: Array<{
+      id: number;
+      userId: string;
+      createdAt: string;
+      updatedAt: string;
+    }> = [];
 
     (links as LinkRow[] | null)?.forEach((row) => {
       if (row.status === "accepted") {
@@ -50,7 +57,12 @@ export async function GET(req: Request) {
       }
 
       if (row.status === "pending" && row.requested_id === user.id) {
-        incomingRequests.push({ id: row.id, userId: row.requester_id });
+        incomingRequests.push({
+          id: row.id,
+          userId: row.requester_id,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
       }
     });
 
@@ -122,10 +134,20 @@ export async function GET(req: Request) {
           id: reqRow.id,
           username: profile.username,
           avatar_url: profile.avatar_url ?? null,
+          request_created_at: reqRow.createdAt,
+          request_updated_at: reqRow.updatedAt,
         };
       })
       .filter(
-        (row): row is { id: number; username: string; avatar_url: string | null } =>
+        (
+          row
+        ): row is {
+          id: number;
+          username: string;
+          avatar_url: string | null;
+          request_created_at: string;
+          request_updated_at: string;
+        } =>
           Boolean(row)
       )
       .sort((a, b) => a.username.localeCompare(b.username, "en", { sensitivity: "base" }))
