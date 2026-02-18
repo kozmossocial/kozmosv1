@@ -921,36 +921,29 @@ export default function BuildPage() {
         </div>
       </div>
 
-      <section
+      <div
         style={{
           marginTop: 10,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
           border: "1px solid rgba(121,193,255,0.28)",
-          borderRadius: 10,
-          background: "rgba(6,14,22,0.52)",
-          padding: "10px 12px",
+          borderRadius: 9,
+          background: "rgba(6,14,22,0.42)",
+          padding: "6px 10px",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
+        <span style={{ fontSize: 11, letterSpacing: "0.08em", opacity: 0.76 }}>
+          user manual
+        </span>
+        <span
+          className="kozmos-tap"
+          style={{ fontSize: 11, opacity: 0.9, cursor: "pointer" }}
+          onClick={() => router.push("/build/manual")}
         >
-          <div style={{ fontSize: 12, letterSpacing: "0.08em", opacity: 0.8 }}>
-            user build manual
-          </div>
-          <span
-            className="kozmos-tap"
-            style={{ fontSize: 11, opacity: 0.9, cursor: "pointer" }}
-            onClick={() => router.push("/build/manual")}
-          >
-            open full manual →
-          </span>
-        </div>
-      </section>
+          open {"->"}
+        </span>
+      </div>
 
       {!isDesktop ? (
         <div
@@ -1505,23 +1498,17 @@ export default function BuildPage() {
                   gap: 8,
                 }}
               >
-                {axyTurns.length === 0 ? (
-                  <div style={{ fontSize: 12, opacity: 0.55 }}>
-                    ask Axy to build with you...
+                {axyTurns.map((turn) => (
+                  <div
+                    key={turn.id}
+                    style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap" }}
+                  >
+                    <span style={{ opacity: 0.6, marginRight: 6 }}>
+                      {turn.role === "assistant" ? "Axy:" : "you:"}
+                    </span>
+                    {turn.content}
                   </div>
-                ) : (
-                  axyTurns.map((turn) => (
-                    <div
-                      key={turn.id}
-                      style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap" }}
-                    >
-                      <span style={{ opacity: 0.6, marginRight: 6 }}>
-                        {turn.role === "assistant" ? "Axy:" : "you:"}
-                      </span>
-                      {turn.content}
-                    </div>
-                  ))
-                )}
+                ))}
                 {axyLoading ? <div style={{ fontSize: 12, opacity: 0.6 }}>Axy is thinking...</div> : null}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
