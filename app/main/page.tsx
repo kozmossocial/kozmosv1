@@ -1690,6 +1690,31 @@ export default function Main() {
             </div>
           </div>
 
+          <div
+            className="play-panel news-paper-panel news-paper-mobile"
+            style={newsPaperPanelMobileStyle}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ opacity: 0.8, letterSpacing: "0.2em" }}>
+                {"news📰paper"}
+              </div>
+              <div style={{ opacity: 0.5 }}>soon</div>
+            </div>
+
+            <div style={{ opacity: 0.62, marginBottom: 6 }}>bright pulses from kozmos</div>
+
+            <div style={{ opacity: 0.52, fontSize: 11 }}>
+              headlines will appear here
+            </div>
+          </div>
+
           <div className="hush-panel space-tv-panel" style={spaceTvPanelStyle}>
             <div
               style={{
@@ -2610,6 +2635,31 @@ export default function Main() {
 
             <div style={{ opacity: 0.46, fontSize: 11 }}>open your subspace</div>
           </div>
+
+          <div
+            className="play-panel news-paper-panel news-paper-desktop"
+            style={newsPaperPanelDesktopStyle}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ opacity: 0.8, letterSpacing: "0.2em" }}>
+                {"news📰paper"}
+              </div>
+              <div style={{ opacity: 0.52 }}>soon</div>
+            </div>
+
+            <div style={{ opacity: 0.62, marginBottom: 6 }}>bright pulses from kozmos</div>
+
+            <div style={{ opacity: 0.52, fontSize: 11 }}>
+              headlines will appear here
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2696,6 +2746,31 @@ const userBuildPanelStyle: React.CSSProperties = {
   boxShadow:
     "0 0 24px rgba(255, 230, 170, 0.24), inset 0 0 12px rgba(255, 230, 170, 0.14)",
   backdropFilter: "blur(6px)",
+};
+
+const newsPaperPanelBaseStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 12,
+  fontSize: 12,
+  letterSpacing: "0.04em",
+  opacity: 0.94,
+  borderRadius: 12,
+  border: "1px solid rgba(94, 176, 255, 0.52)",
+  background:
+    "linear-gradient(180deg, rgba(12,28,46,0.92), rgba(7,16,30,0.8))",
+  boxShadow:
+    "0 0 24px rgba(94, 176, 255, 0.34), inset 0 0 12px rgba(118, 194, 255, 0.22)",
+  backdropFilter: "blur(6px)",
+};
+
+const newsPaperPanelMobileStyle: React.CSSProperties = {
+  ...newsPaperPanelBaseStyle,
+  marginTop: 20,
+};
+
+const newsPaperPanelDesktopStyle: React.CSSProperties = {
+  ...newsPaperPanelBaseStyle,
+  marginTop: 18,
 };
 
 const leftPanelStackStyle: React.CSSProperties = {

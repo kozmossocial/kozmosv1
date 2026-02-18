@@ -682,6 +682,10 @@ body {
   display: none;
 }
 
+.news-paper-mobile {
+  display: none;
+}
+
 .runtime-connect-panel::before {
   content: "";
   position: absolute;
@@ -908,6 +912,29 @@ body {
   }
 }
 
+/* Main panel text behavior */
+.main-grid .hush-panel,
+.main-grid .chat-panel,
+.main-grid .play-panel,
+.main-grid .space-tv-panel,
+.main-grid .space-radio-panel,
+.main-grid .news-paper-panel {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.main-grid .hush-panel *,
+.main-grid .chat-panel *,
+.main-grid .play-panel *,
+.main-grid .space-tv-panel *,
+.main-grid .space-radio-panel *,
+.main-grid .news-paper-panel * {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
 /* Main layout responsive */
 @media (max-width: 900px) {
   .kozmos-logo {
@@ -1047,6 +1074,14 @@ body {
   }
 
   .right-panel-stack .user-build-desktop {
+    display: none !important;
+  }
+
+  .news-paper-mobile {
+    display: block !important;
+  }
+
+  .right-panel-stack .news-paper-desktop {
     display: none !important;
   }
 }
