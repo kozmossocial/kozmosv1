@@ -1211,7 +1211,7 @@ useEffect(() => {
   }, [isMobileLayout, notesBootstrapping]);
 
   function renderTouchPanel() {
-    const holoWrapperClassName =
+    const holoPhaseClassName =
       holoFlightPhase === "idle"
         ? undefined
         : holoFlightPhase === "tour"
@@ -1221,6 +1221,9 @@ useEffect(() => {
             : holoFlightPhase === "return"
               ? "lumi-ship-flight-return"
               : "lumi-ship-flight-special";
+    const holoWrapperClassName = ["lumi-ship-hover-target", holoPhaseClassName]
+      .filter(Boolean)
+      .join(" ");
 
     const holoWrapperStyle: React.CSSProperties =
       holoFlightPhase === "idle"
@@ -1259,6 +1262,26 @@ useEffect(() => {
               className="lumi-ship-float"
               style={touchHoloShipImageStyle}
             />
+            <span
+              className="lumi-ship-label lumi-ship-label-follow"
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "calc(100% - 16px)",
+                fontSize: 11,
+                letterSpacing: "0.14em",
+                color: "rgba(196, 236, 255, 0.9)",
+                textShadow:
+                  "0 0 6px rgba(160,220,255,0.55), 0 0 14px rgba(112,196,255,0.34)",
+                opacity: 0,
+                transition: "opacity 280ms ease",
+                pointerEvents: "none",
+                userSelect: "none",
+              }}
+            >
+              Lumi
+            </span>
           </div>
         ) : null}
         <div style={touchPanelContentLayerStyle}>
