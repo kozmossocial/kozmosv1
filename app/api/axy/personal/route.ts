@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { AXY_LUMI_AWARENESS_PROMPT } from "@/lib/axyCore";
 
 let openaiClient: OpenAI | null = null;
 
@@ -265,6 +266,7 @@ function buildPersonalSystemPrompt(
   return `
 ${PERSONAL_BASE_PROMPT}
 ${KOZMOS_CORE_SPIRIT_PROMPT}
+${AXY_LUMI_AWARENESS_PROMPT}
 
 Personal profile:
 voice: ${profile?.voice ?? "calm minimal"}

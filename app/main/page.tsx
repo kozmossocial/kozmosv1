@@ -25,6 +25,7 @@ const CHAT_MODE_LABEL: Record<ChatMode, string> = {
   build: "build chat",
 };
 const NIGHT_PROTOCOL_MODE = "night-protocol";
+const AXY_SHIP_SRC = "/ufo.png";
 
 type NightProtocolLobby = {
   id: string;
@@ -4573,14 +4574,21 @@ export default function Main() {
 
         <div style={{ position: "relative" }}>
           <div
+            ref={sharedMessagesRef}
+            style={sharedMessagesScrollStyle}
+            onScroll={syncSharedStickToBottom}
+          >
+          <div
             aria-hidden
             className="ufo-ambient-faint"
             style={{
-              position: "absolute",
-              inset: "6% 0 8%",
+              position: "sticky",
+              top: 0,
+              height: "100%",
+              marginBottom: "-100%",
               pointerEvents: "none",
               zIndex: 0,
-              backgroundImage: "url('/ufo.png')",
+              backgroundImage: `url('${AXY_SHIP_SRC}')`,
               backgroundRepeat: "no-repeat",
               backgroundPosition: "center 62%",
               backgroundSize: "min(460px, 74%) auto",
@@ -4592,11 +4600,6 @@ export default function Main() {
                 "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.74) 52%, rgba(0,0,0,0.28) 72%, rgba(0,0,0,0) 88%)",
             }}
           />
-          <div
-            ref={sharedMessagesRef}
-            style={sharedMessagesScrollStyle}
-            onScroll={syncSharedStickToBottom}
-          >
           {!chatBootstrapReady && activeMessages.length === 0 ? (
             <div
               aria-hidden
@@ -4616,7 +4619,7 @@ export default function Main() {
                 style={{
                   position: "absolute",
                   inset: "10% 0 10%",
-                  backgroundImage: "url('/ufo.png')",
+                  backgroundImage: `url('${AXY_SHIP_SRC}')`,
                   backgroundRepeat: "no-repeat",
                   backgroundPosition: "center 62%",
                   backgroundSize: "min(500px, 76%) auto",

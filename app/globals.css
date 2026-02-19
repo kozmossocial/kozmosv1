@@ -1472,7 +1472,8 @@ body {
   }
 }
 
-.ufo-holo-float {
+.ufo-holo-float,
+.lumi-ship-float {
   animation:
     ufoHoloFloat 4.2s ease-in-out infinite,
     ufoHoloBreathe 2.8s ease-in-out infinite alternate;
@@ -1503,7 +1504,8 @@ body {
   }
 }
 
-.ufo-holo-mobile-hover {
+.ufo-holo-mobile-hover,
+.lumi-ship-mobile-hover {
   animation: ufoHoloMobileHover 4.8s ease-in-out infinite;
   transform-origin: 50% 50%;
   will-change: transform;
@@ -1654,25 +1656,29 @@ body {
   }
 }
 
-.ufo-holo-flight-tour {
+.ufo-holo-flight-tour,
+.lumi-ship-flight-tour {
   animation:
     ufoHoloTourRun 8s linear forwards,
     ufoHoloBreatheFlight 2.8s ease-in-out infinite alternate;
 }
 
-.ufo-holo-flight-exit {
+.ufo-holo-flight-exit,
+.lumi-ship-flight-exit {
   animation:
     ufoHoloExitRun 920ms cubic-bezier(0.25, 0.68, 0.2, 1) forwards,
     ufoHoloBreatheFlight 2.8s ease-in-out infinite alternate;
 }
 
-.ufo-holo-flight-return {
+.ufo-holo-flight-return,
+.lumi-ship-flight-return {
   animation:
     ufoHoloReturnRun 1.16s cubic-bezier(0.24, 0.7, 0.2, 1) forwards,
     ufoHoloBreatheFlight 2.8s ease-in-out infinite alternate;
 }
 
-.ufo-holo-flight-special {
+.ufo-holo-flight-special,
+.lumi-ship-flight-special {
   animation: ufoHoloBreatheFlight 2.8s ease-in-out infinite alternate;
   will-change: transform, filter, opacity;
 }

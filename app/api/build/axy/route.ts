@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { AXY_LUMI_AWARENESS_PROMPT } from "@/lib/axyCore";
 
 let openaiClient: OpenAI | null = null;
 
@@ -130,6 +131,8 @@ Kozmos fit:
 - preserve user autonomy
 - do not force a direction
 - support intentional building
+
+${AXY_LUMI_AWARENESS_PROMPT}
 `;
 
 export async function POST(req: Request) {

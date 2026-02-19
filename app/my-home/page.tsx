@@ -48,6 +48,8 @@ type HoloFlightStyle = React.CSSProperties & {
 const DIRECT_CHAT_SEEN_STORAGE_PREFIX = "kozmos:dm-seen:";
 const SECONDARY_AMBIENT_SRC = "/ambient-main.mp3";
 const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
+const AXY_SHIP_SRC = "/ufo.png";
+const LUMI_SHIP_SRC = "/ufoholo.png";
 
 export default function MyHome() {
   const router = useRouter();
@@ -1213,12 +1215,12 @@ useEffect(() => {
       holoFlightPhase === "idle"
         ? undefined
         : holoFlightPhase === "tour"
-          ? "ufo-holo-flight-tour"
+          ? "lumi-ship-flight-tour"
           : holoFlightPhase === "exit"
-            ? "ufo-holo-flight-exit"
+            ? "lumi-ship-flight-exit"
             : holoFlightPhase === "return"
-              ? "ufo-holo-flight-return"
-              : "ufo-holo-flight-special";
+              ? "lumi-ship-flight-return"
+              : "lumi-ship-flight-special";
 
     const holoWrapperStyle: React.CSSProperties =
       holoFlightPhase === "idle"
@@ -1250,11 +1252,11 @@ useEffect(() => {
             aria-hidden
           >
             <img
-              src="/ufoholo.png"
+              src={LUMI_SHIP_SRC}
               alt=""
               aria-hidden
               draggable={false}
-              className="ufo-holo-float"
+              className="lumi-ship-float"
               style={touchHoloShipImageStyle}
             />
           </div>
@@ -1697,11 +1699,11 @@ useEffect(() => {
           }}
         >
           <img
-            src="/ufoholo.png"
+            src={LUMI_SHIP_SRC}
             alt=""
             aria-hidden
             draggable={false}
-            className="ufo-holo-mobile-hover"
+            className="lumi-ship-mobile-hover"
             style={touchHoloShipImageMobileStyle}
           />
         </div>
@@ -1750,7 +1752,7 @@ useEffect(() => {
         </div>
 
         {/* NOTES */}
-        <div style={notesListStyle}>
+        <div style={notesShellStyle}>
           {!notesBootstrapping ? (
             <div
               aria-hidden
@@ -1764,7 +1766,7 @@ useEffect(() => {
                 inset: 0,
                 pointerEvents: "none",
                 zIndex: 0,
-                backgroundImage: "url('/ufo.png')",
+                backgroundImage: `url('${AXY_SHIP_SRC}')`,
                 backgroundRepeat: "no-repeat",
                 backgroundPosition: "center 62%",
                 backgroundSize: "min(380px, 82%) auto",
@@ -1779,6 +1781,7 @@ useEffect(() => {
               }}
             />
           ) : null}
+          <div style={notesListStyle}>
           {notesBootstrapping ? (
             <div aria-hidden style={{ position: "relative", zIndex: 1, height: "100%" }}>
               <div
@@ -1904,6 +1907,7 @@ useEffect(() => {
               ))}
             </div>
           )}
+          </div>
         </div>
 
         {isMobileLayout ? (
@@ -2074,19 +2078,26 @@ const noteActionsStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const notesListStyle: React.CSSProperties = {
+const notesShellStyle: React.CSSProperties = {
   marginTop: 24,
   height: "clamp(340px, 46vh, 560px)",
   maxHeight: "clamp(340px, 46vh, 560px)",
+  position: "relative",
+};
+
+const notesListStyle: React.CSSProperties = {
+  height: "100%",
+  maxHeight: "100%",
   overflowY: "auto",
   overflowX: "hidden",
   paddingRight: 8,
   position: "relative",
+  zIndex: 1,
 };
 
 const notesBootPlaceholderStyle: React.CSSProperties = {
   height: "100%",
-  background: "url('/ufo.png') no-repeat center 62% / min(380px, 82%) auto",
+  background: `url('${AXY_SHIP_SRC}') no-repeat center 62% / min(380px, 82%) auto`,
   mixBlendMode: "screen",
   WebkitMaskImage:
     "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.92) 42%, rgba(0,0,0,0.44) 66%, rgba(0,0,0,0) 84%)",

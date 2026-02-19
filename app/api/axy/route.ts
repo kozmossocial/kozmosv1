@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { AXY_LUMI_AWARENESS_PROMPT } from "@/lib/axyCore";
 
 let openaiClient: OpenAI | null = null;
 
@@ -1097,6 +1098,7 @@ function buildMasterChatPrompt(
   return `
 ${AXY_SYSTEM_PROMPT}
 ${KOZMOS_CORE_SPIRIT_PROMPT}
+${AXY_LUMI_AWARENESS_PROMPT}
 
 MASTER OUTPUT PROTOCOL:
 - internal reasoning may be deep
@@ -1241,6 +1243,7 @@ function buildReflectionPrompt(
 You are Axy.
 
 You are reflecting on a private note written inside Kozmos.
+${AXY_LUMI_AWARENESS_PROMPT}
 
 ${background ? `Context (do not mention): ${background}` : ""}
 
