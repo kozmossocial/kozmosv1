@@ -120,7 +120,7 @@ export default function MyHome() {
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
   const touchPanelRef = useRef<HTMLDivElement | null>(null);
-  const holoShipRef = useRef<HTMLImageElement | null>(null);
+  const holoShipRef = useRef<HTMLDivElement | null>(null);
   const holoFlightTimersRef = useRef<number[]>([]);
   const holoFlightPhaseRef = useRef<"idle" | "tour" | "exit" | "return" | "special">(
     "idle"
@@ -130,6 +130,9 @@ export default function MyHome() {
   const holoSpecialRafRef = useRef<number | null>(null);
   const holoSpecialLaunchTimerRef = useRef<number | null>(null);
   const holoSpecialIntervalRef = useRef<number | null>(null);
+  const holoDockLeft = isMobileLayout ? 12 : 18;
+  const holoDockTop = isMobileLayout ? -92 : -128;
+  const holoShipWidth = isMobileLayout ? 94 : 140;
 
   const loadKeepInTouch = useCallback(async () => {
     setTouchLoading(true);
@@ -986,8 +989,8 @@ useEffect(() => {
     const panelRect = panel.getBoundingClientRect();
     const shipWidth = ship.offsetWidth || 140;
     const shipHeight = ship.offsetHeight || 76;
-    const dockLeft = Number(touchHoloShipStyle.left ?? 0);
-    const dockTop = Number(touchHoloShipStyle.top ?? 0);
+    const dockLeft = holoDockLeft;
+    const dockTop = holoDockTop;
     const rect = {
       x: panelRect.left + dockLeft + shipWidth * 0.5,
       y: panelRect.top + dockTop + shipHeight * 0.5,
@@ -1026,23 +1029,23 @@ useEffect(() => {
     const panelRect = panel.getBoundingClientRect();
     const shipWidth = ship.offsetWidth || 140;
     const shipHeight = ship.offsetHeight || 76;
-    const dockLeft = Number(touchHoloShipStyle.left ?? 0);
-    const dockTop = Number(touchHoloShipStyle.top ?? 0);
+    const dockLeft = holoDockLeft;
+    const dockTop = holoDockTop;
     const originX = panelRect.left + dockLeft + shipWidth * 0.5;
     const originY = panelRect.top + dockTop + shipHeight * 0.5;
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
-    const centerX = viewportW * 0.52;
-    const centerY = viewportH * 0.42;
-    const loopCount = 20;
+    const centerX = viewportW * (isMobileLayout ? 0.5 : 0.52);
+    const centerY = viewportH * (isMobileLayout ? 0.38 : 0.42);
+    const loopCount = isMobileLayout ? 14 : 20;
     const enterMs = 1900;
     const hoverMs = 820;
     const loopMs = 11200;
     const slowMs = 1650;
     const homeMs = 1950;
     const totalMs = enterMs + hoverMs + loopMs + slowMs + homeMs;
-    const leftEntryX = -viewportW * 0.16;
-    const rightExitX = viewportW * 1.16;
+    const leftEntryX = -viewportW * (isMobileLayout ? 0.22 : 0.16);
+    const rightExitX = viewportW * (isMobileLayout ? 1.22 : 1.16);
     const loopSpan = rightExitX - leftEntryX;
     const startLoopFrac = Math.min(
       0.96,
@@ -1184,7 +1187,7 @@ useEffect(() => {
     return () => {
       clearHoloSpecialSchedule();
     };
-  }, [notesBootstrapping]);
+  }, [isMobileLayout, notesBootstrapping]);
 
   function renderTouchPanel() {
     const holoWrapperClassName =
@@ -1202,10 +1205,14 @@ useEffect(() => {
       holoFlightPhase === "idle"
         ? {
             ...touchHoloShipStyle,
+            left: holoDockLeft,
+            top: holoDockTop,
+            width: holoShipWidth,
             opacity: touchHoloShipStyle.opacity,
           }
         : {
             ...touchHoloFlightOverlayStyle,
+            width: holoShipWidth,
             ...holoFlightMotionStyle,
             left: holoFlightOrigin?.x ?? 0,
             top: holoFlightOrigin?.y ?? 0,
