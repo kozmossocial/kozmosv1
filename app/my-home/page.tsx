@@ -56,6 +56,7 @@ export default function MyHome() {
 
   const [noteInput, setNoteInput] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
+  const [notesBootstrapping, setNotesBootstrapping] = useState(true);
   const [loading, setLoading] = useState(false);
   const [touchUsers, setTouchUsers] = useState<TouchUser[]>([]);
   const [incomingTouchRequests, setIncomingTouchRequests] = useState<TouchRequest[]>(
@@ -525,46 +526,51 @@ export default function MyHome() {
   useEffect(() => {
 
     async function loadUserAndNotes() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      setUserId(user.id);
+      setNotesBootstrapping(true);
       try {
-        const raw = window.localStorage.getItem(
-          `${DIRECT_CHAT_SEEN_STORAGE_PREFIX}${user.id}`
-        );
-        if (raw) {
-          const parsed = JSON.parse(raw) as Record<string, string>;
-          if (parsed && typeof parsed === "object") {
-            directChatSeenAtRef.current = parsed;
-          }
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          router.push("/login");
+          return;
         }
-      } catch {
-        directChatSeenAtRef.current = {};
+
+        setUserId(user.id);
+        try {
+          const raw = window.localStorage.getItem(
+            `${DIRECT_CHAT_SEEN_STORAGE_PREFIX}${user.id}`
+          );
+          if (raw) {
+            const parsed = JSON.parse(raw) as Record<string, string>;
+            if (parsed && typeof parsed === "object") {
+              directChatSeenAtRef.current = parsed;
+            }
+          }
+        } catch {
+          directChatSeenAtRef.current = {};
+        }
+
+        const { data: profile } = await supabase
+          .from("profileskozmos")
+          .select("username")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        setUsername(profile?.username?.trim() || "user");
+
+        const { data: notesData } = await supabase
+          .from("notes")
+          .select("id, content")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        setNotes(notesData || []);
+        await Promise.all([loadKeepInTouch(), loadDirectChats()]);
+      } finally {
+        setNotesBootstrapping(false);
       }
-
-      const { data: profile } = await supabase
-        .from("profileskozmos")
-        .select("username")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      setUsername(profile?.username?.trim() || "user");
-
-      const { data: notesData } = await supabase
-        .from("notes")
-        .select("id, content")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      setNotes(notesData || []);
-      await Promise.all([loadKeepInTouch(), loadDirectChats()]);
     }
 
     loadUserAndNotes();
@@ -1223,8 +1229,15 @@ useEffect(() => {
         </div>
 
         {/* NOTES */}
-        <div style={notesListStyle}>
-          {notes.map((note) => (
+        <div
+          style={{
+            ...notesListStyle,
+            minHeight: notesBootstrapping ? "clamp(220px, 34vh, 360px)" : undefined,
+          }}
+        >
+          {notesBootstrapping ? (
+            <div style={notesBootPlaceholderStyle} aria-hidden />
+          ) : notes.map((note) => (
             <div
               key={note.id}
               style={{
@@ -1490,6 +1503,18 @@ const notesListStyle: React.CSSProperties = {
   overflowY: "auto",
   overflowX: "hidden",
   paddingRight: 8,
+};
+
+const notesBootPlaceholderStyle: React.CSSProperties = {
+  height: "clamp(220px, 34vh, 360px)",
+  background:
+    "radial-gradient(circle at 50% 62%, rgba(180,194,222,0.08) 0%, rgba(11,11,11,0) 62%), url('/ufo.png')",
+  backgroundRepeat: "no-repeat, no-repeat",
+  backgroundPosition: "center, center 58%",
+  backgroundSize: "100% 100%, min(330px, 78%) auto",
+  opacity: 0.56,
+  filter:
+    "drop-shadow(0 0 8px rgba(166,186,220,0.14)) drop-shadow(0 0 18px rgba(126,146,180,0.1))",
 };
 
 const noteContentStyle: React.CSSProperties = {
