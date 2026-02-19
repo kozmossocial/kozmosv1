@@ -119,6 +119,7 @@ export default function MyHome() {
     useState<HoloFlightStyle>({});
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
+  const touchPanelRef = useRef<HTMLDivElement | null>(null);
   const holoShipRef = useRef<HTMLImageElement | null>(null);
   const holoFlightTimersRef = useRef<number[]>([]);
   const holoFlightPhaseRef = useRef<"idle" | "tour" | "exit" | "return" | "special">(
@@ -934,7 +935,8 @@ useEffect(() => {
   function launchHoloFlight() {
     if (holoFlightPhaseRef.current !== "idle") return;
     const ship = holoShipRef.current;
-    if (!ship) return;
+    const panel = touchPanelRef.current;
+    if (!ship || !panel) return;
     const rng = Math.random;
     const randomRange = (min: number, max: number) => min + rng() * (max - min);
     const randomOffscreenPoint = () => {
@@ -981,10 +983,18 @@ useEffect(() => {
       "--ufo-return-rot": `${randomRange(-40, 40).toFixed(2)}deg`,
     };
 
-    const rect = ship.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const shipWidth = ship.offsetWidth || 140;
+    const shipHeight = ship.offsetHeight || 76;
+    const dockLeft = Number(touchHoloShipStyle.left ?? 0);
+    const dockTop = Number(touchHoloShipStyle.top ?? 0);
+    const rect = {
+      x: panelRect.left + dockLeft + shipWidth * 0.5,
+      y: panelRect.top + dockTop + shipHeight * 0.5,
+    };
     setHoloFlightOrigin({
-      x: rect.left + rect.width * 0.5,
-      y: rect.top + rect.height * 0.55,
+      x: rect.x,
+      y: rect.y,
     });
     setHoloFlightMotionStyle(motionStyle);
     clearHoloFlightTimers();
@@ -1010,11 +1020,16 @@ useEffect(() => {
   function launchSpecialHoloFlight() {
     if (holoFlightPhaseRef.current !== "idle") return;
     const ship = holoShipRef.current;
-    if (!ship) return;
+    const panel = touchPanelRef.current;
+    if (!ship || !panel) return;
     clearHoloFlightTimers();
-    const rect = ship.getBoundingClientRect();
-    const originX = rect.left + rect.width * 0.5;
-    const originY = rect.top + rect.height * 0.55;
+    const panelRect = panel.getBoundingClientRect();
+    const shipWidth = ship.offsetWidth || 140;
+    const shipHeight = ship.offsetHeight || 76;
+    const dockLeft = Number(touchHoloShipStyle.left ?? 0);
+    const dockTop = Number(touchHoloShipStyle.top ?? 0);
+    const originX = panelRect.left + dockLeft + shipWidth * 0.5;
+    const originY = panelRect.top + dockTop + shipHeight * 0.5;
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
     const centerX = viewportW * 0.52;
@@ -1156,13 +1171,15 @@ useEffect(() => {
 
   useEffect(() => {
     if (notesBootstrapping) return;
+    const initialDelayMs = 30000;
+    const intervalMs = 180000;
     clearHoloSpecialSchedule();
     holoSpecialLaunchTimerRef.current = window.setTimeout(() => {
       launchSpecialHoloFlight();
-    }, 5000);
-    holoSpecialIntervalRef.current = window.setInterval(() => {
-      launchSpecialHoloFlight();
-    }, 5000);
+      holoSpecialIntervalRef.current = window.setInterval(() => {
+        launchSpecialHoloFlight();
+      }, intervalMs);
+    }, initialDelayMs);
 
     return () => {
       clearHoloSpecialSchedule();
@@ -1170,9 +1187,9 @@ useEffect(() => {
   }, [notesBootstrapping]);
 
   function renderTouchPanel() {
-    const holoClassName =
+    const holoWrapperClassName =
       holoFlightPhase === "idle"
-        ? "ufo-holo-float"
+        ? undefined
         : holoFlightPhase === "tour"
           ? "ufo-holo-flight-tour"
           : holoFlightPhase === "exit"
@@ -1181,7 +1198,7 @@ useEffect(() => {
               ? "ufo-holo-flight-return"
               : "ufo-holo-flight-special";
 
-    const holoStyle: React.CSSProperties =
+    const holoWrapperStyle: React.CSSProperties =
       holoFlightPhase === "idle"
         ? {
             ...touchHoloShipStyle,
@@ -1195,17 +1212,23 @@ useEffect(() => {
           };
 
     return (
-      <div style={touchPanelStyle}>
-        <img
+      <div ref={touchPanelRef} style={touchPanelStyle}>
+        <div
           ref={holoShipRef}
-          src="/ufoholo.png"
-          alt=""
-          aria-hidden
-          draggable={false}
-          className={holoClassName}
+          className={holoWrapperClassName}
           onClick={() => launchHoloFlight()}
-          style={holoStyle}
-        />
+          style={holoWrapperStyle}
+          aria-hidden
+        >
+          <img
+            src="/ufoholo.png"
+            alt=""
+            aria-hidden
+            draggable={false}
+            className="ufo-holo-float"
+            style={touchHoloShipImageStyle}
+          />
+        </div>
         <div style={touchPanelContentLayerStyle}>
         <div style={touchPanelHeadStyle}>
           <div style={{ ...labelStyle, marginBottom: 0 }}>users in touch</div>
@@ -2124,6 +2147,14 @@ const touchHoloShipStyle: React.CSSProperties = {
   userSelect: "none",
   cursor: "pointer",
   zIndex: 1,
+};
+
+const touchHoloShipImageStyle: React.CSSProperties = {
+  width: "100%",
+  height: "auto",
+  display: "block",
+  pointerEvents: "none",
+  userSelect: "none",
 };
 
 const touchHoloFlightOverlayStyle: React.CSSProperties = {
