@@ -132,7 +132,6 @@ export default function MyHome() {
   const holoDockRafRef = useRef<number | null>(null);
   const holoSpecialRafRef = useRef<number | null>(null);
   const holoSpecialLaunchTimerRef = useRef<number | null>(null);
-  const holoSpecialIntervalRef = useRef<number | null>(null);
   const lumiMobileTapHintTimerRef = useRef<number | null>(null);
   const holoDockLeft = isMobileLayout ? 12 : 18;
   const holoDockTop = isMobileLayout ? -92 : -128;
@@ -942,10 +941,6 @@ useEffect(() => {
       window.clearTimeout(holoSpecialLaunchTimerRef.current);
       holoSpecialLaunchTimerRef.current = null;
     }
-    if (holoSpecialIntervalRef.current !== null) {
-      window.clearInterval(holoSpecialIntervalRef.current);
-      holoSpecialIntervalRef.current = null;
-    }
   }
 
   function launchHoloFlight() {
@@ -1202,13 +1197,9 @@ useEffect(() => {
     }
     if (notesBootstrapping) return;
     const initialDelayMs = 30000;
-    const intervalMs = 180000;
     clearHoloSpecialSchedule();
     holoSpecialLaunchTimerRef.current = window.setTimeout(() => {
       launchSpecialHoloFlight();
-      holoSpecialIntervalRef.current = window.setInterval(() => {
-        launchSpecialHoloFlight();
-      }, intervalMs);
     }, initialDelayMs);
 
     return () => {
@@ -2057,6 +2048,7 @@ const pageStyle: React.CSSProperties = {
   color: "#eaeaea",
   padding: 40,
   position: "relative",
+  overflowX: "hidden",
   userSelect: "none",
   WebkitUserSelect: "none",
 };
@@ -2137,6 +2129,7 @@ const notesShellStyle: React.CSSProperties = {
   height: "clamp(340px, 46vh, 560px)",
   maxHeight: "clamp(340px, 46vh, 560px)",
   position: "relative",
+  overflow: "hidden",
 };
 
 const notesListStyle: React.CSSProperties = {
