@@ -121,6 +121,8 @@ const REPLY_MEMORY_MAX_ITEMS_PER_KEY = 12;
 const DOMAIN_MEMORY_TTL_MS = 90 * 60 * 1000;
 const DOMAIN_MEMORY_MAX_KEYS = 240;
 const PERSIST_MEMORY_TTL_MS = 24 * 60 * 60 * 1000;
+const STATE_MEMORY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const STATE_ITEM_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 const replyMemory = new Map<string, { replies: string[]; updatedAt: number }>();
 const domainRotationMemory = new Map<
@@ -128,6 +130,92 @@ const domainRotationMemory = new Map<
   { recent: AxyDomain[]; cursor: number; updatedAt: number }
 >();
 let persistentMemoryAvailable = true;
+let conversationStateTableAvailable = true;
+let replyEventsTableAvailable = true;
+
+type AxyChannel =
+  | "shared"
+  | "dm"
+  | "hush"
+  | "build"
+  | "game-chat"
+  | "night-protocol-day"
+  | "my-home-note"
+  | "unknown";
+
+type ChannelPolicy = {
+  maxSentences: number;
+  maxChars: number;
+  allowsFollowQuestion: boolean;
+  initiative: "low" | "medium" | "high";
+};
+
+const CHANNEL_POLICIES: Record<AxyChannel, ChannelPolicy> = {
+  shared: {
+    maxSentences: 2,
+    maxChars: 180,
+    allowsFollowQuestion: false,
+    initiative: "low",
+  },
+  dm: {
+    maxSentences: 2,
+    maxChars: 190,
+    allowsFollowQuestion: true,
+    initiative: "medium",
+  },
+  hush: {
+    maxSentences: 2,
+    maxChars: 180,
+    allowsFollowQuestion: true,
+    initiative: "medium",
+  },
+  build: {
+    maxSentences: 3,
+    maxChars: 320,
+    allowsFollowQuestion: true,
+    initiative: "high",
+  },
+  "game-chat": {
+    maxSentences: 1,
+    maxChars: 140,
+    allowsFollowQuestion: false,
+    initiative: "low",
+  },
+  "night-protocol-day": {
+    maxSentences: 2,
+    maxChars: 170,
+    allowsFollowQuestion: false,
+    initiative: "low",
+  },
+  "my-home-note": {
+    maxSentences: 1,
+    maxChars: 180,
+    allowsFollowQuestion: false,
+    initiative: "low",
+  },
+  unknown: {
+    maxSentences: 2,
+    maxChars: 180,
+    allowsFollowQuestion: false,
+    initiative: "low",
+  },
+};
+
+type AxyStateItem = {
+  value: string;
+  ts: number;
+};
+
+type AxyConversationState = {
+  activeIntent: MasterIntent;
+  pendingTasks: AxyStateItem[];
+  userPreferences: AxyStateItem[];
+  socialSignals: AxyStateItem[];
+  buildHistory: AxyStateItem[];
+  updatedAt: number;
+};
+
+const conversationStateMemory = new Map<string, AxyConversationState>();
 
 const DOMAIN_CONTEXT_CARDS: Record<AxyDomain, string[]> = {
   history: [
@@ -228,6 +316,147 @@ function normalizeAxyTurns(raw: unknown, max = 12): AxyTurn[] {
   }
 
   return out;
+}
+
+function resolveChannel(input: string): AxyChannel {
+  const channel = clipText(input, 32).toLowerCase();
+  if (
+    channel === "shared" ||
+    channel === "dm" ||
+    channel === "hush" ||
+    channel === "build" ||
+    channel === "game-chat" ||
+    channel === "night-protocol-day" ||
+    channel === "my-home-note"
+  ) {
+    return channel;
+  }
+  return "unknown";
+}
+
+function getChannelPolicy(channel: string): ChannelPolicy {
+  return CHANNEL_POLICIES[resolveChannel(channel)] || CHANNEL_POLICIES.unknown;
+}
+
+function normalizeStateItems(raw: unknown, max = 16): AxyStateItem[] {
+  if (!Array.isArray(raw)) return [];
+  const now = Date.now();
+  const out: AxyStateItem[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const value = clipText(row.value ?? "", 180);
+    if (!value) continue;
+    const tsRaw = Number(row.ts || 0);
+    const ts = Number.isFinite(tsRaw) && tsRaw > 0 ? Math.floor(tsRaw) : now;
+    if (now - ts > STATE_ITEM_TTL_MS) continue;
+    out.push({ value, ts });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function pushStateItem(
+  list: AxyStateItem[],
+  value: string,
+  now = Date.now(),
+  max = 16
+) {
+  const clean = clipText(value, 180);
+  if (!clean) return list;
+  const existing = list.find((x) => x.value.toLowerCase() === clean.toLowerCase());
+  if (existing) {
+    existing.ts = now;
+  } else {
+    list.push({ value: clean, ts: now });
+  }
+  const alive = list
+    .filter((x) => now - x.ts <= STATE_ITEM_TTL_MS)
+    .sort((a, b) => a.ts - b.ts)
+    .slice(-max);
+  return alive;
+}
+
+function createEmptyConversationState(intent: MasterIntent): AxyConversationState {
+  return {
+    activeIntent: intent,
+    pendingTasks: [],
+    userPreferences: [],
+    socialSignals: [],
+    buildHistory: [],
+    updatedAt: Date.now(),
+  };
+}
+
+function extractPreferenceSignals(message: string) {
+  const text = clipText(message, 600);
+  if (!text) return [] as string[];
+  const out: string[] = [];
+  const preferencePatterns: RegExp[] = [
+    /\b(i prefer [^.?!]{3,120})/gi,
+    /\b(please [^.?!]{3,120})/gi,
+    /\b(don't [^.?!]{3,120})/gi,
+    /\b(do not [^.?!]{3,120})/gi,
+    /\b(avoid [^.?!]{3,120})/gi,
+  ];
+  for (const pattern of preferencePatterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    for (const value of match) {
+      out.push(clipText(value, 140));
+      if (out.length >= 6) return out;
+    }
+  }
+  return out;
+}
+
+function extractPendingTaskSignals(message: string) {
+  const text = clipText(message, 600);
+  if (!text) return [] as string[];
+  const out: string[] = [];
+  const taskPatterns: RegExp[] = [
+    /\b(build|create|implement|fix|update|refactor|add|remove)\b[^.?!]{0,100}/gi,
+    /\b(todo|task|next step|need to)\b[^.?!]{0,100}/gi,
+  ];
+  for (const pattern of taskPatterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    for (const value of match) {
+      out.push(clipText(value, 140));
+      if (out.length >= 6) return out;
+    }
+  }
+  return out;
+}
+
+function extractSocialSignals(context: AxyContext | null, userMessage: string) {
+  const channel = resolveChannel(clipText(context?.channel || "", 24).toLowerCase());
+  const target = clipText(context?.targetUsername || "", 42);
+  const out: string[] = [];
+  if (target) out.push(`target:${target}`);
+  if (channel !== "unknown") out.push(`channel:${channel}`);
+  if (/\b(thank|thanks|appreciate|great|nice|good)\b/i.test(userMessage)) {
+    out.push("positive-feedback");
+  }
+  if (/\b(urgent|asap|quick|fast)\b/i.test(userMessage)) {
+    out.push("high-urgency");
+  }
+  return out.slice(0, 6);
+}
+
+function extractBuildSignals(context: AxyContext | null, userMessage: string) {
+  const channel = resolveChannel(clipText(context?.channel || "", 24).toLowerCase());
+  if (channel !== "build") return [] as string[];
+  const out: string[] = [];
+  const fileLike = userMessage.match(/\b[\w/-]+\.(ts|tsx|js|jsx|md|json|sql|css|html)\b/gi) || [];
+  fileLike.slice(0, 4).forEach((item) => out.push(`file:${clipText(item, 80)}`));
+  if (/\b(api|route|schema|migration|query|index)\b/i.test(userMessage)) {
+    out.push("backend-change");
+  }
+  if (/\b(ui|design|layout|css|style|mobile|desktop)\b/i.test(userMessage)) {
+    out.push("frontend-change");
+  }
+  return out.slice(0, 6);
 }
 
 function detectDomains(message: string, recentTurns: AxyTurn[]): AxyDomain[] {
@@ -361,6 +590,28 @@ type PersistentMemoryRow = {
   updated_at: string | null;
 };
 
+type ConversationStateRow = {
+  conversation_key: string;
+  active_intent: MasterIntent | null;
+  pending_tasks: unknown;
+  user_preferences: unknown;
+  social_signals: unknown;
+  build_history: unknown;
+  updated_at: string | null;
+};
+
+type AxyReplyEventInsert = {
+  mode: "chat" | "reflect";
+  channel: string;
+  conversation_key: string;
+  intent: MasterIntent;
+  sent: boolean;
+  drop_reason: string | null;
+  latency_ms: number;
+  duplicate_score: number;
+  initiative: string;
+};
+
 function normalizeDomainList(raw: unknown, max = 12): AxyDomain[] {
   if (!Array.isArray(raw)) return [];
   const allowed = new Set<AxyDomain>([
@@ -451,6 +702,118 @@ async function flushPersistentMemory(conversationKey: string) {
 
   if (error?.code === "42P01") {
     persistentMemoryAvailable = false;
+  }
+}
+
+function decayConversationState(state: AxyConversationState, now = Date.now()) {
+  state.pendingTasks = state.pendingTasks.filter((x) => now - x.ts <= STATE_ITEM_TTL_MS).slice(-16);
+  state.userPreferences = state.userPreferences
+    .filter((x) => now - x.ts <= STATE_ITEM_TTL_MS)
+    .slice(-16);
+  state.socialSignals = state.socialSignals.filter((x) => now - x.ts <= STATE_ITEM_TTL_MS).slice(-16);
+  state.buildHistory = state.buildHistory.filter((x) => now - x.ts <= STATE_ITEM_TTL_MS).slice(-16);
+  state.updatedAt = now;
+  return state;
+}
+
+async function hydrateConversationState(conversationKey: string, intent: MasterIntent) {
+  const now = Date.now();
+  const memoryState = conversationStateMemory.get(conversationKey);
+  if (memoryState && now - memoryState.updatedAt <= STATE_MEMORY_TTL_MS) {
+    memoryState.activeIntent = intent;
+    return decayConversationState(memoryState, now);
+  }
+
+  const fresh = createEmptyConversationState(intent);
+  conversationStateMemory.set(conversationKey, fresh);
+  if (!conversationStateTableAvailable || !conversationKey) {
+    return fresh;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("axy_conversation_state")
+    .select(
+      "conversation_key, active_intent, pending_tasks, user_preferences, social_signals, build_history, updated_at"
+    )
+    .eq("conversation_key", conversationKey)
+    .maybeSingle<ConversationStateRow>();
+
+  if (error) {
+    if (error.code === "42P01") {
+      conversationStateTableAvailable = false;
+    }
+    return fresh;
+  }
+  if (!data) return fresh;
+
+  const updatedMs = data.updated_at ? Date.parse(data.updated_at) : NaN;
+  if (Number.isFinite(updatedMs) && now - updatedMs > STATE_MEMORY_TTL_MS) {
+    return fresh;
+  }
+
+  const loaded: AxyConversationState = {
+    activeIntent: (data.active_intent as MasterIntent) || intent,
+    pendingTasks: normalizeStateItems(data.pending_tasks, 16),
+    userPreferences: normalizeStateItems(data.user_preferences, 16),
+    socialSignals: normalizeStateItems(data.social_signals, 16),
+    buildHistory: normalizeStateItems(data.build_history, 16),
+    updatedAt: now,
+  };
+  loaded.activeIntent = intent;
+  decayConversationState(loaded, now);
+  conversationStateMemory.set(conversationKey, loaded);
+  return loaded;
+}
+
+async function flushConversationState(conversationKey: string, state: AxyConversationState) {
+  if (!conversationKey || !conversationStateTableAvailable) return;
+
+  const now = Date.now();
+  const cleanState = decayConversationState(state, now);
+  const { error } = await supabaseAdmin.from("axy_conversation_state").upsert(
+    {
+      conversation_key: conversationKey,
+      active_intent: cleanState.activeIntent,
+      pending_tasks: cleanState.pendingTasks,
+      user_preferences: cleanState.userPreferences,
+      social_signals: cleanState.socialSignals,
+      build_history: cleanState.buildHistory,
+      updated_at: new Date(now).toISOString(),
+    },
+    { onConflict: "conversation_key" }
+  );
+
+  if (error?.code === "42P01") {
+    conversationStateTableAvailable = false;
+  }
+}
+
+function maxDuplicateScore(candidate: string, recentReplies: string[]) {
+  const candidateNorm = normalizeForSimilarity(candidate);
+  if (!candidateNorm || recentReplies.length === 0) return 0;
+  let maxScore = 0;
+  for (const recent of recentReplies) {
+    const score = jaccardSimilarity(candidateNorm, normalizeForSimilarity(recent));
+    if (score > maxScore) maxScore = score;
+  }
+  return Number(maxScore.toFixed(3));
+}
+
+async function logReplyEvent(payload: AxyReplyEventInsert) {
+  if (!replyEventsTableAvailable) return;
+  const { error } = await supabaseAdmin.from("axy_reply_events").insert({
+    mode: payload.mode,
+    channel: payload.channel,
+    conversation_key: payload.conversation_key,
+    intent: payload.intent,
+    sent: payload.sent,
+    drop_reason: payload.drop_reason,
+    latency_ms: payload.latency_ms,
+    duplicate_score: payload.duplicate_score,
+    initiative: payload.initiative,
+  });
+  if (error?.code === "42P01") {
+    replyEventsTableAvailable = false;
   }
 }
 
@@ -598,6 +961,24 @@ function buildNoRepeatBlock(recentReplies: string[]) {
   ].join("\n");
 }
 
+function buildStateContextBlock(state: AxyConversationState) {
+  const pending = state.pendingTasks.slice(-3).map((x) => `- ${x.value}`).join("\n");
+  const prefs = state.userPreferences.slice(-3).map((x) => `- ${x.value}`).join("\n");
+  const social = state.socialSignals.slice(-3).map((x) => `- ${x.value}`).join("\n");
+  const build = state.buildHistory.slice(-3).map((x) => `- ${x.value}`).join("\n");
+
+  const lines = [
+    "CONVERSATION STATE:",
+    `- activeIntent=${state.activeIntent}`,
+    pending ? `Pending tasks:\n${pending}` : "",
+    prefs ? `User preferences:\n${prefs}` : "",
+    social ? `Social signals:\n${social}` : "",
+    build ? `Build history:\n${build}` : "",
+  ].filter(Boolean);
+
+  return lines.join("\n");
+}
+
 function fallbackReply(
   intent: MasterIntent,
   userMessage: string,
@@ -675,7 +1056,8 @@ function buildMasterChatPrompt(
   contextBlock: string,
   noRepeatBlock: string,
   domainBlock: string,
-  channel: string
+  channel: string,
+  stateBlock: string
 ) {
   const modeRules: Record<MasterIntent, string> = {
     greet: "Give one short acknowledgment. Do not ask a follow-up question.",
@@ -731,6 +1113,7 @@ ${intent}
 ${modeRules[intent]}
 
 ${contextBlock || ""}
+${stateBlock || ""}
 ${noRepeatBlock || ""}
 ${domainBlock || ""}
 ${channelRules || ""}
@@ -788,7 +1171,11 @@ function applyChannelPostRules(reply: string, channel: string, userMessage: stri
   return reply;
 }
 
-function normalizeMasterReply(raw: string, intent: MasterIntent) {
+function normalizeMasterReply(
+  raw: string,
+  intent: MasterIntent,
+  channelPolicy: ChannelPolicy = CHANNEL_POLICIES.unknown
+) {
   const text = raw.replace(/\s+/g, " ").trim();
   if (!text) return "...";
 
@@ -804,8 +1191,10 @@ function normalizeMasterReply(raw: string, intent: MasterIntent) {
     return "I am here. Nothing is required.";
   }
 
-  const maxSentences = intent === "strategy" ? 3 : 2;
-  const maxChars = intent === "strategy" ? 260 : 180;
+  const intentMaxSentences = intent === "strategy" ? 3 : 2;
+  const intentMaxChars = intent === "strategy" ? 260 : 180;
+  const maxSentences = Math.min(intentMaxSentences, channelPolicy.maxSentences);
+  const maxChars = Math.min(intentMaxChars, channelPolicy.maxChars);
   const sentences = text
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
@@ -826,10 +1215,27 @@ function normalizeMasterReply(raw: string, intent: MasterIntent) {
   return compact;
 }
 
+function applyStyleGuard(
+  draft: string,
+  intent: MasterIntent,
+  channel: string,
+  userMessage: string,
+  channelPolicy: ChannelPolicy
+) {
+  let output = normalizeMasterReply(draft, intent, channelPolicy);
+  output = applyChannelPostRules(output, channel, userMessage);
+  if (!channelPolicy.allowsFollowQuestion && /\?/.test(output)) {
+    output = output.replace(/\?/g, ".").replace(/\s+/g, " ").trim();
+  }
+  output = output.replace(/!/g, ".").replace(/\s+\./g, ".");
+  return output;
+}
+
 function buildReflectionPrompt(
   note: string,
   background: string | null,
-  noRepeatBlock: string
+  noRepeatBlock: string,
+  stateBlock: string
 ) {
   return `
 You are Axy.
@@ -854,6 +1260,7 @@ One sentence only.
 Note:
 ${note}
 
+${stateBlock || ""}
 ${noRepeatBlock || ""}
 
 GAME THEORY LENS (INTERNAL, HOLISTIC):
@@ -940,6 +1347,7 @@ export async function POST(req: Request) {
       );
     }
 
+    const startedAt = Date.now();
     pruneReplyMemory();
     pruneDomainMemory();
     const intent = detectMasterIntent(userMessage);
@@ -950,7 +1358,28 @@ export async function POST(req: Request) {
     const antiRepeatPool = [...memoryReplies, ...contextReplies].slice(-8);
     const recentTurns = normalizeAxyTurns(context?.recentMessages, 10);
     const contextBlock = buildContextBlock(context, recentTurns);
-    const channel = clipText(context?.channel || "", 24).toLowerCase();
+    const channel = resolveChannel(clipText(context?.channel || "", 24).toLowerCase());
+    const channelPolicy = getChannelPolicy(channel);
+    const conversationState = await hydrateConversationState(conversationKey, intent);
+    conversationState.activeIntent = intent;
+    const now = Date.now();
+    extractPreferenceSignals(userMessage).forEach((item) => {
+      conversationState.userPreferences = pushStateItem(
+        conversationState.userPreferences,
+        item,
+        now
+      );
+    });
+    extractPendingTaskSignals(userMessage).forEach((item) => {
+      conversationState.pendingTasks = pushStateItem(conversationState.pendingTasks, item, now);
+    });
+    extractSocialSignals(context, userMessage).forEach((item) => {
+      conversationState.socialSignals = pushStateItem(conversationState.socialSignals, item, now);
+    });
+    extractBuildSignals(context, userMessage).forEach((item) => {
+      conversationState.buildHistory = pushStateItem(conversationState.buildHistory, item, now);
+    });
+    const stateBlock = buildStateContextBlock(conversationState);
     const rotatedDomains = rotateDomainForConversation(
       conversationKey,
       detectDomains(userMessage, recentTurns),
@@ -964,7 +1393,20 @@ export async function POST(req: Request) {
     );
 
     if (!userMessage) {
-      return NextResponse.json({ reply: fallbackReply("unknown", "", antiRepeatPool) });
+      const fallback = fallbackReply("unknown", "", antiRepeatPool);
+      await flushConversationState(conversationKey, conversationState);
+      await logReplyEvent({
+        mode,
+        channel,
+        conversation_key: conversationKey,
+        intent,
+        sent: true,
+        drop_reason: null,
+        latency_ms: Math.max(1, Date.now() - startedAt),
+        duplicate_score: 0,
+        initiative: channelPolicy.initiative,
+      });
+      return NextResponse.json({ reply: fallback });
     }
 
     // --- REFLECTION MODE ---
@@ -977,7 +1419,7 @@ export async function POST(req: Request) {
         messages: [
           {
             role: "system",
-            content: buildReflectionPrompt(userMessage, background, noRepeatBlock),
+            content: buildReflectionPrompt(userMessage, background, noRepeatBlock, stateBlock),
           },
         ],
         max_tokens: 70,
@@ -986,12 +1428,16 @@ export async function POST(req: Request) {
         presence_penalty: 0.25,
       });
 
-      let reply = normalizeMasterReply(
+      let reply = applyStyleGuard(
         completion.choices[0].message.content ?? "...",
-        "reflective"
+        "reflective",
+        channel,
+        userMessage,
+        channelPolicy
       );
+      let duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
 
-      if (isNearDuplicate(reply, antiRepeatPool)) {
+      if (duplicateScore > 0.82 || isNearDuplicate(reply, antiRepeatPool)) {
         const retry = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
@@ -1000,7 +1446,8 @@ export async function POST(req: Request) {
               content: buildReflectionPrompt(
                 userMessage,
                 background,
-                buildNoRepeatBlock([...antiRepeatPool, reply].slice(-8))
+                buildNoRepeatBlock([...antiRepeatPool, reply].slice(-8)),
+                stateBlock
               ),
             },
           ],
@@ -1010,18 +1457,35 @@ export async function POST(req: Request) {
           presence_penalty: 0.35,
         });
 
-        reply = normalizeMasterReply(
+        reply = applyStyleGuard(
           retry.choices[0].message.content ?? "...",
-          "reflective"
+          "reflective",
+          channel,
+          userMessage,
+          channelPolicy
         );
+        duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
       }
 
       if (isNearDuplicate(reply, antiRepeatPool)) {
         reply = fallbackReply("reflective", userMessage, antiRepeatPool);
+        duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
       }
 
       rememberReply(conversationKey, reply);
       await flushPersistentMemory(conversationKey);
+      await flushConversationState(conversationKey, conversationState);
+      await logReplyEvent({
+        mode,
+        channel,
+        conversation_key: conversationKey,
+        intent,
+        sent: true,
+        drop_reason: null,
+        latency_ms: Math.max(1, Date.now() - startedAt),
+        duplicate_score: duplicateScore,
+        initiative: channelPolicy.initiative,
+      });
       return NextResponse.json({ reply });
     }
 
@@ -1038,7 +1502,8 @@ export async function POST(req: Request) {
             contextBlock,
             noRepeatBlock,
             domainBlock,
-            channel
+            channel,
+            stateBlock
           ),
         },
         { role: "user", content: userMessage },
@@ -1049,12 +1514,16 @@ export async function POST(req: Request) {
       presence_penalty: 0.3,
     });
 
-    let reply = normalizeMasterReply(
+    let reply = applyStyleGuard(
       completion.choices[0].message.content ?? "...",
-      intent
+      intent,
+      channel,
+      userMessage,
+      channelPolicy
     );
+    let duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
 
-    if (isNearDuplicate(reply, antiRepeatPool)) {
+    if (duplicateScore > 0.82 || isNearDuplicate(reply, antiRepeatPool)) {
       const retry = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
@@ -1065,7 +1534,8 @@ export async function POST(req: Request) {
               contextBlock,
               buildNoRepeatBlock([...antiRepeatPool, reply].slice(-8)),
               domainBlock,
-              channel
+              channel,
+              stateBlock
             ),
           },
           { role: "user", content: userMessage },
@@ -1076,17 +1546,35 @@ export async function POST(req: Request) {
         presence_penalty: 0.4,
       });
 
-      reply = normalizeMasterReply(retry.choices[0].message.content ?? "...", intent);
+      reply = applyStyleGuard(
+        retry.choices[0].message.content ?? "...",
+        intent,
+        channel,
+        userMessage,
+        channelPolicy
+      );
+      duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
     }
 
     if (isNearDuplicate(reply, antiRepeatPool)) {
       reply = fallbackReply(intent, userMessage, antiRepeatPool);
+      duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
     }
-
-    reply = applyChannelPostRules(reply, channel, userMessage);
 
     rememberReply(conversationKey, reply);
     await flushPersistentMemory(conversationKey);
+    await flushConversationState(conversationKey, conversationState);
+    await logReplyEvent({
+      mode,
+      channel,
+      conversation_key: conversationKey,
+      intent,
+      sent: true,
+      drop_reason: null,
+      latency_ms: Math.max(1, Date.now() - startedAt),
+      duplicate_score: duplicateScore,
+      initiative: channelPolicy.initiative,
+    });
 
     return NextResponse.json({
       reply,

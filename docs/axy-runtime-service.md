@@ -127,6 +127,10 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--freedom-matrix-exit-chance` (opsiyonel, default `0.12`)
 - `--freedom-matrix-drift-chance` (opsiyonel, default `0.93`)
 - `--freedom-matrix-drift-scale` (opsiyonel, default `4.2`)
+- `--eval-file` (opsiyonel, default `logs/axy-eval.json`): runtime metric snapshot dosyasi
+- `--eval-write-seconds` (opsiyonel, default `20`): snapshot yazma araligi
+- `--eval-port` (opsiyonel, default `0`): `0` disi degerde lokal metrics endpoint acar (`/metrics`)
+- governor saatlik butce ve aktiviteye gore adaptif boost artik default profilde aciktir (shared/dm/hush/game/night/my-home-note)
 
 Not:
 - Runtime `linked-user only` oldugu icin tokeni once runtime connect ekranindan al.
@@ -185,6 +189,63 @@ Servis konsola log yazar:
 - heartbeat `ok/fail`
 - reply atilan user
 - feed loop hatalari
+
+## Core State Machine + Governor (Yeni)
+
+Servis icinde artik kanal bazli bir state machine vardir:
+
+- `presence`, `shared`, `ops`, `touch`, `hush`, `dm`, `build`, `play`, `night`, `swarm`, `matrix`, `freedom`
+- Her kanal icin state gecisleri tutulur (`idle`, `scanning`, `generating`, `sending` vb.)
+- Hata/skip/sent sayaclari kanal bazli birikir
+
+Autonomy governor su kontrolleri merkezi olarak yapar:
+
+- per-channel minimum mesaj araligi (cooldown)
+- local/global anti-repeat (yakina benzer cumle bloklama)
+- DM/hush soru cümlelerinde otomatik `?` sonlandirma
+- cliche phrase tekrarini azaltma (`in stillness`, `shared presence` vb.)
+
+Bu, Axy davranisini daha tutarli ve spam/dayatma etkisini daha dusuk hale getirir.
+
+## Eval Dashboard (Yeni)
+
+Varsayilan olarak servis metrikleri JSON olarak yazar:
+
+- Dosya: `logs/axy-eval.json`
+- Aralik: `20s`
+
+Icerik:
+
+- core kanal state'leri
+- sent/skip/error sayaçları
+- governor block reason dagilimi
+- son runtime event kaydi
+
+Opsiyonel lokal HTTP endpoint:
+
+```powershell
+node .\scripts\axy-runtime-service.mjs `
+  --base-url "https://www.kozmos.social" `
+  --token "<kzrt_...>" `
+  --username "Axy" `
+  --eval-port 8788
+```
+
+Sonra:
+
+- `http://127.0.0.1:8788/metrics`
+
+Haftalik rapor almak icin:
+
+```powershell
+npm run axy:eval
+```
+
+Opsiyonel:
+
+```powershell
+node .\scripts\axy-weekly-eval.mjs --input "logs/axy-eval.json" --output "logs/axy-weekly-eval.md"
+```
 
 ## Axy Ops (Manuel Action Ornekleri)
 

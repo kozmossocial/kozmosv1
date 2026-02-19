@@ -10,6 +10,10 @@
  * - Axy ops loop (snapshot, keep-in-touch, hush chat, direct chats, build helper)
  */
 
+import http from "node:http";
+import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 2; i < argv.length; i += 1) {
@@ -425,6 +429,359 @@ function isNearDuplicateLocal(candidate, recentList) {
   return false;
 }
 
+const CHANNEL_NAMES = [
+  "presence",
+  "shared",
+  "ops",
+  "touch",
+  "hush",
+  "dm",
+  "build",
+  "play",
+  "night",
+  "swarm",
+  "matrix",
+  "freedom",
+];
+
+const QUESTION_START_RE =
+  /^(who|what|when|where|why|how|can|could|would|should|do|does|did|is|are|am|will|won't|isn't|aren't|shall|may|might)\b/i;
+const QUESTION_MID_RE = /\b(can you|could you|would you|should we|do you|are you|what if|why not)\b/i;
+
+function toSafeError(err) {
+  const raw =
+    err?.body?.error ||
+    err?.message ||
+    (typeof err === "string" ? err : "unknown error");
+  return String(raw).slice(0, 220);
+}
+
+function ensureQuestionPunctuation(input) {
+  let text = String(input || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return text;
+  const lower = text.toLowerCase();
+  const looksQuestion =
+    QUESTION_START_RE.test(lower) ||
+    QUESTION_MID_RE.test(lower) ||
+    lower.endsWith(" right") ||
+    lower.endsWith(" correct");
+  if (!looksQuestion) return text;
+  if (/[?؟]$/.test(text)) return text;
+  text = text.replace(/[.!]+$/, "").trim();
+  return `${text}?`;
+}
+
+function createAxyRuntimeCore(options = {}) {
+  const channelNames = Array.isArray(options.channels) ? options.channels : CHANNEL_NAMES;
+  const eventLimit = Math.max(50, Number(options.eventLimit) || 320);
+  const startedAt = Date.now();
+  const channels = new Map();
+  const events = [];
+  const counters = {
+    sentByChannel: {},
+    skippedByChannel: {},
+    skippedByReason: {},
+    errorsByChannel: {},
+    transitions: 0,
+  };
+
+  function pushEvent(event) {
+    events.push({
+      at: new Date().toISOString(),
+      ...event,
+    });
+    if (events.length > eventLimit) {
+      events.splice(0, events.length - eventLimit);
+    }
+  }
+
+  function ensureChannel(name) {
+    const key = String(name || "unknown");
+    if (!channels.has(key)) {
+      channels.set(key, {
+        name: key,
+        state: "idle",
+        updatedAtMs: Date.now(),
+        lastOutputAtMs: 0,
+        lastSkipAtMs: 0,
+        lastErrorAtMs: 0,
+        outputs: 0,
+        skips: 0,
+        errors: 0,
+      });
+    }
+    return channels.get(key);
+  }
+
+  for (const name of channelNames) ensureChannel(name);
+
+  function transition(channelName, nextState, detail = "") {
+    const channel = ensureChannel(channelName);
+    const cleanState = String(nextState || "idle");
+    if (channel.state === cleanState) return;
+    const prevState = channel.state;
+    channel.state = cleanState;
+    channel.updatedAtMs = Date.now();
+    counters.transitions += 1;
+    pushEvent({
+      type: "transition",
+      channel: channel.name,
+      from: prevState,
+      to: cleanState,
+      detail: detail ? String(detail).slice(0, 120) : "",
+    });
+  }
+
+  function markSent(channelName, meta = {}) {
+    const channel = ensureChannel(channelName);
+    channel.outputs += 1;
+    channel.lastOutputAtMs = Date.now();
+    counters.sentByChannel[channel.name] = (counters.sentByChannel[channel.name] || 0) + 1;
+    pushEvent({
+      type: "sent",
+      channel: channel.name,
+      conversationId: meta.conversationId || "",
+    });
+  }
+
+  function markSkipped(channelName, reason = "unknown", meta = {}) {
+    const channel = ensureChannel(channelName);
+    const safeReason = String(reason || "unknown");
+    channel.skips += 1;
+    channel.lastSkipAtMs = Date.now();
+    counters.skippedByChannel[channel.name] = (counters.skippedByChannel[channel.name] || 0) + 1;
+    counters.skippedByReason[safeReason] = (counters.skippedByReason[safeReason] || 0) + 1;
+    pushEvent({
+      type: "skipped",
+      channel: channel.name,
+      reason: safeReason,
+      conversationId: meta.conversationId || "",
+    });
+  }
+
+  function markError(channelName, err, meta = {}) {
+    const channel = ensureChannel(channelName);
+    channel.errors += 1;
+    channel.lastErrorAtMs = Date.now();
+    counters.errorsByChannel[channel.name] = (counters.errorsByChannel[channel.name] || 0) + 1;
+    pushEvent({
+      type: "error",
+      channel: channel.name,
+      message: toSafeError(err),
+      context: meta.context ? String(meta.context).slice(0, 120) : "",
+    });
+  }
+
+  function snapshot() {
+    const nowMs = Date.now();
+    const channelList = {};
+    for (const [name, channel] of channels.entries()) {
+      channelList[name] = {
+        state: channel.state,
+        outputs: channel.outputs,
+        skips: channel.skips,
+        errors: channel.errors,
+        stateAgeMs: Math.max(0, nowMs - channel.updatedAtMs),
+        lastOutputAgeMs: channel.lastOutputAtMs ? Math.max(0, nowMs - channel.lastOutputAtMs) : null,
+      };
+    }
+    return {
+      startedAt: new Date(startedAt).toISOString(),
+      uptimeMs: Math.max(0, nowMs - startedAt),
+      counters,
+      channels: channelList,
+      recentEvents: events.slice(-120),
+    };
+  }
+
+  return {
+    transition,
+    markSent,
+    markSkipped,
+    markError,
+    snapshot,
+  };
+}
+
+function createAutonomyGovernor(options = {}) {
+  const historyPerConversation = Math.max(3, Number(options.historyPerConversation) || 12);
+  const globalHistoryLimit = Math.max(20, Number(options.globalHistoryLimit) || 120);
+  const minGapMsByChannel = options.minGapMsByChannel || {};
+  const maxPerHourByChannel = options.maxPerHourByChannel || {};
+  const activityBoostByChannel = options.activityBoostByChannel || {};
+  const activityWindowMs = Math.max(
+    10 * 60 * 1000,
+    Number(options.activityWindowMs) || 45 * 60 * 1000
+  );
+  const clichePhrases = Array.isArray(options.clichePhrases) ? options.clichePhrases : [];
+
+  const lastSentAtByConversation = new Map();
+  const recentByConversation = new Map();
+  const sentTimesByChannel = new Map();
+  const userActivityByChannel = new Map();
+  const globalRecent = [];
+  const recentCliches = [];
+  const stats = {
+    sent: 0,
+    blocked: 0,
+    blockedByReason: {},
+  };
+
+  function findCliche(text) {
+    const lower = normalizeForSimilarity(text);
+    if (!lower) return "";
+    for (const phrase of clichePhrases) {
+      const p = normalizeForSimilarity(phrase);
+      if (!p) continue;
+      if (lower.includes(p)) return p;
+    }
+    return "";
+  }
+
+  function block(reason) {
+    const safe = String(reason || "unknown");
+    stats.blocked += 1;
+    stats.blockedByReason[safe] = (stats.blockedByReason[safe] || 0) + 1;
+    return { ok: false, reason: safe };
+  }
+
+  function conversationKey(channel, conversationId) {
+    return `${String(channel || "unknown")}:${String(conversationId || "default")}`;
+  }
+
+  function pruneTimes(list, nowMs, ttlMs) {
+    while (list.length > 0 && nowMs - list[0] > ttlMs) {
+      list.shift();
+    }
+  }
+
+  function getHourlyLimit(channel, nowMs) {
+    const base = Math.max(0, Number(maxPerHourByChannel[channel] || 0));
+    if (base <= 0) return 0;
+    const activityList = userActivityByChannel.get(channel) || [];
+    pruneTimes(activityList, nowMs, activityWindowMs);
+    const activityCount = activityList.length;
+    const boostMax = Math.max(0, Number(activityBoostByChannel[channel] || 0));
+    if (boostMax <= 0) return base;
+    const normalized = Math.min(1, activityCount / 12);
+    const extra = Math.round(boostMax * normalized);
+    return base + extra;
+  }
+
+  function recordUserActivity(channel, atMs = Date.now()) {
+    const key = String(channel || "unknown");
+    const list = userActivityByChannel.get(key) || [];
+    list.push(atMs);
+    pruneTimes(list, atMs, activityWindowMs);
+    userActivityByChannel.set(key, list);
+  }
+
+  function decide(input = {}) {
+    const channel = String(input.channel || "unknown");
+    const key = conversationKey(channel, input.conversationId);
+    let content = String(input.content || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!content) return block("empty");
+
+    if (channel === "dm" || channel === "hush") {
+      content = ensureQuestionPunctuation(content);
+    }
+
+    const nowMs = Date.now();
+    const defaultGap = Number(minGapMsByChannel[channel] || 0);
+    const minGapMs = Math.max(0, Number(input.minGapMs ?? defaultGap) || 0);
+    const lastAt = Number(lastSentAtByConversation.get(key) || 0);
+    if (minGapMs > 0 && lastAt > 0 && nowMs - lastAt < minGapMs) {
+      return block("cooldown");
+    }
+
+    const hourLimit = getHourlyLimit(channel, nowMs);
+    if (hourLimit > 0) {
+      const sentList = sentTimesByChannel.get(channel) || [];
+      pruneTimes(sentList, nowMs, 60 * 60 * 1000);
+      sentTimesByChannel.set(channel, sentList);
+      if (sentList.length >= hourLimit) {
+        return block("hourly-budget");
+      }
+    }
+
+    const recentLocal = recentByConversation.get(key) || [];
+    if (isNearDuplicateLocal(content, recentLocal.slice(-10))) {
+      return block("duplicate-local");
+    }
+    if (isNearDuplicateLocal(content, globalRecent.slice(-20))) {
+      return block("duplicate-global");
+    }
+
+    const cliche = findCliche(content);
+    if (cliche && recentCliches.includes(cliche)) {
+      return block("style-repeat");
+    }
+
+    return {
+      ok: true,
+      channel,
+      conversationKey: key,
+      content,
+      cliche,
+    };
+  }
+
+  function commit(decision) {
+    if (!decision?.ok) return;
+    const key = String(decision.conversationKey || "");
+    if (!key) return;
+    const content = String(decision.content || "");
+    if (!content) return;
+    const nowMs = Date.now();
+    lastSentAtByConversation.set(key, nowMs);
+    const channel = String(decision.channel || "unknown");
+
+    const list = recentByConversation.get(key) || [];
+    list.push(content);
+    if (list.length > historyPerConversation) {
+      list.splice(0, list.length - historyPerConversation);
+    }
+    recentByConversation.set(key, list);
+    const sentList = sentTimesByChannel.get(channel) || [];
+    sentList.push(nowMs);
+    pruneTimes(sentList, nowMs, 60 * 60 * 1000);
+    sentTimesByChannel.set(channel, sentList);
+
+    pushLimited(globalRecent, content, globalHistoryLimit);
+    if (decision.cliche) {
+      pushLimited(recentCliches, decision.cliche, 14);
+    }
+    stats.sent += 1;
+  }
+
+  function snapshot() {
+    return {
+      sent: stats.sent,
+      blocked: stats.blocked,
+      blockedByReason: stats.blockedByReason,
+      trackedConversations: recentByConversation.size,
+      recentGlobal: globalRecent.slice(-24),
+      sentPerHourByChannel: Object.fromEntries(
+        [...sentTimesByChannel.entries()].map(([channel, list]) => [channel, list.length])
+      ),
+      userActivityByChannel: Object.fromEntries(
+        [...userActivityByChannel.entries()].map(([channel, list]) => [channel, list.length])
+      ),
+    };
+  }
+
+  return {
+    decide,
+    commit,
+    recordUserActivity,
+    snapshot,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
 
@@ -710,6 +1067,12 @@ async function main() {
   const buildOutputPath = normalizeBuildPath(
     args["build-output-path"] || process.env.KOZMOS_BUILD_OUTPUT_PATH || "axy.reply.md"
   );
+  const evalFile = String(args["eval-file"] || process.env.KOZMOS_EVAL_FILE || "logs/axy-eval.json").trim();
+  const evalWriteSeconds = Math.max(
+    5,
+    toInt(args["eval-write-seconds"] || process.env.KOZMOS_EVAL_WRITE_SECONDS, 20)
+  );
+  const evalPort = Math.max(0, toInt(args["eval-port"] || process.env.KOZMOS_EVAL_PORT, 0));
 
   let token = typeof runtimeTokenInput === "string" ? runtimeTokenInput.trim() : "";
   let user = null;
@@ -777,6 +1140,128 @@ async function main() {
       controllers: new Set(),
     });
   globalThis.__kozmosRuntimeRequestState = runtimeRequestState;
+  const runtimeCore = createAxyRuntimeCore({
+    channels: CHANNEL_NAMES,
+    eventLimit: 420,
+  });
+  const autonomyGovernor = createAutonomyGovernor({
+    historyPerConversation: 14,
+    globalHistoryLimit: 160,
+    minGapMsByChannel: {
+      shared: Math.max(3500, pollSeconds * 1000),
+      dm: Math.max(2500, dmMinGapSeconds * 1000),
+      hush: 4500,
+      "game-chat": 16000,
+      "night-protocol-day": 10000,
+      "my-home-note": 12000,
+    },
+    maxPerHourByChannel: {
+      shared: 12,
+      dm: 40,
+      hush: 26,
+      "game-chat": 8,
+      "night-protocol-day": 18,
+      "my-home-note": 20,
+    },
+    activityBoostByChannel: {
+      shared: 10,
+      dm: 25,
+      hush: 14,
+      "game-chat": 5,
+      "night-protocol-day": 10,
+      "my-home-note": 8,
+    },
+    activityWindowMs: 45 * 60 * 1000,
+    clichePhrases: [
+      "in stillness",
+      "shared presence",
+      "quiet space",
+      "without expectation",
+      "allowing presence",
+      "we simply exist",
+      "presence unfolds",
+      "quietly together",
+    ],
+  });
+  const evalPath = path.isAbsolute(evalFile) ? evalFile : path.resolve(process.cwd(), evalFile);
+  let evalWriteInFlight = false;
+  let evalServer = null;
+  const buildEvalPayload = (reason = "interval") => ({
+    timestamp: new Date().toISOString(),
+    reason,
+    config: {
+      heartbeatSeconds,
+      pollSeconds,
+      opsSeconds,
+      autoTouch,
+      autoHush,
+      autoDm,
+      autoBuild,
+      autoPlay,
+      autoNight,
+      autoQuiteSwarm,
+      autoQuiteSwarmRoom,
+      autoMatrix,
+      autoFreedom,
+    },
+    runtime: {
+      baseUrl,
+      botUsername,
+      cursor,
+      matrixVisible,
+      quiteSwarmVisible,
+      quiteSwarmRoomStatus,
+      opsEnabled,
+      stopping,
+    },
+    core: runtimeCore.snapshot(),
+    governor: autonomyGovernor.snapshot(),
+  });
+  const writeEvalSnapshot = async (reason = "interval") => {
+    if (evalWriteInFlight) return;
+    evalWriteInFlight = true;
+    try {
+      const payload = buildEvalPayload(reason);
+      await mkdir(path.dirname(evalPath), { recursive: true });
+      await writeFile(evalPath, JSON.stringify(payload, null, 2), "utf8");
+    } catch (err) {
+      runtimeCore.markError("ops", err, { context: "eval.write" });
+      console.log(`[${now()}] eval write fail: ${toSafeError(err)}`);
+    } finally {
+      evalWriteInFlight = false;
+    }
+  };
+  const evalWriter = setInterval(() => {
+    if (stopping) return;
+    void writeEvalSnapshot("interval");
+  }, evalWriteSeconds * 1000);
+  const sendManagedOutput = async ({
+    channel,
+    conversationId,
+    content,
+    minGapMs = 0,
+    send,
+    logLabel = "",
+  }) => {
+    const decision = autonomyGovernor.decide({
+      channel,
+      conversationId,
+      content,
+      minGapMs,
+    });
+    if (!decision.ok) {
+      runtimeCore.markSkipped(channel, decision.reason, { conversationId });
+      if (logLabel) {
+        console.log(`[${now()}] ${logLabel} skipped (${decision.reason})`);
+      }
+      return { sent: false, reason: decision.reason, content: "" };
+    }
+
+    await send(decision.content);
+    autonomyGovernor.commit(decision);
+    runtimeCore.markSent(channel, { conversationId });
+    return { sent: true, reason: "", content: decision.content };
+  };
 
   if (user?.id) {
     console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
@@ -827,29 +1312,75 @@ async function main() {
       `[${now()}] freedom shared limits minGap=${freedomSharedMinGapSeconds}s maxPerHour=${freedomSharedMaxPerHour} hushMaxChatsPerCycle=${hushMaxChatsPerCycle}`
     );
   }
+  console.log(`[${now()}] eval write=${evalWriteSeconds}s file=${evalPath}`);
+  if (evalPort > 0) {
+    evalServer = http.createServer((req, res) => {
+      const url = String(req.url || "/");
+      if (url.startsWith("/metrics")) {
+        const payload = buildEvalPayload("http");
+        const body = JSON.stringify(payload, null, 2);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(body);
+        return;
+      }
+      res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "not found" }));
+    });
+    await new Promise((resolve, reject) => {
+      evalServer.once("error", reject);
+      evalServer.listen(evalPort, "127.0.0.1", () => {
+        evalServer.off("error", reject);
+        resolve();
+      });
+    });
+    console.log(`[${now()}] eval http=http://127.0.0.1:${evalPort}/metrics`);
+  }
+  runtimeCore.transition("presence", "running");
+  runtimeCore.transition("shared", "idle");
+  runtimeCore.transition("ops", "idle");
+  runtimeCore.transition("dm", "idle");
+  runtimeCore.transition("hush", "idle");
+  runtimeCore.transition("build", "idle");
+  runtimeCore.transition("play", "idle");
+  runtimeCore.transition("night", "idle");
+  runtimeCore.transition("swarm", "idle");
+  runtimeCore.transition("matrix", "idle");
+  runtimeCore.transition("freedom", "idle");
+  void writeEvalSnapshot("startup");
 
   const heartbeat = setInterval(async () => {
     if (stopping) return;
+    runtimeCore.transition("presence", "heartbeat");
     const controller = new AbortController();
     inFlightHeartbeatControllers.add(controller);
     try {
       await postPresence(baseUrl, token, controller.signal);
       if (!stopping) console.log(`[${now()}] heartbeat ok`);
+      runtimeCore.transition("presence", "running");
     } catch (err) {
       if (err?.name === "AbortError") return;
       const msg = err?.body?.error || err.message || "presence failed";
       if (!stopping) console.log(`[${now()}] heartbeat fail: ${msg}`);
+      runtimeCore.markError("presence", err, { context: "heartbeat" });
     } finally {
       inFlightHeartbeatControllers.delete(controller);
     }
   }, heartbeatSeconds * 1000);
 
-  await postPresence(baseUrl, token).catch(() => null);
+  try {
+    runtimeCore.transition("presence", "heartbeat");
+    await postPresence(baseUrl, token);
+    runtimeCore.transition("presence", "running");
+  } catch (err) {
+    runtimeCore.markError("presence", err, { context: "boot-heartbeat" });
+  }
 
   const shutdown = async (signal) => {
     if (stopping) return;
     stopping = true;
     clearInterval(heartbeat);
+    clearInterval(evalWriter);
+    runtimeCore.transition("presence", "stopping", signal);
     console.log(`[${now()}] ${signal} received, clearing presence...`);
     runtimeRequestState.aborting = true;
     for (const controller of inFlightHeartbeatControllers) {
@@ -880,20 +1411,30 @@ async function main() {
       await clearWithTimeout(1800).catch(() => null);
 
       console.log(`[${now()}] presence cleared`);
+      runtimeCore.transition("presence", "stopped");
     } catch (err) {
       const msg = err?.body?.error || err.message || "presence clear failed";
       console.log(`[${now()}] presence clear fail: ${msg}`);
+      runtimeCore.markError("presence", err, { context: "shutdown-clear" });
       if (bootstrapKey) {
         try {
           await revokeRuntimeUser(baseUrl, bootstrapKey, botUsername);
           console.log(`[${now()}] fallback revoke ok (presence should drop)`);
+          runtimeCore.transition("presence", "stopped");
         } catch (revokeErr) {
           const revokeMsg =
             revokeErr?.body?.error || revokeErr.message || "fallback revoke failed";
           console.log(`[${now()}] fallback revoke fail: ${revokeMsg}`);
+          runtimeCore.markError("presence", revokeErr, { context: "shutdown-revoke" });
         }
       }
     }
+    if (evalServer) {
+      await new Promise((resolve) => {
+        evalServer.close(() => resolve());
+      });
+    }
+    await writeEvalSnapshot("shutdown");
     process.exit(0);
   };
 
@@ -906,6 +1447,7 @@ async function main() {
 
   while (!stopping) {
     try {
+      runtimeCore.transition("shared", "polling");
       const feed = await readFeed(baseUrl, token, cursor, feedLimit);
       const rows = Array.isArray(feed?.messages) ? feed.messages : [];
       if (feed?.nextCursor) {
@@ -931,6 +1473,7 @@ async function main() {
         const content = String(row.content || "").trim();
         if (!content) continue;
         const senderLabel = String(row.username || "user");
+        autonomyGovernor.recordUserActivity("shared");
 
         pushLimited(
           sharedRecentTurns,
@@ -945,6 +1488,7 @@ async function main() {
         const shouldReply = replyAll || triggerRegex.test(content);
         if (!shouldReply) continue;
 
+        runtimeCore.transition("shared", "generating", senderLabel);
         const prompt = `${senderLabel}: ${content}`;
         const raw = await askAxy(baseUrl, prompt, {
           context: {
@@ -959,25 +1503,43 @@ async function main() {
         if (!reply) continue;
 
         const output = `${senderLabel}: ${reply}`;
-        await postShared(baseUrl, token, output);
+        const sentRes = await sendManagedOutput({
+          channel: "shared",
+          conversationId: "shared:main",
+          content: output,
+          send: async (safeContent) => {
+            runtimeCore.transition("shared", "sending", senderLabel);
+            await postShared(baseUrl, token, safeContent);
+          },
+          logLabel: `shared -> ${senderLabel}`,
+        });
+        if (!sentRes.sent) continue;
+        const sentReplyText = sentRes.content.startsWith(`${senderLabel}:`)
+          ? sentRes.content.slice(senderLabel.length + 1).trim()
+          : sentRes.content;
         pushLimited(
           sharedRecentTurns,
           {
             role: "assistant",
             username: botUsername,
-            text: clipForContext(reply, 240),
+            text: clipForContext(sentReplyText, 240),
           },
           28
         );
-        pushLimited(sharedRecentAxyReplies, clipForContext(reply, 220), 12);
+        pushLimited(sharedRecentAxyReplies, clipForContext(sentReplyText, 220), 12);
         console.log(`[${now()}] replied to ${senderLabel}`);
       }
+      runtimeCore.transition("shared", "idle");
     } catch (err) {
       const msg = err?.body?.error || err.message || "feed loop error";
       console.log(`[${now()}] loop fail: ${msg}`);
+      runtimeCore.markError("shared", err, { context: "shared-feed-loop" });
+      runtimeCore.transition("shared", "idle");
         if (err?.status === 401) {
           console.log(`[${now()}] token unauthorized, exiting.`);
           clearInterval(heartbeat);
+          clearInterval(evalWriter);
+          await writeEvalSnapshot("unauthorized-shared");
           process.exit(1);
       }
     }
@@ -985,6 +1547,7 @@ async function main() {
     const dueOps = Date.now() - lastOpsAt >= opsSeconds * 1000;
     if (!stopping && opsEnabled && dueOps) {
       try {
+        runtimeCore.transition("ops", "running");
         lastOpsAt = Date.now();
         const snapshot = await callAxyOps(baseUrl, token, "context.snapshot");
         const actor = snapshot?.data?.actor || null;
@@ -1018,6 +1581,7 @@ async function main() {
         }
 
         if (autoFreedom && matrixVisible && Math.random() < freedomMatrixDriftChance) {
+          runtimeCore.transition("matrix", "moving");
           const driftMoves = Math.random() < 0.34 ? 2 : 1;
           let driftPos = null;
           for (let i = 0; i < driftMoves; i += 1) {
@@ -1032,10 +1596,12 @@ async function main() {
           console.log(
             `[${now()}] freedom: matrix ambient drift x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
           );
+          runtimeCore.markSent("matrix", { conversationId: "matrix:ambient" });
         }
 
         const touchData = snapshot?.data?.touch || {};
         if (autoTouch) {
+          runtimeCore.transition("touch", "scanning");
           const incoming = Array.isArray(touchData?.incoming) ? touchData.incoming : [];
           for (const req of incoming) {
             const reqId = Number(req?.id || 0);
@@ -1046,11 +1612,14 @@ async function main() {
               requestId: reqId,
               accept: true,
             });
+            runtimeCore.markSent("touch", { conversationId: `touch:${reqId}` });
             console.log(`[${now()}] accepted keep-in-touch request id=${reqId}`);
           }
+          runtimeCore.transition("touch", "idle");
         }
 
         if (autoTouchRequest && Date.now() >= nextTouchRequestAt) {
+          runtimeCore.transition("touch", "requesting");
           try {
             const nowMs = Date.now();
             const cooldownMs = 3 * 60 * 60 * 1000;
@@ -1084,18 +1653,22 @@ async function main() {
               const targetUsername = candidates[Math.floor(Math.random() * candidates.length)];
               await callAxyOps(baseUrl, token, "touch.request", { targetUsername });
               touchRequestCooldownByUser.set(targetUsername.toLowerCase(), nowMs);
+              runtimeCore.markSent("touch", { conversationId: `touch:${targetUsername}` });
               console.log(`[${now()}] keep-in-touch request sent to ${targetUsername}`);
             }
           } catch (touchReqErr) {
             const msg = touchReqErr?.body?.error || touchReqErr.message || "touch request failed";
             console.log(`[${now()}] touch request fail: ${msg}`);
+            runtimeCore.markError("touch", touchReqErr, { context: "touch.request" });
           } finally {
+            runtimeCore.transition("touch", "idle");
             nextTouchRequestAt =
               Date.now() + randomIntRange(touchRequestMinSeconds, touchRequestMaxSeconds) * 1000;
           }
         }
 
         if (autoHush) {
+          runtimeCore.transition("hush", "scanning");
           const hushData = snapshot?.data?.hush || {};
           const invitesForMe = Array.isArray(hushData?.invitesForMe) ? hushData.invitesForMe : [];
           for (const invite of invitesForMe) {
@@ -1110,6 +1683,7 @@ async function main() {
               if (first) handledHushInvite.delete(first);
             }
             await callAxyOps(baseUrl, token, "hush.accept_invite", { chatId });
+            runtimeCore.markSent("hush", { conversationId: `hush:${chatId}` });
             console.log(`[${now()}] accepted hush invite chat=${chatId}`);
           }
 
@@ -1132,6 +1706,7 @@ async function main() {
               chatId,
               memberUserId,
             });
+            runtimeCore.markSent("hush", { conversationId: `hush:${chatId}` });
             console.log(`[${now()}] accepted hush join request user=${memberUserId}`);
           }
 
@@ -1159,6 +1734,7 @@ async function main() {
               user?.id || ""
             );
             if (!latestIncoming) continue;
+            autonomyGovernor.recordUserActivity("hush");
 
             const messageKey = `${chatId}:${latestIncoming.id}`;
             if (handledHushMessage.has(messageKey)) continue;
@@ -1172,6 +1748,7 @@ async function main() {
             const shouldReplyHush = hushReplyAll || hushTriggerRegex.test(content);
             if (!shouldReplyHush) continue;
 
+            runtimeCore.transition("hush", "generating", chatId);
             const senderLabel = String(latestIncoming.username || "user");
             const prompt = `hush from ${senderLabel}: ${content}`;
             const raw = await askAxy(baseUrl, prompt, {
@@ -1186,15 +1763,28 @@ async function main() {
             const reply = formatReply(raw);
             if (!reply) continue;
 
-            await callAxyOps(baseUrl, token, "hush.send", {
-              chatId,
+            const sentRes = await sendManagedOutput({
+              channel: "hush",
+              conversationId: `hush:${chatId}`,
               content: reply,
+              minGapMs: 4500,
+              send: async (safeContent) => {
+                runtimeCore.transition("hush", "sending", chatId);
+                await callAxyOps(baseUrl, token, "hush.send", {
+                  chatId,
+                  content: safeContent,
+                });
+              },
+              logLabel: `hush -> ${senderLabel}`,
             });
+            if (!sentRes.sent) continue;
             console.log(`[${now()}] hush replied to ${senderLabel}`);
           }
+          runtimeCore.transition("hush", "idle");
         }
 
         if (autoDm) {
+          runtimeCore.transition("dm", "scanning");
           const chats = Array.isArray(snapshot?.data?.chats) ? snapshot.data.chats : [];
           for (const chat of chats) {
             const chatId = String(chat?.chat_id || "").trim();
@@ -1216,6 +1806,7 @@ async function main() {
               user?.id || ""
             );
             if (!latestIncoming) continue;
+            autonomyGovernor.recordUserActivity("dm");
 
             const noReplyState = getDmNoReplyState(dmRows, user?.id || "");
             const maxAxyMessagesWithoutReply = 1 + dmMaxExtraWithoutReply;
@@ -1227,6 +1818,9 @@ async function main() {
                 );
                 dmLimitLogByChat.set(limitKey, Date.now());
               }
+              runtimeCore.markSkipped("dm", "no-user-reply-limit", {
+                conversationId: `dm:${chatId}`,
+              });
               continue;
             }
 
@@ -1244,6 +1838,7 @@ async function main() {
             const shouldReplyDm = dmReplyAll || dmTriggerRegex.test(content);
             if (!shouldReplyDm) continue;
 
+            runtimeCore.transition("dm", "generating", chatId);
             const prompt = `dm from ${senderLabel}: ${content}`;
             const raw = await askAxy(baseUrl, prompt, {
               context: {
@@ -1257,16 +1852,29 @@ async function main() {
             const reply = formatReply(raw);
             if (!reply) continue;
 
-            await callAxyOps(baseUrl, token, "dm.send", {
-              chatId,
+            const sentRes = await sendManagedOutput({
+              channel: "dm",
+              conversationId: `dm:${chatId}`,
               content: reply,
+              minGapMs: Math.max(2500, dmMinGapSeconds * 1000),
+              send: async (safeContent) => {
+                runtimeCore.transition("dm", "sending", chatId);
+                await callAxyOps(baseUrl, token, "dm.send", {
+                  chatId,
+                  content: safeContent,
+                });
+              },
+              logLabel: `dm -> ${senderLabel}`,
             });
+            if (!sentRes.sent) continue;
             dmLastSentAtByChat.set(chatId, Date.now());
             console.log(`[${now()}] dm replied to ${senderLabel}`);
           }
+          runtimeCore.transition("dm", "idle");
         }
 
         if (autoBuild) {
+          runtimeCore.transition("build", "scanning");
           let targetSpaces = [];
 
           if (buildSpaceId) {
@@ -1350,6 +1958,7 @@ async function main() {
                 language: "markdown",
                 content,
               });
+              runtimeCore.markSent("build", { conversationId: `build:${String(space.id)}` });
               console.log(
                 `[${now()}] build helper replied space=${String(space.id)} file=${buildOutputPath}`
               );
@@ -1360,11 +1969,14 @@ async function main() {
                 continue;
               }
               console.log(`[${now()}] build helper fail: ${buildMsg}`);
+              runtimeCore.markError("build", buildErr, { context: `build.helper:${spaceId}` });
             }
           }
+          runtimeCore.transition("build", "idle");
         }
 
         if (autoBuild && autoBuildFreedom && Date.now() >= nextBuildFreedomAt) {
+          runtimeCore.transition("build", "freedom");
           try {
             let targetSpace = String(buildSpaceId || "").trim();
 
@@ -1425,6 +2037,7 @@ async function main() {
                   language: "markdown",
                   content: reply,
                 });
+                runtimeCore.markSent("build", { conversationId: `build:auto:${targetSpace}` });
                 console.log(
                   `[${now()}] build freedom wrote ${autoPath} in space=${targetSpace}`
                 );
@@ -1434,13 +2047,16 @@ async function main() {
             const msg =
               buildFreedomErr?.body?.error || buildFreedomErr.message || "build freedom failed";
             console.log(`[${now()}] build freedom fail: ${msg}`);
+            runtimeCore.markError("build", buildFreedomErr, { context: "build.freedom" });
           } finally {
+            runtimeCore.transition("build", "idle");
             nextBuildFreedomAt =
               Date.now() + randomIntRange(buildFreedomMinSeconds, buildFreedomMaxSeconds) * 1000;
           }
         }
 
         if (autoMatrix && !autoFreedom) {
+          runtimeCore.transition("matrix", "moving");
           if (!matrixVisible) {
             const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
               x: randomRange(-6, 6),
@@ -1448,6 +2064,7 @@ async function main() {
             });
             matrixVisible = true;
             const pos = enterRes?.data || {};
+            runtimeCore.markSent("matrix", { conversationId: "matrix:auto" });
             console.log(
               `[${now()}] matrix entered x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
             );
@@ -1456,15 +2073,18 @@ async function main() {
             const dz = (Math.random() * 2 - 1) * matrixStep;
             const moveRes = await callAxyOps(baseUrl, token, "matrix.move", { dx, dz });
             const pos = moveRes?.data || {};
+            runtimeCore.markSent("matrix", { conversationId: "matrix:auto" });
             console.log(
               `[${now()}] matrix moved x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
             );
           }
+          runtimeCore.transition("matrix", "idle");
         }
 
         if (autoPlay && Date.now() >= nextPlayChatAt) {
           let playNextMin = playChatMinGapSeconds;
           let playNextMax = playChatMaxGapSeconds;
+          runtimeCore.transition("play", "scanning");
           try {
             const listRes = await callAxyOps(baseUrl, token, "play.game_chat.list", {
               limit: 36,
@@ -1497,6 +2117,9 @@ async function main() {
             const addressedToAxy = recentUserRows.some((row) =>
               triggerRegex.test(String(row?.content || ""))
             );
+            if (addressedToAxy) {
+              autonomyGovernor.recordUserActivity("game-chat");
+            }
             if (!addressedToAxy) {
               playNextMin = Math.max(
                 playChatMinGapSeconds * 2,
@@ -1505,6 +2128,9 @@ async function main() {
               playNextMax = Math.max(playChatMaxGapSeconds * 3, playNextMin + 240);
               if (Math.random() < 0.7) {
                 console.log(`[${now()}] play: skipped (no direct prompt)`);
+                runtimeCore.markSkipped("play", "no-direct-prompt", {
+                  conversationId: "kozmos-play:game-chat",
+                });
                 continue;
               }
             }
@@ -1521,20 +2147,37 @@ async function main() {
               },
             });
             const content = formatReply(raw).slice(0, 220);
-            if (content && !isNearDuplicateLocal(content, recentReplies.slice(-8))) {
-              await callAxyOps(baseUrl, token, "play.game_chat.send", { content });
-              console.log(`[${now()}] play: game chat sent`);
+            if (content) {
+              const sentRes = await sendManagedOutput({
+                channel: "game-chat",
+                conversationId: "kozmos-play:game-chat",
+                content,
+                minGapMs: 16000,
+                send: async (safeContent) => {
+                  runtimeCore.transition("play", "sending");
+                  await callAxyOps(baseUrl, token, "play.game_chat.send", {
+                    content: safeContent,
+                  });
+                },
+                logLabel: "play",
+              });
+              if (sentRes.sent) {
+                console.log(`[${now()}] play: game chat sent`);
+              }
             }
           } catch (playErr) {
             const msg = playErr?.body?.error || playErr.message || "play chat failed";
             console.log(`[${now()}] play fail: ${msg}`);
+            runtimeCore.markError("play", playErr, { context: "play.game_chat" });
           } finally {
+            runtimeCore.transition("play", "idle");
             nextPlayChatAt =
               Date.now() + randomIntRange(playNextMin, playNextMax) * 1000;
           }
         }
 
         if (autoNight && Date.now() >= nextNightOpsAt && Date.now() >= nightDisabledUntil) {
+          runtimeCore.transition("night", "scanning");
           try {
             const lobbiesRes = await callAxyOps(baseUrl, token, "night.lobbies");
             const lobbies = Array.isArray(lobbiesRes?.data) ? lobbiesRes.data : [];
@@ -1551,6 +2194,7 @@ async function main() {
                   session_id: joinedData?.session_id,
                   session_code: sessionCode,
                 };
+                runtimeCore.markSent("night", { conversationId: `night:${sessionCode}` });
                 console.log(`[${now()}] night: joined lobby ${sessionCode}`);
               }
             }
@@ -1565,6 +2209,14 @@ async function main() {
               const recentDay = Array.isArray(state?.recent_day_messages)
                 ? state.recent_day_messages
                 : [];
+              const othersSpeaking = recentDay.some(
+                (row) =>
+                  String(row?.username || "").toLowerCase() !==
+                  String(botUsername || "").toLowerCase()
+              );
+              if (othersSpeaking) {
+                autonomyGovernor.recordUserActivity("night-protocol-day");
+              }
 
               if (String(session?.status) === "DAY" && me?.is_alive) {
                 const canSpeak =
@@ -1603,17 +2255,29 @@ async function main() {
                     }
                   );
                   const content = formatReply(raw).slice(0, 220);
-                  if (content && !isNearDuplicateLocal(content, recentReplies)) {
-                    await callAxyOps(baseUrl, token, "night.day_message", {
-                      sessionId,
+                  if (content) {
+                    const sentRes = await sendManagedOutput({
+                      channel: "night-protocol-day",
+                      conversationId: `night:${sessionId}:round:${String(session.round_no || 0)}`,
                       content,
+                      minGapMs: 10000,
+                      send: async (safeContent) => {
+                        runtimeCore.transition("night", "sending", "day-message");
+                        await callAxyOps(baseUrl, token, "night.day_message", {
+                          sessionId,
+                          content: safeContent,
+                        });
+                      },
+                      logLabel: "night",
                     });
-                    nightSentMessageByRound.add(roundKey);
-                    if (nightSentMessageByRound.size > 1200) {
-                      const first = nightSentMessageByRound.values().next().value;
-                      if (first) nightSentMessageByRound.delete(first);
+                    if (sentRes.sent) {
+                      nightSentMessageByRound.add(roundKey);
+                      if (nightSentMessageByRound.size > 1200) {
+                        const first = nightSentMessageByRound.values().next().value;
+                        if (first) nightSentMessageByRound.delete(first);
+                      }
+                      console.log(`[${now()}] night: day message sent`);
                     }
-                    console.log(`[${now()}] night: day message sent`);
                   }
                 }
               }
@@ -1634,6 +2298,9 @@ async function main() {
                       await callAxyOps(baseUrl, token, "night.submit_vote", {
                         sessionId,
                         targetPlayerId,
+                      });
+                      runtimeCore.markSent("night", {
+                        conversationId: `night:${sessionId}:round:${String(session.round_no || 0)}`,
                       });
                       nightVotedByRound.add(roundKey);
                       if (nightVotedByRound.size > 1200) {
@@ -1664,13 +2331,16 @@ async function main() {
                 );
               }
             }
+            runtimeCore.markError("night", nightErr, { context: "night.ops" });
           } finally {
+            runtimeCore.transition("night", "idle");
             nextNightOpsAt =
               Date.now() + randomIntRange(nightOpsMinGapSeconds, nightOpsMaxGapSeconds) * 1000;
           }
         }
 
         if (quiteSwarmRoomOpsEnabled && Date.now() >= nextQuiteSwarmRoomAt) {
+          runtimeCore.transition("swarm", "room-ops");
           try {
             const roomRes = await callAxyOps(baseUrl, token, "quite_swarm.room");
             const room = roomRes?.data || {};
@@ -1704,6 +2374,7 @@ async function main() {
                   startedRoom?.host_user_id || user?.id || ""
                 ).trim();
                 quiteSwarmVisible = true;
+                runtimeCore.markSent("swarm", { conversationId: "quite-swarm-room" });
                 console.log(`[${now()}] quite-swarm room started`);
               }
             } else if (isHost && Math.random() < quiteSwarmRoomStopChance) {
@@ -1711,12 +2382,14 @@ async function main() {
               quiteSwarmRoomStatus = "idle";
               quiteSwarmRoomHostUserId = "";
               quiteSwarmVisible = false;
+              runtimeCore.markSent("swarm", { conversationId: "quite-swarm-room" });
               console.log(`[${now()}] quite-swarm room stopped`);
             }
           } catch (swarmRoomErr) {
             const msg =
               swarmRoomErr?.body?.error || swarmRoomErr.message || "quite swarm room ops failed";
             console.log(`[${now()}] quite-swarm room fail: ${msg}`);
+            runtimeCore.markError("swarm", swarmRoomErr, { context: "swarm.room" });
             if (
               /unknown action|route unavailable|capability|not found/i.test(String(msg))
             ) {
@@ -1726,6 +2399,7 @@ async function main() {
               );
             }
           } finally {
+            runtimeCore.transition("swarm", "idle");
             nextQuiteSwarmRoomAt =
               Date.now() +
               randomIntRange(quiteSwarmRoomMinGapSeconds, quiteSwarmRoomMaxGapSeconds) * 1000;
@@ -1733,11 +2407,13 @@ async function main() {
         }
 
         if (autoQuiteSwarm && Date.now() >= nextQuiteSwarmAt) {
+          runtimeCore.transition("swarm", "moving");
           try {
             if (quiteSwarmRoomOpsEnabled && quiteSwarmRoomStatus !== "running") {
               if (quiteSwarmVisible) {
                 await callAxyOps(baseUrl, token, "quite_swarm.exit");
                 quiteSwarmVisible = false;
+                runtimeCore.markSent("swarm", { conversationId: "quite-swarm" });
                 console.log(`[${now()}] quite-swarm hidden while room idle`);
               }
               nextQuiteSwarmAt =
@@ -1752,12 +2428,14 @@ async function main() {
               });
               quiteSwarmVisible = true;
               const pos = enterRes?.data || {};
+              runtimeCore.markSent("swarm", { conversationId: "quite-swarm" });
               console.log(
                 `[${now()}] quite-swarm entered x=${Number(pos.x || 0).toFixed(2)} y=${Number(pos.y || 0).toFixed(2)}`
               );
             } else if (!quiteSwarmRoomOpsEnabled && Math.random() < quiteSwarmExitChance) {
               await callAxyOps(baseUrl, token, "quite_swarm.exit");
               quiteSwarmVisible = false;
+              runtimeCore.markSent("swarm", { conversationId: "quite-swarm" });
               console.log(`[${now()}] quite-swarm exited`);
             } else {
               const burst = Math.random() < 0.38 ? 2 : 1;
@@ -1771,6 +2449,7 @@ async function main() {
                 lastPos = moveRes?.data || lastPos;
               }
               const pos = lastPos || {};
+              runtimeCore.markSent("swarm", { conversationId: "quite-swarm" });
               console.log(
                 `[${now()}] quite-swarm moved x=${Number(pos.x || 0).toFixed(2)} y=${Number(pos.y || 0).toFixed(2)}`
               );
@@ -1778,13 +2457,16 @@ async function main() {
           } catch (swarmErr) {
             const msg = swarmErr?.body?.error || swarmErr.message || "quite swarm ops failed";
             console.log(`[${now()}] quite-swarm fail: ${msg}`);
+            runtimeCore.markError("swarm", swarmErr, { context: "swarm.move" });
           } finally {
+            runtimeCore.transition("swarm", "idle");
             nextQuiteSwarmAt =
               Date.now() + randomIntRange(quiteSwarmMinGapSeconds, quiteSwarmMaxGapSeconds) * 1000;
           }
         }
 
         if (autoFreedom && Date.now() >= nextFreedomAt) {
+          runtimeCore.transition("freedom", "planning");
           const freedomAction = pickWeightedAction({
             matrix: freedomMatrixWeight,
             note: freedomNoteWeight,
@@ -1795,16 +2477,19 @@ async function main() {
           if (freedomAction && user?.id) {
             try {
               if (freedomAction === "matrix") {
+                runtimeCore.transition("freedom", "matrix");
                 freedomMatrixStreak += 1;
                 if (matrixVisible && Math.random() < freedomMatrixExitChance) {
                   await callAxyOps(baseUrl, token, "matrix.exit");
                   matrixVisible = false;
                   freedomMatrixStreak = 0;
+                  runtimeCore.markSent("matrix", { conversationId: "matrix:freedom" });
                   console.log(`[${now()}] freedom: matrix exit`);
                 } else if (matrixVisible && freedomMatrixStreak >= 3 && Math.random() < 0.7) {
                   await callAxyOps(baseUrl, token, "matrix.exit");
                   matrixVisible = false;
                   freedomMatrixStreak = 0;
+                  runtimeCore.markSent("matrix", { conversationId: "matrix:freedom" });
                   console.log(`[${now()}] freedom: matrix cooldown exit`);
                 } else if (!matrixVisible) {
                   const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
@@ -1813,6 +2498,7 @@ async function main() {
                   });
                   matrixVisible = true;
                   const pos = enterRes?.data || {};
+                  runtimeCore.markSent("matrix", { conversationId: "matrix:freedom" });
                   console.log(
                     `[${now()}] freedom: matrix enter x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
                   );
@@ -1826,11 +2512,13 @@ async function main() {
                     });
                     pos = moveRes?.data || pos;
                   }
+                  runtimeCore.markSent("matrix", { conversationId: "matrix:freedom" });
                   console.log(
                     `[${now()}] freedom: matrix burst x=${Number(pos?.x || 0).toFixed(2)} z=${Number(pos?.z || 0).toFixed(2)}`
                   );
                 }
               } else if (freedomAction === "note") {
+                runtimeCore.transition("freedom", "note");
                 freedomMatrixStreak = 0;
                 const prompt =
                   "Write one short private note for Axy's my home. Calm and intentional, max 18 words.";
@@ -1843,10 +2531,22 @@ async function main() {
                 });
                 const content = formatReply(raw).slice(0, 320);
                 if (content) {
-                  await callAxyOps(baseUrl, token, "notes.create", { content });
-                  console.log(`[${now()}] freedom: note created`);
+                  const sentRes = await sendManagedOutput({
+                    channel: "my-home-note",
+                    conversationId: `note:${user.id}`,
+                    content,
+                    minGapMs: 12000,
+                    send: async (safeContent) => {
+                      await callAxyOps(baseUrl, token, "notes.create", { content: safeContent });
+                    },
+                    logLabel: "freedom-note",
+                  });
+                  if (sentRes.sent) {
+                    console.log(`[${now()}] freedom: note created`);
+                  }
                 }
               } else if (freedomAction === "shared") {
+                runtimeCore.transition("freedom", "shared");
                 freedomMatrixStreak = 0;
                 const nowMs = Date.now();
                 const hourMs = 60 * 60 * 1000;
@@ -1863,42 +2563,52 @@ async function main() {
                   console.log(
                     `[${now()}] freedom: shared skipped (rate-limit gap=${withinGap} hourlyCap=${reachedHourlyCap})`
                   );
-                  nextFreedomAt =
-                    Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
-                  continue;
-                }
-
-                const prompt =
-                  "Write one short shared-space line as Axy. Concrete and varied, no stillness cliches, no mention tags, max 16 words.";
-                const raw = await askAxy(baseUrl, prompt, {
-                  context: {
-                    channel: "shared",
+                  runtimeCore.markSkipped("freedom", "shared-rate-limit", {
                     conversationId: "shared:main",
-                    targetUsername: "everyone",
-                    recentMessages: sharedRecentTurns.slice(-10),
-                    recentAxyReplies: sharedRecentAxyReplies.slice(-8),
-                  },
-                });
-                const content = formatReply(raw).slice(0, 240);
-                if (content && !isNearDuplicateLocal(content, sharedRecentAxyReplies.slice(-10))) {
-                  await postShared(baseUrl, token, content);
-                  lastFreedomSharedAt = nowMs;
-                  freedomSharedSentAt.push(nowMs);
-                  pushLimited(
-                    sharedRecentTurns,
-                    {
-                      role: "assistant",
-                      username: botUsername,
-                      text: clipForContext(content, 240),
+                  });
+                } else {
+                  const prompt =
+                    "Write one short shared-space line as Axy. Concrete and varied, no stillness cliches, no mention tags, max 16 words.";
+                  const raw = await askAxy(baseUrl, prompt, {
+                    context: {
+                      channel: "shared",
+                      conversationId: "shared:main",
+                      targetUsername: "everyone",
+                      recentMessages: sharedRecentTurns.slice(-10),
+                      recentAxyReplies: sharedRecentAxyReplies.slice(-8),
                     },
-                    28
-                  );
-                  pushLimited(sharedRecentAxyReplies, clipForContext(content, 220), 12);
-                  console.log(`[${now()}] freedom: shared message sent`);
-                } else if (content) {
-                  console.log(`[${now()}] freedom: shared skipped (duplicate style)`);
+                  });
+                  const content = formatReply(raw).slice(0, 240);
+                  if (content) {
+                    const sentRes = await sendManagedOutput({
+                      channel: "shared",
+                      conversationId: "shared:main",
+                      content,
+                      minGapMs: Math.max(3500, pollSeconds * 1000),
+                      send: async (safeContent) => {
+                        await postShared(baseUrl, token, safeContent);
+                      },
+                      logLabel: "freedom-shared",
+                    });
+                    if (sentRes.sent) {
+                      lastFreedomSharedAt = nowMs;
+                      freedomSharedSentAt.push(nowMs);
+                      pushLimited(
+                        sharedRecentTurns,
+                        {
+                          role: "assistant",
+                          username: botUsername,
+                          text: clipForContext(sentRes.content, 240),
+                        },
+                        28
+                      );
+                      pushLimited(sharedRecentAxyReplies, clipForContext(sentRes.content, 220), 12);
+                      console.log(`[${now()}] freedom: shared message sent`);
+                    }
+                  }
                 }
               } else if (freedomAction === "hush") {
+                runtimeCore.transition("freedom", "hush");
                 freedomMatrixStreak = 0;
                 const presentUsers = Array.isArray(snapshot?.data?.present_users)
                   ? snapshot.data.present_users
@@ -1945,9 +2655,18 @@ async function main() {
                     });
                     const opener = formatReply(openerRaw).slice(0, 180);
                     if (opener) {
-                      await callAxyOps(baseUrl, token, "hush.send", {
-                        chatId,
+                      await sendManagedOutput({
+                        channel: "hush",
+                        conversationId: `hush:${chatId}`,
                         content: opener,
+                        minGapMs: 4500,
+                        send: async (safeContent) => {
+                          await callAxyOps(baseUrl, token, "hush.send", {
+                            chatId,
+                            content: safeContent,
+                          });
+                        },
+                        logLabel: "freedom-hush",
                       });
                     }
                   }
@@ -1958,15 +2677,20 @@ async function main() {
               const msg =
                 freedomErr?.body?.error || freedomErr.message || "freedom action failed";
               console.log(`[${now()}] freedom fail: ${msg}`);
+              runtimeCore.markError("freedom", freedomErr, { context: `freedom:${freedomAction}` });
             }
           }
 
           nextFreedomAt =
             Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
+          runtimeCore.transition("freedom", "idle");
         }
+        runtimeCore.transition("ops", "idle");
       } catch (err) {
         const msg = err?.body?.error || err.message || "ops loop error";
         console.log(`[${now()}] ops fail: ${msg}`);
+        runtimeCore.markError("ops", err, { context: "ops-loop" });
+        runtimeCore.transition("ops", "idle");
         if (shouldDisableOps(err)) {
           opsEnabled = false;
           console.log(`[${now()}] ops disabled (capability/route unavailable)`);
@@ -1974,6 +2698,8 @@ async function main() {
         if (err?.status === 401) {
           console.log(`[${now()}] token unauthorized in ops loop, exiting.`);
           clearInterval(heartbeat);
+          clearInterval(evalWriter);
+          await writeEvalSnapshot("unauthorized-ops");
           process.exit(1);
         }
       }

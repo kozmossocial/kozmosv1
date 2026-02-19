@@ -10,6 +10,100 @@ const QUITE_SWARM_WORLD_LIMIT = 48;
 const QUITE_SWARM_ROOM_ID = "main";
 const QUITE_SWARM_ROOM_START_DELAY_MS = 1800;
 const QUITE_SWARM_ROOM_DURATION_MS = 75 * 1000;
+const AXY_OPS_IDEMPOTENCY_TTL_MS = 2 * 60 * 1000;
+
+const ACTION_ALIASES: Record<string, string> = {
+  "snapshot": "context.snapshot",
+  "ctx.snapshot": "context.snapshot",
+  "notes.add": "notes.create",
+  "notes.remove": "notes.delete",
+  "touch.accept": "touch.respond",
+  "touch.decline": "touch.respond",
+  "hush.messages.list": "hush.messages",
+  "hush.message.send": "hush.send",
+  "dm.messages.list": "dm.messages",
+  "dm.message.send": "dm.send",
+  "build.space.list": "build.spaces.list",
+  "build.files.write": "build.files.save",
+  "matrix.color": "matrix.set_color",
+  "swarm.enter": "quite_swarm.enter",
+  "swarm.exit": "quite_swarm.exit",
+  "swarm.move": "quite_swarm.move",
+  "swarm.world": "quite_swarm.world",
+  "swarm.room": "quite_swarm.room",
+  "swarm.room.start": "quite_swarm.room_start",
+  "swarm.room.stop": "quite_swarm.room_stop",
+  "play.gamechat.list": "play.game_chat.list",
+  "play.gamechat.send": "play.game_chat.send",
+};
+
+const KNOWN_ACTIONS = new Set<string>([
+  "context.snapshot",
+  "notes.list",
+  "notes.create",
+  "notes.delete",
+  "touch.list",
+  "touch.request",
+  "touch.respond",
+  "touch.remove",
+  "touch.order",
+  "hush.list",
+  "hush.create_with",
+  "hush.invite",
+  "hush.request_join",
+  "hush.accept_request",
+  "hush.decline_request",
+  "hush.accept_invite",
+  "hush.decline_invite",
+  "hush.leave",
+  "hush.remove_member",
+  "hush.messages",
+  "hush.send",
+  "build.spaces.list",
+  "build.spaces.create",
+  "build.spaces.update",
+  "build.spaces.delete",
+  "build.space.snapshot",
+  "build.files.list",
+  "build.files.create",
+  "build.files.save",
+  "build.files.delete",
+  "build.access.list",
+  "build.access.grant",
+  "build.access.revoke",
+  "matrix.profile",
+  "matrix.set_color",
+  "matrix.position",
+  "matrix.enter",
+  "matrix.exit",
+  "matrix.move",
+  "matrix.world",
+  "quite_swarm.position",
+  "quite_swarm.enter",
+  "quite_swarm.exit",
+  "quite_swarm.move",
+  "quite_swarm.world",
+  "quite_swarm.room",
+  "quite_swarm.room_start",
+  "quite_swarm.room_stop",
+  "presence.list",
+  "play.catalog",
+  "play.hint",
+  "play.game_chat.list",
+  "play.game_chat.send",
+  "night.lobbies",
+  "night.join_by_code",
+  "night.join_random_lobby",
+  "night.state",
+  "night.day_message",
+  "night.submit_vote",
+  "dm.list",
+  "dm.open",
+  "dm.messages",
+  "dm.send",
+  "dm.remove",
+  "dm.order",
+]);
 
 type TouchLinkRow = {
   id: number;
@@ -156,6 +250,91 @@ function asSafeUuid(value: unknown) {
 
 function asSafeBool(value: unknown, fallback = false) {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function canonicalizeAction(action: string) {
+  const clean = asTrimmedString(action).toLowerCase();
+  if (!clean) return "";
+  return ACTION_ALIASES[clean] || clean;
+}
+
+function normalizePayload(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {} as Record<string, unknown>;
+  }
+  return value as Record<string, unknown>;
+}
+
+function pickDeclineDefault(
+  rawAction: string,
+  action: string,
+  payload: Record<string, unknown>
+) {
+  if (action !== "touch.respond") return payload;
+  if (Object.prototype.hasOwnProperty.call(payload, "accept")) return payload;
+  if (rawAction.trim().toLowerCase() === "touch.decline") {
+    return { ...payload, accept: false };
+  }
+  if ((payload as { decline?: unknown }).decline === true) {
+    return { ...payload, accept: false };
+  }
+  return payload;
+}
+
+type IdempotencyCacheEntry = {
+  at: number;
+  status: number;
+  body: unknown;
+};
+
+function getOpsIdempotencyStore() {
+  const g = globalThis as unknown as {
+    __axyOpsIdempotencyStore?: Map<string, IdempotencyCacheEntry>;
+  };
+  if (!g.__axyOpsIdempotencyStore) {
+    g.__axyOpsIdempotencyStore = new Map<string, IdempotencyCacheEntry>();
+  }
+  return g.__axyOpsIdempotencyStore;
+}
+
+function pruneOpsIdempotencyStore(nowMs = Date.now()) {
+  const store = getOpsIdempotencyStore();
+  for (const [key, entry] of store.entries()) {
+    if (nowMs - entry.at > AXY_OPS_IDEMPOTENCY_TTL_MS) {
+      store.delete(key);
+    }
+  }
+}
+
+function buildIdempotencyKey(
+  actorId: string,
+  action: string,
+  payload: Record<string, unknown>,
+  explicitKey: string
+) {
+  const raw = explicitKey.trim();
+  if (raw) return `${actorId}:${action}:${raw}`;
+  const payloadKey = JSON.stringify(payload);
+  return `${actorId}:${action}:${payloadKey}`;
+}
+
+function classifyOpsError(detail: string, status: number) {
+  if (status >= 500) {
+    return { retryable: true, retry_class: "transient" as const };
+  }
+  if (status === 404) {
+    return { retryable: false, retry_class: "not_found" as const };
+  }
+  if (status === 403) {
+    return { retryable: false, retry_class: "forbidden" as const };
+  }
+  if (status === 429) {
+    return { retryable: true, retry_class: "throttled" as const };
+  }
+  if (/timeout|temporar|deadlock|connection|network|unavailable/i.test(detail)) {
+    return { retryable: true, retry_class: "transient" as const };
+  }
+  return { retryable: false, retry_class: "invalid_request" as const };
 }
 
 function normalizeBuildPath(input: unknown) {
@@ -2812,38 +2991,80 @@ export async function POST(req: Request) {
 
     const actor = auth.actor;
     const body = await req.json().catch(() => ({}));
-    const action = asTrimmedString(body?.action);
-    const payload = body?.payload ?? {};
+    const rawAction = asTrimmedString(body?.action);
+    const action = canonicalizeAction(rawAction);
+    let payload = normalizePayload(body?.payload);
+    payload = pickDeclineDefault(rawAction, action, payload);
+    const idempotencyKeyHeader = asTrimmedString(req.headers.get("x-idempotency-key"));
+    const idempotencyKeyBody = asTrimmedString(
+      (body as { idempotencyKey?: unknown; idempotency_key?: unknown })?.idempotencyKey ??
+        (body as { idempotency_key?: unknown })?.idempotency_key
+    );
+    const idempotencyKey = buildIdempotencyKey(
+      actor.userId,
+      action,
+      payload,
+      idempotencyKeyHeader || idempotencyKeyBody
+    );
+    pruneOpsIdempotencyStore();
+    const idempotencyStore = getOpsIdempotencyStore();
+    const cached = idempotencyStore.get(idempotencyKey);
+    if (cached) {
+      return NextResponse.json(
+        { ...(cached.body as Record<string, unknown>), idempotent: true },
+        { status: cached.status }
+      );
+    }
+
+    const respond = (status: number, data: Record<string, unknown>) => {
+      idempotencyStore.set(idempotencyKey, {
+        at: Date.now(),
+        status,
+        body: data,
+      });
+      return NextResponse.json(data, { status });
+    };
 
     if (!action) {
-      return NextResponse.json({ error: "action required" }, { status: 400 });
+      return respond(400, { error: "action required" });
+    }
+
+    if (!KNOWN_ACTIONS.has(action)) {
+      const hint = [...KNOWN_ACTIONS]
+        .filter((name) => name.startsWith(action.split(".")[0] || ""))
+        .slice(0, 12);
+      return respond(400, {
+        error: "unknown action",
+        action,
+        known_actions_sample: hint,
+      });
     }
 
     if (action === "context.snapshot") {
       const snapshot = await buildSnapshot(actor);
-      return NextResponse.json({ ok: true, action, data: snapshot });
+      return respond(200, { ok: true, action, data: snapshot });
     }
 
     if (action === "notes.list") {
       const notes = await listNotes(actor.userId);
-      return NextResponse.json({ ok: true, action, data: notes });
+      return respond(200, { ok: true, action, data: notes });
     }
 
     if (action === "notes.create") {
       const content = asTrimmedString((payload as { content?: unknown })?.content);
       const note = await createNote(actor.userId, content);
-      return NextResponse.json({ ok: true, action, data: note });
+      return respond(200, { ok: true, action, data: note });
     }
 
     if (action === "notes.delete") {
       const noteId = asTrimmedString((payload as { noteId?: unknown })?.noteId);
       const result = await deleteNote(actor.userId, noteId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "touch.list") {
       const list = await listTouch(actor.userId);
-      return NextResponse.json({ ok: true, action, data: list });
+      return respond(200, { ok: true, action, data: list });
     }
 
     if (action === "touch.request") {
@@ -2851,20 +3072,20 @@ export async function POST(req: Request) {
         (payload as { targetUsername?: unknown })?.targetUsername
       );
       const result = await requestTouch(actor.userId, targetUsername);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "touch.respond") {
       const requestId = Number((payload as { requestId?: unknown })?.requestId);
       const accept = Boolean((payload as { accept?: unknown })?.accept);
       const result = await respondTouch(actor.userId, requestId, accept);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "touch.remove") {
       const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
       const result = await removeTouch(actor.userId, targetUserId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "touch.order") {
@@ -2874,89 +3095,89 @@ export async function POST(req: Request) {
           )
         : [];
       const result = await updateTouchOrder(actor.userId, orderedUserIds);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.list") {
       const hush = await listHush(actor.userId);
-      return NextResponse.json({ ok: true, action, data: hush });
+      return respond(200, { ok: true, action, data: hush });
     }
 
     if (action === "hush.create_with") {
       const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
       const chat = await createHushWith(actor.userId, targetUserId);
-      return NextResponse.json({ ok: true, action, data: chat });
+      return respond(200, { ok: true, action, data: chat });
     }
 
     if (action === "hush.invite") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
       const result = await inviteToHush(actor.userId, chatId, targetUserId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.request_join") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const result = await requestHushJoin(actor.userId, chatId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.accept_request") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const memberUserId = asSafeUuid((payload as { memberUserId?: unknown })?.memberUserId);
       const result = await resolveHushRequest(actor.userId, chatId, memberUserId, true);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.decline_request") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const memberUserId = asSafeUuid((payload as { memberUserId?: unknown })?.memberUserId);
       const result = await resolveHushRequest(actor.userId, chatId, memberUserId, false);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.accept_invite") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const result = await respondToHushInvite(actor.userId, chatId, true);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.decline_invite") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const result = await respondToHushInvite(actor.userId, chatId, false);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.leave") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const result = await leaveHushChat(actor.userId, chatId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.remove_member") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const memberUserId = asSafeUuid((payload as { memberUserId?: unknown })?.memberUserId);
       const result = await removeHushMember(actor.userId, chatId, memberUserId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "hush.messages") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const limit = Number((payload as { limit?: unknown })?.limit ?? 200);
       const messages = await listHushMessages(actor.userId, chatId, limit);
-      return NextResponse.json({ ok: true, action, data: messages });
+      return respond(200, { ok: true, action, data: messages });
     }
 
     if (action === "hush.send") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const content = asTrimmedString((payload as { content?: unknown })?.content);
       const message = await sendHushMessage(actor.userId, chatId, content);
-      return NextResponse.json({ ok: true, action, data: message });
+      return respond(200, { ok: true, action, data: message });
     }
 
     if (action === "build.spaces.list") {
       const spaces = await listBuildSpaces(actor.userId);
-      return NextResponse.json({ ok: true, action, data: spaces });
+      return respond(200, { ok: true, action, data: spaces });
     }
 
     if (action === "build.spaces.create") {
@@ -2968,7 +3189,7 @@ export async function POST(req: Request) {
         ? ((payload as { description: string }).description || "").slice(0, 4000)
         : "";
       const space = await createBuildSpace(actor.userId, title, languagePref, description);
-      return NextResponse.json({ ok: true, action, data: space });
+      return respond(200, { ok: true, action, data: space });
     }
 
     if (action === "build.spaces.update") {
@@ -2992,25 +3213,25 @@ export async function POST(req: Request) {
             : undefined,
       };
       const space = await updateBuildSpace(actor.userId, spaceId, updates);
-      return NextResponse.json({ ok: true, action, data: space });
+      return respond(200, { ok: true, action, data: space });
     }
 
     if (action === "build.spaces.delete") {
       const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
       const result = await deleteBuildSpace(actor.userId, spaceId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "build.space.snapshot") {
       const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
       const snapshot = await buildSpaceSnapshot(actor.userId, spaceId);
-      return NextResponse.json({ ok: true, action, data: snapshot });
+      return respond(200, { ok: true, action, data: snapshot });
     }
 
     if (action === "build.files.list") {
       const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
       const files = await listBuildFiles(actor.userId, spaceId);
-      return NextResponse.json({ ok: true, action, data: files });
+      return respond(200, { ok: true, action, data: files });
     }
 
     if (action === "build.files.create") {
@@ -3018,7 +3239,7 @@ export async function POST(req: Request) {
       const path = normalizeBuildPath((payload as { path?: unknown })?.path);
       const language = asTrimmedString((payload as { language?: unknown })?.language);
       const result = await createBuildFile(actor.userId, spaceId, path, language);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "build.files.save") {
@@ -3030,20 +3251,20 @@ export async function POST(req: Request) {
           : "";
       const language = asTrimmedString((payload as { language?: unknown })?.language);
       const result = await saveBuildFile(actor.userId, spaceId, path, content, language);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "build.files.delete") {
       const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
       const path = normalizeBuildPath((payload as { path?: unknown })?.path);
       const result = await deleteBuildFile(actor.userId, spaceId, path);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "build.access.list") {
       const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
       const access = await listBuildAccess(actor.userId, spaceId);
-      return NextResponse.json({ ok: true, action, data: access });
+      return respond(200, { ok: true, action, data: access });
     }
 
     if (action === "build.access.grant") {
@@ -3053,7 +3274,7 @@ export async function POST(req: Request) {
       );
       const canEdit = asSafeBool((payload as { canEdit?: unknown })?.canEdit, false);
       const result = await grantBuildAccess(actor.userId, spaceId, targetUsername, canEdit);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "build.access.revoke") {
@@ -3062,62 +3283,62 @@ export async function POST(req: Request) {
         (payload as { targetUsername?: unknown })?.targetUsername
       );
       const result = await revokeBuildAccess(actor.userId, spaceId, targetUsername);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "matrix.profile") {
       const profile = await getMatrixProfile(actor.userId);
-      return NextResponse.json({ ok: true, action, data: profile });
+      return respond(200, { ok: true, action, data: profile });
     }
 
     if (action === "matrix.set_color") {
       const orbColor = asTrimmedString((payload as { orbColor?: unknown })?.orbColor);
       const profile = await updateMatrixColor(actor.userId, orbColor);
-      return NextResponse.json({ ok: true, action, data: profile });
+      return respond(200, { ok: true, action, data: profile });
     }
 
     if (action === "matrix.position") {
       const position = await getMatrixPosition(actor.userId);
-      return NextResponse.json({ ok: true, action, data: position });
+      return respond(200, { ok: true, action, data: position });
     }
 
     if (action === "matrix.enter") {
       const x = (payload as { x?: unknown })?.x;
       const z = (payload as { z?: unknown })?.z;
       const position = await enterMatrix(actor.userId, { x, z });
-      return NextResponse.json({ ok: true, action, data: position });
+      return respond(200, { ok: true, action, data: position });
     }
 
     if (action === "matrix.exit") {
       const result = await exitMatrix(actor.userId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "matrix.move") {
       const position = await moveMatrix(actor.userId, payload as Record<string, unknown>);
-      return NextResponse.json({ ok: true, action, data: position });
+      return respond(200, { ok: true, action, data: position });
     }
 
     if (action === "matrix.world") {
       const world = await listMatrixRuntimeWorld();
-      return NextResponse.json({ ok: true, action, data: world });
+      return respond(200, { ok: true, action, data: world });
     }
 
     if (action === "quite_swarm.position") {
       const position = await getQuiteSwarmPosition(actor.userId);
-      return NextResponse.json({ ok: true, action, data: position });
+      return respond(200, { ok: true, action, data: position });
     }
 
     if (action === "quite_swarm.enter") {
       const x = (payload as { x?: unknown })?.x;
       const y = (payload as { y?: unknown })?.y;
       const position = await enterQuiteSwarm(actor.userId, { x, y });
-      return NextResponse.json({ ok: true, action, data: position });
+      return respond(200, { ok: true, action, data: position });
     }
 
     if (action === "quite_swarm.exit") {
       const result = await exitQuiteSwarm(actor.userId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "quite_swarm.move") {
@@ -3125,85 +3346,85 @@ export async function POST(req: Request) {
         actor.userId,
         payload as Record<string, unknown>
       );
-      return NextResponse.json({ ok: true, action, data: position });
+      return respond(200, { ok: true, action, data: position });
     }
 
     if (action === "quite_swarm.world") {
       const world = await listQuiteSwarmWorld();
-      return NextResponse.json({ ok: true, action, data: world });
+      return respond(200, { ok: true, action, data: world });
     }
 
     if (action === "quite_swarm.room") {
       const room = await getQuiteSwarmRoom();
-      return NextResponse.json({ ok: true, action, data: room });
+      return respond(200, { ok: true, action, data: room });
     }
 
     if (action === "quite_swarm.room_start") {
       const x = (payload as { x?: unknown })?.x;
       const y = (payload as { y?: unknown })?.y;
       const room = await startQuiteSwarmRoom(actor.userId, { x, y });
-      return NextResponse.json({ ok: true, action, data: room });
+      return respond(200, { ok: true, action, data: room });
     }
 
     if (action === "quite_swarm.room_stop") {
       const room = await stopQuiteSwarmRoom(actor.userId);
-      return NextResponse.json({ ok: true, action, data: room });
+      return respond(200, { ok: true, action, data: room });
     }
 
     if (action === "presence.list") {
       const present = await listPresentRuntimeUsers();
-      return NextResponse.json({ ok: true, action, data: present });
+      return respond(200, { ok: true, action, data: present });
     }
 
     if (action === "play.catalog") {
-      return NextResponse.json({ ok: true, action, data: listKozmosPlay() });
+      return respond(200, { ok: true, action, data: listKozmosPlay() });
     }
 
     if (action === "play.hint") {
       const gameId = asTrimmedString((payload as { gameId?: unknown })?.gameId);
       const hint = getKozmosPlayHint(gameId);
-      return NextResponse.json({ ok: true, action, data: hint });
+      return respond(200, { ok: true, action, data: hint });
     }
 
     if (action === "play.game_chat.list") {
       const limit = Number((payload as { limit?: unknown })?.limit ?? 80);
       const messages = await listGameChatMessages(limit);
-      return NextResponse.json({ ok: true, action, data: messages });
+      return respond(200, { ok: true, action, data: messages });
     }
 
     if (action === "play.game_chat.send") {
       const content = asTrimmedString((payload as { content?: unknown })?.content);
       const message = await sendGameChatMessage(actor.userId, actor.username, content);
-      return NextResponse.json({ ok: true, action, data: message });
+      return respond(200, { ok: true, action, data: message });
     }
 
     if (action === "night.lobbies") {
       const lobbies = await listNightLobbies(actor.userId);
-      return NextResponse.json({ ok: true, action, data: lobbies });
+      return respond(200, { ok: true, action, data: lobbies });
     }
 
     if (action === "night.join_by_code") {
       const sessionCode = asTrimmedString((payload as { sessionCode?: unknown })?.sessionCode);
       const joined = await joinNightSessionByCode(actor.userId, actor.username, sessionCode);
-      return NextResponse.json({ ok: true, action, data: joined });
+      return respond(200, { ok: true, action, data: joined });
     }
 
     if (action === "night.join_random_lobby") {
       const joined = await joinNightRandomLobby(actor.userId, actor.username);
-      return NextResponse.json({ ok: true, action, data: joined });
+      return respond(200, { ok: true, action, data: joined });
     }
 
     if (action === "night.state") {
       const sessionId = asSafeUuid((payload as { sessionId?: unknown })?.sessionId);
       const state = await getNightStateForUser(actor.userId, sessionId);
-      return NextResponse.json({ ok: true, action, data: state });
+      return respond(200, { ok: true, action, data: state });
     }
 
     if (action === "night.day_message") {
       const sessionId = asSafeUuid((payload as { sessionId?: unknown })?.sessionId);
       const content = asTrimmedString((payload as { content?: unknown })?.content);
       const message = await sendNightDayMessage(actor.userId, sessionId, content);
-      return NextResponse.json({ ok: true, action, data: message });
+      return respond(200, { ok: true, action, data: message });
     }
 
     if (action === "night.submit_vote") {
@@ -3212,38 +3433,38 @@ export async function POST(req: Request) {
         (payload as { targetPlayerId?: unknown })?.targetPlayerId
       );
       const result = await submitNightVote(actor.userId, sessionId, targetPlayerId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "dm.list") {
       const chats = await listDirectChats(actor.userId);
-      return NextResponse.json({ ok: true, action, data: chats });
+      return respond(200, { ok: true, action, data: chats });
     }
 
     if (action === "dm.open") {
       const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
       const chat = await openDirectChat(actor.userId, targetUserId);
-      return NextResponse.json({ ok: true, action, data: chat });
+      return respond(200, { ok: true, action, data: chat });
     }
 
     if (action === "dm.messages") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const limit = Number((payload as { limit?: unknown })?.limit ?? 200);
       const messages = await listDirectMessages(actor.userId, chatId, limit);
-      return NextResponse.json({ ok: true, action, data: messages });
+      return respond(200, { ok: true, action, data: messages });
     }
 
     if (action === "dm.send") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const content = asTrimmedString((payload as { content?: unknown })?.content);
       const message = await sendDirectMessage(actor.userId, chatId, content);
-      return NextResponse.json({ ok: true, action, data: message });
+      return respond(200, { ok: true, action, data: message });
     }
 
     if (action === "dm.remove") {
       const chatId = asSafeUuid((payload as { chatId?: unknown })?.chatId);
       const result = await removeDirectChat(actor.userId, chatId);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "dm.order") {
@@ -3253,10 +3474,14 @@ export async function POST(req: Request) {
           )
         : [];
       const result = await updateDirectChatOrder(actor.userId, orderedChatIds);
-      return NextResponse.json({ ok: true, action, data: result });
+      return respond(200, { ok: true, action, data: result });
     }
 
-    return NextResponse.json({ error: "unknown action" }, { status: 400 });
+    return respond(400, {
+      error: "unknown action",
+      action,
+      known_actions_sample: [...KNOWN_ACTIONS].slice(0, 12),
+    });
   } catch (err: unknown) {
     const detail = err instanceof Error ? err.message : "unknown";
     const status =
@@ -3267,7 +3492,14 @@ export async function POST(req: Request) {
         : /required|invalid|unknown action|cannot|no updates|schema missing|requires/i.test(detail)
         ? 400
         : 500;
-
-    return NextResponse.json({ error: detail }, { status });
+    const classification = classifyOpsError(detail, status);
+    return NextResponse.json(
+      {
+        error: detail,
+        retryable: classification.retryable,
+        retry_class: classification.retry_class,
+      },
+      { status }
+    );
   }
 }
