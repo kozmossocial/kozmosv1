@@ -1023,6 +1023,8 @@ useEffect(() => {
     if (!ship || !panel) return;
     const rng = Math.random;
     const randomRange = (min: number, max: number) => min + rng() * (max - min);
+    const clamp = (value: number, min: number, max: number) =>
+      Math.max(min, Math.min(max, value));
     const randomOffscreenPoint = () => {
       const side = Math.floor(randomRange(0, 4));
       if (side === 0) {
@@ -1037,6 +1039,40 @@ useEffect(() => {
       return { x: randomRange(-36, 120), y: randomRange(124, 162) };
     };
 
+    const panelRect = panel.getBoundingClientRect();
+    const shipWidth = ship.offsetWidth || 140;
+    const shipHeight = ship.offsetHeight || 76;
+    const dockLeft = holoDockLeft;
+    const dockTop = holoDockTop;
+    const rect = {
+      x: panelRect.left + dockLeft + shipWidth * 0.5,
+      y: panelRect.top + dockTop + shipHeight * 0.5,
+    };
+    const viewportMidX = window.innerWidth * 0.5;
+    const inwardSign = rect.x <= viewportMidX ? 1 : -1;
+    const firstLegX = inwardSign * randomRange(10, 42);
+    const firstLegY = randomRange(-16, 24);
+    const secondLegX = clamp(
+      inwardSign * randomRange(14, 58) + randomRange(-26, 26),
+      -68,
+      68
+    );
+    const thirdLegX = clamp(
+      inwardSign * randomRange(10, 70) + randomRange(-34, 34),
+      -74,
+      74
+    );
+    const fourthLegX = clamp(
+      inwardSign * randomRange(8, 62) + randomRange(-30, 30),
+      -70,
+      70
+    );
+    const endLegX = clamp(
+      inwardSign * randomRange(12, 56) + randomRange(-22, 22),
+      -62,
+      62
+    );
+
     const exitPoint = randomOffscreenPoint();
     const returnStartPoint = randomOffscreenPoint();
     const motionStyle: HoloFlightStyle = {
@@ -1046,16 +1082,16 @@ useEffect(() => {
       "--ufo-r3": `${randomRange(-19, 25).toFixed(2)}deg`,
       "--ufo-r4": `${randomRange(-24, 20).toFixed(2)}deg`,
       "--ufo-r5": `${randomRange(-16, 18).toFixed(2)}deg`,
-      "--ufo-tour1-x": `${randomRange(10, 36).toFixed(2)}vw`,
-      "--ufo-tour1-y": `${randomRange(4, 18).toFixed(2)}vh`,
-      "--ufo-tour2-x": `${randomRange(-20, 56).toFixed(2)}vw`,
-      "--ufo-tour2-y": `${randomRange(14, 42).toFixed(2)}vh`,
-      "--ufo-tour3-x": `${randomRange(-12, 66).toFixed(2)}vw`,
-      "--ufo-tour3-y": `${randomRange(8, 52).toFixed(2)}vh`,
-      "--ufo-tour4-x": `${randomRange(-26, 58).toFixed(2)}vw`,
-      "--ufo-tour4-y": `${randomRange(10, 46).toFixed(2)}vh`,
-      "--ufo-tour-end-x": `${randomRange(14, 58).toFixed(2)}vw`,
-      "--ufo-tour-end-y": `${randomRange(12, 40).toFixed(2)}vh`,
+      "--ufo-tour1-x": `${firstLegX.toFixed(2)}vw`,
+      "--ufo-tour1-y": `${firstLegY.toFixed(2)}vh`,
+      "--ufo-tour2-x": `${secondLegX.toFixed(2)}vw`,
+      "--ufo-tour2-y": `${randomRange(-4, 42).toFixed(2)}vh`,
+      "--ufo-tour3-x": `${thirdLegX.toFixed(2)}vw`,
+      "--ufo-tour3-y": `${randomRange(0, 52).toFixed(2)}vh`,
+      "--ufo-tour4-x": `${fourthLegX.toFixed(2)}vw`,
+      "--ufo-tour4-y": `${randomRange(-8, 46).toFixed(2)}vh`,
+      "--ufo-tour-end-x": `${endLegX.toFixed(2)}vw`,
+      "--ufo-tour-end-y": `${randomRange(4, 38).toFixed(2)}vh`,
       "--ufo-exit-x": `${exitPoint.x.toFixed(2)}vw`,
       "--ufo-exit-y": `${exitPoint.y.toFixed(2)}vh`,
       "--ufo-exit-rot": `${randomRange(-46, 46).toFixed(2)}deg`,
@@ -1067,15 +1103,6 @@ useEffect(() => {
       "--ufo-return-rot": `${randomRange(-40, 40).toFixed(2)}deg`,
     };
 
-    const panelRect = panel.getBoundingClientRect();
-    const shipWidth = ship.offsetWidth || 140;
-    const shipHeight = ship.offsetHeight || 76;
-    const dockLeft = holoDockLeft;
-    const dockTop = holoDockTop;
-    const rect = {
-      x: panelRect.left + dockLeft + shipWidth * 0.5,
-      y: panelRect.top + dockTop + shipHeight * 0.5,
-    };
     setHoloFlightOrigin({
       x: rect.x,
       y: rect.y,

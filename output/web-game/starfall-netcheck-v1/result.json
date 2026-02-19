@@ -1,0 +1,55 @@
+{
+  "disabledBefore": true,
+  "phaseAfterStart": {
+    "p1": "menu",
+    "p2": "menu"
+  },
+  "modeAfterStart": {
+    "p1": "single",
+    "p2": "single"
+  },
+  "playersBefore": {
+    "p1": [
+      {
+        "id": "p1",
+        "x": 428,
+        "y": 584,
+        "lives": 3,
+        "alive": true,
+        "score": 0
+      }
+    ],
+    "p2": [
+      {
+        "id": "p1",
+        "x": 428,
+        "y": 584,
+        "lives": 3,
+        "alive": true,
+        "score": 0
+      }
+    ]
+  },
+  "playersAfter": {
+    "p1": [
+      {
+        "id": "p1",
+        "x": 428,
+        "y": 584,
+        "lives": 3,
+        "alive": true,
+        "score": 0
+      }
+    ],
+    "p2": [
+      {
+        "id": "p1",
+        "x": 428,
+        "y": 584,
+        "lives": 3,
+        "alive": true,
+        "score": 0
+      }
+    ]
+  }
+}

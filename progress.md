@@ -106,3 +106,25 @@ Validation log:
   - pause/resume check: `output/web-game/starfall-pause-v2/*`
     - paused state contains `"phase":"paused"`
     - resumed state returns to `"phase":"playing"`.
+- Multiplayer ownership + sync-start update:
+  - Reworked Starfall multi mode from local dual-keyboard to networked seat ownership via Supabase Realtime channel `starfall-protocol-room`.
+  - Added room presence tracking and deterministic seat assignment:
+    - first active peer => `p1` (host)
+    - second active peer => `p2`
+    - only first two peers are active players; others are spectators.
+  - `start multi` now requires 2 connected players and a local seat; otherwise disabled and status explains why.
+  - Added host-driven sync start flow:
+    - guest can request start
+    - host broadcasts `starfall_start`
+    - both clients enter multi at same start event.
+  - Added host-authoritative snapshot loop for multi play (`starfall_snapshot`) and remote input relay (`starfall_input`) so each player controls only one ship.
+  - In multi mode:
+    - non-host client does not run simulation step locally (renders host snapshots)
+    - non-host cannot restart/stop/pause match controls.
+
+Validation:
+- `npx eslint app/main/play/starfall-protocol/StarfallProtocolGame.tsx` passes.
+- `npm run build` passes.
+- Two-page headless check artifact: `output/web-game/starfall-netcheck-v1/result.json`
+  - In unauth/public route context, `start-multi` remained disabled (presence did not pair in this environment), so end-to-end multiplayer behavior could not be fully asserted in headless public test.
+  - Code paths for presence/seat/sync-start/snapshot/input are implemented and compiled.

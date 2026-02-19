@@ -4,6 +4,8 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabaseClient";
 
 type PlayMode = "single" | "multi";
 type Phase = "menu" | "playing" | "paused" | "game-over";
@@ -92,6 +94,17 @@ type HudState = {
   p2Lives: number;
 };
 
+type NetInput = {
+  left: boolean;
+  right: boolean;
+  fire: boolean;
+};
+
+type RoomPeer = {
+  id: string;
+  joinedAt: number;
+};
+
 declare global {
   interface Window {
     render_game_to_text?: () => string;
@@ -107,7 +120,7 @@ const PLAYER_HEIGHT = 22;
 const PLAYER_Y = WORLD_HEIGHT - 56;
 const PLAYER_SPEED = 330;
 const PLAYER_BULLET_SPEED = -620;
-const PLAYER_FIRE_COOLDOWN = 0.045;
+const PLAYER_FIRE_COOLDOWN = 0.035;
 const PLAYER_MAX_ACTIVE_BULLETS = 3;
 const ENEMY_BULLET_SPEED = 250;
 const ENEMY_ROWS = 5;
@@ -363,18 +376,46 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
   const touchRef = useRef<Record<string, boolean>>({});
   const gameRef = useRef<GameState>(createGameState("single"));
   const highScoreRef = useRef(0);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const remoteInputRef = useRef<Record<"p1" | "p2", NetInput>>({
+    p1: { left: false, right: false, fire: false },
+    p2: { left: false, right: false, fire: false },
+  });
+  const localInputRef = useRef<NetInput>({ left: false, right: false, fire: false });
+  const [clientId] = useState(() => `sf-${Math.random().toString(36).slice(2, 10)}`);
+  const lastSnapshotSentAtRef = useRef(0);
 
   const [hud, setHud] = useState<HudState>(() => toHud(gameRef.current));
   const [highScore, setHighScore] = useState(0);
   const [mobileControls, setMobileControls] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [roomPeers, setRoomPeers] = useState<RoomPeer[]>([]);
+  const [netMessage, setNetMessage] = useState("");
 
   const controlsText = useMemo(() => {
     if (hud.mode === "single") {
       return "Move: A/D or Left/Right | Fire: Space | Restart: button";
     }
-    return "P1 A/D + Space | P2 Left/Right + Enter | Restart: button";
+    return "Online multi: each player controls one ship | Restart: button";
   }, [hud.mode]);
+
+  const activeRoomPeers = useMemo(() => {
+    return [...roomPeers]
+      .sort((a, b) => a.joinedAt - b.joinedAt || a.id.localeCompare(b.id))
+      .slice(0, 2);
+  }, [roomPeers]);
+
+  const seatByClientId = useMemo(() => {
+    const map = new Map<string, "p1" | "p2">();
+    if (activeRoomPeers[0]) map.set(activeRoomPeers[0].id, "p1");
+    if (activeRoomPeers[1]) map.set(activeRoomPeers[1].id, "p2");
+    return map;
+  }, [activeRoomPeers]);
+
+  const localSeat = seatByClientId.get(clientId) ?? null;
+  const isHostSeat = localSeat === "p1";
+  const multiReady = activeRoomPeers.length >= 2;
+  const canControlMultiMatch = hud.mode !== "multi" || isHostSeat;
 
   const syncHud = useCallback((force = false) => {
     const now = performance.now();
@@ -424,6 +465,11 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       next.phase = "playing";
       gameRef.current = next;
       touchRef.current = {};
+      remoteInputRef.current = {
+        p1: { left: false, right: false, fire: false },
+        p2: { left: false, right: false, fire: false },
+      };
+      localInputRef.current = { left: false, right: false, fire: false };
       syncHud(true);
     },
     [syncHud]
@@ -449,6 +495,56 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       syncHud(true);
     }
   }, [syncHud]);
+
+  const pushLocalInput = useCallback(
+    (next: NetInput) => {
+      localInputRef.current = next;
+      const channel = channelRef.current;
+      if (!channel) return;
+      void channel.send({
+        type: "broadcast",
+        event: "starfall_input",
+        payload: {
+          by: clientId,
+          seat: localSeat,
+          input: next,
+          sentAt: Date.now(),
+        },
+      });
+    },
+    [clientId, localSeat]
+  );
+
+  const startOnlineMulti = useCallback(() => {
+    if (!multiReady) {
+      setNetMessage("multi needs 2 players connected");
+      return;
+    }
+    if (!localSeat) {
+      setNetMessage("you are spectator in this room");
+      return;
+    }
+    const channel = channelRef.current;
+    if (!channel) return;
+
+    if (isHostSeat) {
+      startGame("multi");
+      setNetMessage("match started");
+      void channel.send({
+        type: "broadcast",
+        event: "starfall_start",
+        payload: { by: clientId, startedAt: Date.now() },
+      });
+      return;
+    }
+
+    setNetMessage("start requested from host");
+    void channel.send({
+      type: "broadcast",
+      event: "starfall_start_request",
+      payload: { by: clientId, sentAt: Date.now() },
+    });
+  }, [clientId, isHostSeat, localSeat, multiReady, startGame]);
 
   const toggleFullscreen = useCallback(async () => {
     const root = rootRef.current;
@@ -531,6 +627,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     (dt: number) => {
       const state = gameRef.current;
       if (state.phase !== "playing") return;
+      if (state.mode === "multi" && !isHostSeat) return;
 
       state.elapsed += dt;
 
@@ -539,20 +636,23 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
         player.cooldown = Math.max(0, player.cooldown - dt);
         player.invulnerableFor = Math.max(0, player.invulnerableFor - dt);
 
-        const isP1 = player.id === "p1";
-        const left = isP1
-          ? state.mode === "single"
-            ? Boolean(keysRef.current.KeyA || keysRef.current.ArrowLeft || touchRef.current.p1Left)
-            : Boolean(keysRef.current.KeyA || touchRef.current.p1Left)
-          : Boolean(keysRef.current.ArrowLeft || touchRef.current.p2Left);
-        const right = isP1
-          ? state.mode === "single"
-            ? Boolean(keysRef.current.KeyD || keysRef.current.ArrowRight || touchRef.current.p1Right)
-            : Boolean(keysRef.current.KeyD || touchRef.current.p1Right)
-          : Boolean(keysRef.current.ArrowRight || touchRef.current.p2Right);
-        const fire = isP1
-          ? Boolean(keysRef.current.Space || touchRef.current.p1Shoot)
-          : Boolean(keysRef.current.Enter || touchRef.current.p2Shoot);
+        let left = false;
+        let right = false;
+        let fire = false;
+
+        if (state.mode === "single") {
+          left = Boolean(keysRef.current.KeyA || keysRef.current.ArrowLeft || touchRef.current.p1Left);
+          right = Boolean(keysRef.current.KeyD || keysRef.current.ArrowRight || touchRef.current.p1Right);
+          fire = Boolean(keysRef.current.Space || touchRef.current.p1Shoot);
+        } else if (localSeat === player.id) {
+          left = localInputRef.current.left;
+          right = localInputRef.current.right;
+          fire = localInputRef.current.fire;
+        } else {
+          left = remoteInputRef.current[player.id].left;
+          right = remoteInputRef.current[player.id].right;
+          fire = remoteInputRef.current[player.id].fire;
+        }
 
         const axis = Number(right) - Number(left);
         if (axis !== 0) {
@@ -709,7 +809,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
         state.barriers = createBarriers();
       }
     },
-    [damageBarrier, spawnEnemyBullet, spawnPlayerBullet, storeHighScore]
+    [damageBarrier, isHostSeat, localSeat, spawnEnemyBullet, spawnPlayerBullet, storeHighScore]
   );
 
   const renderGame = useCallback(() => {
@@ -826,11 +926,34 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
 
   const stepAndRender = useCallback(
     (dt: number) => {
-      stepGame(Math.min(0.05, Math.max(0, dt)));
+      const state = gameRef.current;
+      const clampedDt = Math.min(0.05, Math.max(0, dt));
+      if (!(state.mode === "multi" && !isHostSeat)) {
+        stepGame(clampedDt);
+      }
       renderGame();
       syncHud();
+
+      if (state.mode === "multi" && isHostSeat && state.phase === "playing") {
+        const nowMs = Date.now();
+        if (nowMs - lastSnapshotSentAtRef.current >= 66) {
+          lastSnapshotSentAtRef.current = nowMs;
+          const channel = channelRef.current;
+          if (channel) {
+            void channel.send({
+              type: "broadcast",
+              event: "starfall_snapshot",
+              payload: {
+                by: clientId,
+                state,
+                sentAt: nowMs,
+              },
+            });
+          }
+        }
+      }
     },
-    [renderGame, stepGame, syncHud]
+    [clientId, isHostSeat, renderGame, stepGame, syncHud]
   );
 
   const renderGameToText = useCallback(() => {
@@ -875,9 +998,30 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     });
   }, []);
 
+  const getLocalMultiInput = useCallback((): NetInput => {
+    if (localSeat === "p1") {
+      return {
+        left: Boolean(keysRef.current.KeyA || touchRef.current.p1Left),
+        right: Boolean(keysRef.current.KeyD || touchRef.current.p1Right),
+        fire: Boolean(keysRef.current.Space || touchRef.current.p1Shoot),
+      };
+    }
+    if (localSeat === "p2") {
+      return {
+        left: Boolean(keysRef.current.ArrowLeft || touchRef.current.p2Left),
+        right: Boolean(keysRef.current.ArrowRight || touchRef.current.p2Right),
+        fire: Boolean(keysRef.current.Enter || touchRef.current.p2Shoot),
+      };
+    }
+    return { left: false, right: false, fire: false };
+  }, [localSeat]);
+
   const setTouch = useCallback((key: string, value: boolean) => {
     touchRef.current[key] = value;
-  }, []);
+    if (gameRef.current.mode === "multi") {
+      pushLocalInput(getLocalMultiInput());
+    }
+  }, [getLocalMultiInput, pushLocalInput]);
 
   const stopTouches = useCallback(() => {
     touchRef.current = {};
@@ -927,15 +1071,23 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
         event.preventDefault();
         void toggleFullscreen();
       }
+
+      if (gameRef.current.mode === "multi") {
+        pushLocalInput(getLocalMultiInput());
+      }
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
       keysRef.current[event.code] = false;
+      if (gameRef.current.mode === "multi") {
+        pushLocalInput(getLocalMultiInput());
+      }
     };
 
     const onBlur = () => {
       keysRef.current = {};
       stopTouches();
+      pushLocalInput({ left: false, right: false, fire: false });
     };
 
     const onResize = () => {
@@ -965,7 +1117,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       window.removeEventListener("resize", onResize);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, [renderGame, resizeCanvas, stopTouches, toggleFullscreen]);
+  }, [getLocalMultiInput, pushLocalInput, renderGame, resizeCanvas, stopTouches, toggleFullscreen]);
 
   useEffect(() => {
     const syncMobileControls = () => {
@@ -976,6 +1128,88 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     window.addEventListener("resize", syncMobileControls);
     return () => window.removeEventListener("resize", syncMobileControls);
   }, []);
+
+  useEffect(() => {
+    const room = supabase.channel("starfall-protocol-room", {
+      config: {
+        presence: {
+          key: clientId,
+        },
+      },
+    });
+    channelRef.current = room;
+
+    room.on("presence", { event: "sync" }, () => {
+      const state = room.presenceState<Record<string, unknown>>();
+      const peers: RoomPeer[] = [];
+      for (const [id, metas] of Object.entries(state)) {
+        const first = Array.isArray(metas) && metas.length > 0 ? metas[0] : null;
+        const joinedAtRaw = first && typeof first.joinedAt === "number" ? first.joinedAt : Date.now();
+        peers.push({ id, joinedAt: joinedAtRaw });
+      }
+      setRoomPeers(peers);
+    });
+
+    room.on("broadcast", { event: "starfall_input" }, ({ payload }) => {
+      const data = payload as { by?: string; seat?: "p1" | "p2"; input?: NetInput } | null;
+      if (!data || data.by === clientId || !data.seat || !data.input) return;
+      remoteInputRef.current[data.seat] = {
+        left: Boolean(data.input.left),
+        right: Boolean(data.input.right),
+        fire: Boolean(data.input.fire),
+      };
+    });
+
+    room.on("broadcast", { event: "starfall_snapshot" }, ({ payload }) => {
+      if (isHostSeat) return;
+      const data = payload as { by?: string; state?: GameState } | null;
+      if (!data || !data.state) return;
+      gameRef.current = data.state;
+      syncHud(true);
+    });
+
+    room.on("broadcast", { event: "starfall_start" }, () => {
+      startGame("multi");
+      setNetMessage("match started");
+    });
+
+    room.on("broadcast", { event: "starfall_start_request" }, () => {
+      if (!isHostSeat || !multiReady) return;
+      startGame("multi");
+      setNetMessage("match started");
+      void room.send({
+        type: "broadcast",
+        event: "starfall_start",
+        payload: { by: clientId, startedAt: Date.now() },
+      });
+    });
+
+    room.subscribe(async (status) => {
+      if (status !== "SUBSCRIBED") return;
+      await room.track({
+        id: clientId,
+        joinedAt: Date.now(),
+      });
+    });
+
+    return () => {
+      channelRef.current = null;
+      supabase.removeChannel(room);
+    };
+  }, [clientId, isHostSeat, multiReady, startGame, syncHud]);
+
+  useEffect(() => {
+    if (hud.mode !== "multi") return;
+    if (!multiReady) {
+      setNetMessage("waiting for second player");
+      return;
+    }
+    if (!localSeat) {
+      setNetMessage("spectating");
+      return;
+    }
+    setNetMessage(`connected as ${localSeat}`);
+  }, [hud.mode, localSeat, multiReady]);
 
   useEffect(() => {
     window.render_game_to_text = renderGameToText;
@@ -1027,28 +1261,65 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
         high score: {scoreText(highScore)} | p1 lives: {hud.p1Lives}
         {hud.mode === "multi" ? ` | p2 lives: ${hud.p2Lives}` : ""}
       </div>
+      {hud.mode === "multi" ? (
+        <div style={{ fontSize: 11, opacity: 0.72, marginBottom: 10 }}>
+          room: {activeRoomPeers.length}/2 | {netMessage}
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         <button id="start-btn" type="button" onClick={() => startGame("single")} style={primaryButton}>
           start single
         </button>
-        <button id="start-multi-btn" type="button" onClick={() => startGame("multi")} style={primaryButton}>
+        <button
+          id="start-multi-btn"
+          type="button"
+          onClick={startOnlineMulti}
+          disabled={!multiReady || !localSeat}
+          style={{
+            ...primaryButton,
+            opacity: !multiReady || !localSeat ? 0.55 : 1,
+            cursor: !multiReady || !localSeat ? "not-allowed" : "pointer",
+          }}
+        >
           start multi
         </button>
-        <button type="button" onClick={() => startGame()} style={secondaryButton}>
+        <button
+          type="button"
+          onClick={() => startGame()}
+          disabled={!canControlMultiMatch}
+          style={{
+            ...secondaryButton,
+            opacity: canControlMultiMatch ? 1 : 0.55,
+            cursor: canControlMultiMatch ? "pointer" : "not-allowed",
+          }}
+        >
           restart
         </button>
-        <button type="button" onClick={goMenu} style={secondaryButton}>
+        <button
+          type="button"
+          onClick={goMenu}
+          disabled={!canControlMultiMatch}
+          style={{
+            ...secondaryButton,
+            opacity: canControlMultiMatch ? 1 : 0.55,
+            cursor: canControlMultiMatch ? "pointer" : "not-allowed",
+          }}
+        >
           stop
         </button>
         <button
           type="button"
           onClick={togglePause}
-          disabled={hud.phase !== "playing" && hud.phase !== "paused"}
+          disabled={(hud.phase !== "playing" && hud.phase !== "paused") || !canControlMultiMatch}
           style={{
             ...secondaryButton,
-            opacity: hud.phase === "playing" || hud.phase === "paused" ? 1 : 0.55,
-            cursor: hud.phase === "playing" || hud.phase === "paused" ? "pointer" : "not-allowed",
+            opacity:
+              (hud.phase === "playing" || hud.phase === "paused") && canControlMultiMatch ? 1 : 0.55,
+            cursor:
+              (hud.phase === "playing" || hud.phase === "paused") && canControlMultiMatch
+                ? "pointer"
+                : "not-allowed",
           }}
         >
           {hud.phase === "paused" ? "resume" : "pause"}
