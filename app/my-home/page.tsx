@@ -936,6 +936,7 @@ useEffect(() => {
   }
 
   function launchHoloFlight() {
+    if (isMobileLayout) return;
     if (holoFlightPhaseRef.current !== "idle") return;
     const ship = holoShipRef.current;
     const panel = touchPanelRef.current;
@@ -1021,6 +1022,7 @@ useEffect(() => {
   }
 
   function launchSpecialHoloFlight() {
+    if (isMobileLayout) return;
     if (holoFlightPhaseRef.current !== "idle") return;
     const ship = holoShipRef.current;
     const panel = touchPanelRef.current;
@@ -1173,6 +1175,14 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
+    if (isMobileLayout) {
+      clearHoloFlightTimers();
+      clearHoloSpecialSchedule();
+      setHoloFlightPhase("idle");
+      setHoloFlightOrigin(null);
+      setHoloFlightMotionStyle({});
+      return;
+    }
     if (notesBootstrapping) return;
     const initialDelayMs = 30000;
     const intervalMs = 180000;
@@ -1223,7 +1233,9 @@ useEffect(() => {
         <div
           ref={holoShipRef}
           className={holoWrapperClassName}
-          onClick={() => launchHoloFlight()}
+          onClick={() => {
+            if (!isMobileLayout) launchHoloFlight();
+          }}
           style={holoWrapperStyle}
           aria-hidden
         >
@@ -1232,8 +1244,8 @@ useEffect(() => {
             alt=""
             aria-hidden
             draggable={false}
-            className="ufo-holo-float"
-            style={touchHoloShipImageStyle}
+            className={isMobileLayout ? undefined : "ufo-holo-float"}
+            style={isMobileLayout ? touchHoloShipImageMobileStyle : touchHoloShipImageStyle}
           />
         </div>
         <div style={touchPanelContentLayerStyle}>
@@ -2162,6 +2174,13 @@ const touchHoloShipImageStyle: React.CSSProperties = {
   display: "block",
   pointerEvents: "none",
   userSelect: "none",
+};
+
+const touchHoloShipImageMobileStyle: React.CSSProperties = {
+  ...touchHoloShipImageStyle,
+  filter:
+    "drop-shadow(10px 0 8px rgba(132,212,255,0.18)) drop-shadow(-10px 0 8px rgba(154,216,255,0.16))",
+  opacity: 0.76,
 };
 
 const touchHoloFlightOverlayStyle: React.CSSProperties = {
