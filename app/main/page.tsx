@@ -3521,7 +3521,6 @@ export default function Main() {
                     href={item.sourceUrl}
                     target="_blank"
                     rel="noreferrer noopener"
-                    title={item.sourceUrl}
                     style={{
                       color: "rgba(156,214,255,0.94)",
                       display: "inline-block",

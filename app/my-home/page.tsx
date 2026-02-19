@@ -1351,8 +1351,7 @@ useEffect(() => {
                     personalAxyReply
                   ) : (
                     <>
-                      I&apos;m <span className="axy-name-glow">Axy</span>. I
-                      exist inside Kozmos·
+                      I&apos;m <span className="axy-name-glow">Axy</span>. I am present inside Kozmos&middot;
                     </>
                   )}
                 </div>

@@ -1463,14 +1463,19 @@ async function main() {
         }
 
         if (autoPlay && Date.now() >= nextPlayChatAt) {
+          let playNextMin = playChatMinGapSeconds;
+          let playNextMax = playChatMaxGapSeconds;
           try {
-            const listRes = await callAxyOps(baseUrl, token, "play.game_chat.list", { limit: 36 });
+            const listRes = await callAxyOps(baseUrl, token, "play.game_chat.list", {
+              limit: 36,
+            });
             const rows = Array.isArray(listRes?.data) ? listRes.data : [];
             const recentTurns = rows
               .slice(-14)
               .map((row) => ({
                 role:
-                  String(row?.username || "").toLowerCase() === String(botUsername || "").toLowerCase()
+                  String(row?.username || "").toLowerCase() ===
+                  String(botUsername || "").toLowerCase()
                     ? "assistant"
                     : "user",
                 username: String(row?.username || "user"),
@@ -1481,6 +1486,28 @@ async function main() {
               .filter((turn) => turn.role === "assistant")
               .map((turn) => turn.text)
               .slice(-8);
+
+            const recentUserRows = rows
+              .slice(-16)
+              .filter(
+                (row) =>
+                  String(row?.username || "").toLowerCase() !==
+                  String(botUsername || "").toLowerCase()
+              );
+            const addressedToAxy = recentUserRows.some((row) =>
+              triggerRegex.test(String(row?.content || ""))
+            );
+            if (!addressedToAxy) {
+              playNextMin = Math.max(
+                playChatMinGapSeconds * 2,
+                playChatMinGapSeconds + 240
+              );
+              playNextMax = Math.max(playChatMaxGapSeconds * 3, playNextMin + 240);
+              if (Math.random() < 0.7) {
+                console.log(`[${now()}] play: skipped (no direct prompt)`);
+                continue;
+              }
+            }
 
             const prompt =
               "Write one short game-chat line for kozmos.play. Varied tone, no repetitive stillness cliches, max 14 words.";
@@ -1503,7 +1530,7 @@ async function main() {
             console.log(`[${now()}] play fail: ${msg}`);
           } finally {
             nextPlayChatAt =
-              Date.now() + randomIntRange(playChatMinGapSeconds, playChatMaxGapSeconds) * 1000;
+              Date.now() + randomIntRange(playNextMin, playNextMax) * 1000;
           }
         }
 
@@ -1877,7 +1904,7 @@ async function main() {
                   ? snapshot.data.present_users
                   : [];
                 const nowMs = Date.now();
-                const cooldownMs = 30 * 60 * 1000;
+                const cooldownMs = 90 * 60 * 1000;
                 for (const [targetUserId, ts] of hushStarterCooldown.entries()) {
                   if (nowMs - ts > cooldownMs) hushStarterCooldown.delete(targetUserId);
                 }
