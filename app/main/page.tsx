@@ -676,6 +676,9 @@ export default function Main() {
     null
   );
   const [newsPaperOpen, setNewsPaperOpen] = useState(false);
+  const [newsPaperUnreadSignal, setNewsPaperUnreadSignal] = useState(false);
+  const [newsPaperOpenedAfterUnread, setNewsPaperOpenedAfterUnread] =
+    useState(false);
   const [gameLoading, setGameLoading] = useState(false);
   const [buildLoading, setBuildLoading] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>("open");
@@ -691,6 +694,7 @@ export default function Main() {
   }>({ active: false, pointerId: null, startX: 0 });
   const [loading, setLoading] = useState(false);
   const [chatBootstrapReady, setChatBootstrapReady] = useState(false);
+  const [chatViewportReady, setChatViewportReady] = useState(false);
   const [realtimePresentUsers, setRealtimePresentUsers] = useState<string[]>(
     []
   );
@@ -823,7 +827,11 @@ export default function Main() {
   const hushAlertTimeoutRef = useRef<number | null>(null);
   const prevInvitesCountRef = useRef(0);
   const prevRequestsCountRef = useRef(0);
+  const newsPaperLatestItemIdRef = useRef<number | null>(null);
+  const newsPaperPrimedRef = useRef(false);
+  const prevNewsPaperOpenRef = useRef(false);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
+  const chatViewportReadyRafRef = useRef<number | null>(null);
   const sharedStickToBottomRef = useRef(true);
   const presentUsersPanelRef = useRef<HTMLDivElement | null>(null);
   const vsMoveKeysRef = useRef<{
@@ -1330,8 +1338,11 @@ export default function Main() {
 
   /*  load user + messages */
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       setChatBootstrapReady(false);
+      const bootstrapStartedAt = Date.now();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -1373,11 +1384,22 @@ export default function Main() {
         setGameMessages(gameRes.data || []);
         setBuildMessages(buildRes.data || []);
       } finally {
-        setChatBootstrapReady(true);
+        const MAIN_CHAT_BOOT_MIN_MS = 950;
+        const elapsed = Date.now() - bootstrapStartedAt;
+        const remaining = Math.max(0, MAIN_CHAT_BOOT_MIN_MS - elapsed);
+        window.setTimeout(() => {
+          if (!cancelled) {
+            setChatBootstrapReady(true);
+          }
+        }, remaining);
       }
     }
 
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   useEffect(() => {
@@ -1591,6 +1613,15 @@ export default function Main() {
             row.sourceUrl.length > 0
         )
         .slice(0, 10);
+      const latestId = parsed[0]?.id ?? null;
+      const previousLatestId = newsPaperLatestItemIdRef.current;
+      if (!newsPaperPrimedRef.current) {
+        newsPaperPrimedRef.current = true;
+      } else if (latestId && latestId !== previousLatestId) {
+        setNewsPaperUnreadSignal(true);
+        setNewsPaperOpenedAfterUnread(false);
+      }
+      newsPaperLatestItemIdRef.current = latestId;
       setNewsPaperItems(parsed);
     } catch {
       setNewsPaperItems([]);
@@ -2487,6 +2518,32 @@ export default function Main() {
   }, []);
 
   useEffect(() => {
+    if (!chatBootstrapReady) {
+      setChatViewportReady(false);
+      return;
+    }
+    const el = sharedMessagesRef.current;
+    if (!el) return;
+    setChatViewportReady(false);
+    const raf1 = window.requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+      chatViewportReadyRafRef.current = window.requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+        sharedStickToBottomRef.current = true;
+        setChatViewportReady(true);
+        chatViewportReadyRafRef.current = null;
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      if (chatViewportReadyRafRef.current !== null) {
+        window.cancelAnimationFrame(chatViewportReadyRafRef.current);
+        chatViewportReadyRafRef.current = null;
+      }
+    };
+  }, [chatBootstrapReady]);
+
+  useEffect(() => {
     const el = sharedMessagesRef.current;
     if (!el) return;
     if (!sharedStickToBottomRef.current) return;
@@ -2734,6 +2791,23 @@ export default function Main() {
       window.clearInterval(poll);
     };
   }, [loadNewsPaper, maybeRunDailyNewsAuto, userId]);
+
+  useEffect(() => {
+    if (newsPaperOpen && newsPaperUnreadSignal && !newsPaperOpenedAfterUnread) {
+      setNewsPaperOpenedAfterUnread(true);
+    }
+    const wasOpen = prevNewsPaperOpenRef.current;
+    if (
+      wasOpen &&
+      !newsPaperOpen &&
+      newsPaperUnreadSignal &&
+      newsPaperOpenedAfterUnread
+    ) {
+      setNewsPaperUnreadSignal(false);
+      setNewsPaperOpenedAfterUnread(false);
+    }
+    prevNewsPaperOpenRef.current = newsPaperOpen;
+  }, [newsPaperOpen, newsPaperOpenedAfterUnread, newsPaperUnreadSignal]);
 
   /*  send */
   async function sendMessage() {
@@ -3639,6 +3713,7 @@ export default function Main() {
       />
 {/* LOGO */}
 <div
+  className="mother-logo-anchor"
   style={{
     position: "absolute",
     top: 30,
@@ -4313,6 +4388,12 @@ export default function Main() {
                 <div style={{ opacity: 0.48, fontSize: 11 }}>keep informed by Axy.</div>
               </>
             )}
+            <div
+              className={`news-paper-alert-lamp${
+                !newsPaperOpen && newsPaperUnreadSignal ? " on" : ""
+              }`}
+              aria-hidden="true"
+            />
           </div>
 
           <div className="hush-panel space-tv-panel" style={spaceTvPanelStyle}>
@@ -4575,7 +4656,13 @@ export default function Main() {
         <div style={{ position: "relative" }}>
           <div
             ref={sharedMessagesRef}
-            style={sharedMessagesScrollStyle}
+            style={{
+              ...sharedMessagesScrollStyle,
+              overflowY: chatViewportReady ? "auto" : "hidden",
+              paddingRight: chatViewportReady
+                ? sharedMessagesScrollStyle.paddingRight
+                : 0,
+            }}
             onScroll={syncSharedStickToBottom}
           >
           <div
@@ -4600,7 +4687,7 @@ export default function Main() {
                 "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.74) 52%, rgba(0,0,0,0.28) 72%, rgba(0,0,0,0) 88%)",
             }}
           />
-          {!chatBootstrapReady && activeMessages.length === 0 ? (
+          {!chatViewportReady ? (
             <div
               aria-hidden
               style={{
@@ -4615,14 +4702,14 @@ export default function Main() {
               }}
             >
               <div
-                className="ufo-boot-glow"
+                className="ufo-boot-glow-main"
                 style={{
                   position: "absolute",
-                  inset: "10% 0 10%",
+                  inset: 0,
                   backgroundImage: `url('${AXY_SHIP_SRC}')`,
                   backgroundRepeat: "no-repeat",
                   backgroundPosition: "center 62%",
-                  backgroundSize: "min(500px, 76%) auto",
+                  backgroundSize: "min(460px, 74%) auto",
                   mixBlendMode: "screen",
                   WebkitMaskImage:
                     "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.9) 48%, rgba(0,0,0,0.44) 68%, rgba(0,0,0,0) 86%)",
@@ -4648,7 +4735,12 @@ export default function Main() {
               </div>
             </div>
           ) : null}
-          <div style={{ position: "relative", zIndex: 2 }}>
+          <div
+            style={{
+              position: "relative",
+              zIndex: 2,
+            }}
+          >
             {activeMessages.map((m) => {
               const reflectionKey = `${chatMode}:${m.id}`;
               return (
@@ -5178,6 +5270,17 @@ export default function Main() {
             {playOpen && (
               <>
               <div style={{ marginBottom: 10 }}>
+                <div
+                  className="kozmos-tap"
+                  style={{ opacity: 0.84, cursor: "pointer", marginBottom: 6 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push("/main/play/starfall-protocol");
+                  }}
+                >
+                  Starfall Protocol🛦
+                </div>
+
                 <div
                   className="kozmos-tap"
                   style={{ opacity: 0.78, cursor: "pointer", marginBottom: 6 }}
@@ -6509,6 +6612,12 @@ export default function Main() {
                 <div style={{ opacity: 0.48, fontSize: 11 }}>keep informed by Axy.</div>
               </>
             )}
+            <div
+              className={`news-paper-alert-lamp${
+                !newsPaperOpen && newsPaperUnreadSignal ? " on" : ""
+              }`}
+              aria-hidden="true"
+            />
           </div>
         </div>
       </div>
@@ -6563,6 +6672,7 @@ const sharedMessagesScrollStyle: React.CSSProperties = {
   height: "clamp(500px, 58vh, 720px)",
   overflowY: "auto",
   overflowX: "hidden",
+  scrollbarGutter: "stable both-edges",
   paddingRight: 8,
   marginBottom: 12,
   position: "relative",
@@ -6601,6 +6711,7 @@ const userBuildPanelStyle: React.CSSProperties = {
 
 const newsPaperPanelBaseStyle: React.CSSProperties = {
   width: "100%",
+  position: "relative",
   padding: 12,
   fontSize: 12,
   letterSpacing: "0.04em",

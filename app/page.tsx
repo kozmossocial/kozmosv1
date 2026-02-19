@@ -1078,7 +1078,7 @@ export default function Home() {
         >
           {/* LOGO */}
           <div
-            className="home-hero-logo-wrap"
+            className="home-hero-logo-wrap mother-logo-anchor"
             style={{
               position: "absolute",
               top: 30,

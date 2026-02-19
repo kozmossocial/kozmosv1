@@ -1679,6 +1679,7 @@ useEffect(() => {
       />
 {/*  KOZMOS LOGO */}
 <div
+  className="mother-logo-anchor"
   style={{
     position: "absolute",
     top: 32,
@@ -1879,7 +1880,13 @@ useEffect(() => {
               }}
             />
           ) : null}
-          <div style={notesListStyle}>
+          <div
+            style={{
+              ...notesListStyle,
+              overflowY: notesBootstrapping ? "hidden" : "auto",
+              paddingRight: notesBootstrapping ? 0 : notesListStyle.paddingRight,
+            }}
+          >
           {notesBootstrapping ? (
             <div aria-hidden style={{ position: "relative", zIndex: 1, height: "100%" }}>
               <div
