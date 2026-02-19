@@ -1230,24 +1230,26 @@ useEffect(() => {
 
     return (
       <div ref={touchPanelRef} style={touchPanelStyle}>
-        <div
-          ref={holoShipRef}
-          className={holoWrapperClassName}
-          onClick={() => {
-            if (!isMobileLayout) launchHoloFlight();
-          }}
-          style={holoWrapperStyle}
-          aria-hidden
-        >
-          <img
-            src="/ufoholo.png"
-            alt=""
+        {!isMobileLayout ? (
+          <div
+            ref={holoShipRef}
+            className={holoWrapperClassName}
+            onClick={() => {
+              if (!isMobileLayout) launchHoloFlight();
+            }}
+            style={holoWrapperStyle}
             aria-hidden
-            draggable={false}
-            className={isMobileLayout ? undefined : "ufo-holo-float"}
-            style={isMobileLayout ? touchHoloShipImageMobileStyle : touchHoloShipImageStyle}
-          />
-        </div>
+          >
+            <img
+              src="/ufoholo.png"
+              alt=""
+              aria-hidden
+              draggable={false}
+              className="ufo-holo-float"
+              style={touchHoloShipImageStyle}
+            />
+          </div>
+        ) : null}
         <div style={touchPanelContentLayerStyle}>
         <div style={touchPanelHeadStyle}>
           <div style={{ ...labelStyle, marginBottom: 0 }}>users in touch</div>
@@ -1691,6 +1693,27 @@ useEffect(() => {
 
       {/* CONTENT */}
       <div style={contentStyle}>
+        {isMobileLayout ? (
+          <div
+            aria-hidden
+            style={{
+              width: holoShipWidth,
+              margin: "-34px auto 16px",
+              opacity: 0.78,
+              pointerEvents: "none",
+              userSelect: "none",
+            }}
+          >
+            <img
+              src="/ufoholo.png"
+              alt=""
+              aria-hidden
+              draggable={false}
+              className="ufo-holo-mobile-hover"
+              style={touchHoloShipImageMobileStyle}
+            />
+          </div>
+        ) : null}
         <div style={{ opacity: 0.6, marginBottom: 6 }}>
           this is your space.
         </div>

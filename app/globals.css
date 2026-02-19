@@ -1491,6 +1491,24 @@ body {
     hue-rotate(0deg);
 }
 
+@keyframes ufoHoloMobileHover {
+  0% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(-1.2deg);
+  }
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+}
+
+.ufo-holo-mobile-hover {
+  animation: ufoHoloMobileHover 4.8s ease-in-out infinite;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
 @keyframes ufoHoloBreathe {
   0% {
     opacity: 0.74;
