@@ -119,6 +119,7 @@ export default function MyHome() {
   } | null>(null);
   const [holoFlightMotionStyle, setHoloFlightMotionStyle] =
     useState<HoloFlightStyle>({});
+  const [lumiMobileTapHintVisible, setLumiMobileTapHintVisible] = useState(false);
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
   const touchPanelRef = useRef<HTMLDivElement | null>(null);
@@ -132,6 +133,7 @@ export default function MyHome() {
   const holoSpecialRafRef = useRef<number | null>(null);
   const holoSpecialLaunchTimerRef = useRef<number | null>(null);
   const holoSpecialIntervalRef = useRef<number | null>(null);
+  const lumiMobileTapHintTimerRef = useRef<number | null>(null);
   const holoDockLeft = isMobileLayout ? 12 : 18;
   const holoDockTop = isMobileLayout ? -92 : -128;
   const holoShipWidth = isMobileLayout ? 94 : 140;
@@ -724,11 +726,6 @@ useEffect(() => {
   }, [directChatEditMode]);
 
   useEffect(() => {
-    if (isMobileLayout) {
-      setUfoBeamActive(false);
-      setUfoBeamHasFired(false);
-      return;
-    }
     if (notesBootstrapping) {
       setUfoBeamActive(false);
       return;
@@ -762,7 +759,7 @@ useEffect(() => {
       if (cycleTimer) window.clearTimeout(cycleTimer);
       if (beamOffTimer) window.clearTimeout(beamOffTimer);
     };
-  }, [isMobileLayout, notesBootstrapping]);
+  }, [notesBootstrapping]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
@@ -1182,6 +1179,10 @@ useEffect(() => {
     return () => {
       clearHoloFlightTimers();
       clearHoloSpecialSchedule();
+      if (lumiMobileTapHintTimerRef.current !== null) {
+        window.clearTimeout(lumiMobileTapHintTimerRef.current);
+        lumiMobileTapHintTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -1709,16 +1710,26 @@ useEffect(() => {
       </div>
       {isMobileLayout ? (
         <div
-          aria-hidden
+          onClick={() => {
+            setLumiMobileTapHintVisible(true);
+            if (lumiMobileTapHintTimerRef.current !== null) {
+              window.clearTimeout(lumiMobileTapHintTimerRef.current);
+            }
+            lumiMobileTapHintTimerRef.current = window.setTimeout(() => {
+              setLumiMobileTapHintVisible(false);
+              lumiMobileTapHintTimerRef.current = null;
+            }, 900);
+          }}
           style={{
             position: "absolute",
             left: 44,
             top: 71,
             width: holoShipWidth,
             opacity: 0.78,
-            pointerEvents: "none",
+            pointerEvents: "auto",
             userSelect: "none",
             zIndex: 3,
+            cursor: "pointer",
           }}
         >
           <img
@@ -1729,6 +1740,27 @@ useEffect(() => {
             className="lumi-ship-mobile-hover"
             style={touchHoloShipImageMobileStyle}
           />
+          <span
+            className="lumi-ship-label"
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "calc(100% - 16px)",
+              transform: "translateX(-50%)",
+              fontSize: 11,
+              letterSpacing: "0.14em",
+              color: "rgba(196, 236, 255, 0.9)",
+              textShadow:
+                "0 0 6px rgba(160,220,255,0.55), 0 0 14px rgba(112,196,255,0.34)",
+              opacity: lumiMobileTapHintVisible ? 1 : 0,
+              transition: "opacity 280ms ease",
+              pointerEvents: "none",
+              userSelect: "none",
+            }}
+          >
+            Lumi
+          </span>
         </div>
       ) : null}
 
@@ -1779,11 +1811,7 @@ useEffect(() => {
           {!notesBootstrapping ? (
             <div
               aria-hidden
-              className={
-                isMobileLayout
-                  ? "ufo-ambient-faint"
-                  : `ufo-ambient-faint ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`
-              }
+              className={`ufo-ambient-faint ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`}
               style={{
                 position: "absolute",
                 inset: 0,
@@ -1793,14 +1821,12 @@ useEffect(() => {
                 backgroundRepeat: "no-repeat",
                 backgroundPosition: "center 62%",
                 backgroundSize: "min(380px, 82%) auto",
-                mixBlendMode: isMobileLayout ? "normal" : "screen",
-                opacity: isMobileLayout ? 0.1 : 0.16,
-                WebkitMaskImage: isMobileLayout
-                  ? "none"
-                  : "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
-                maskImage: isMobileLayout
-                  ? "none"
-                  : "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
+                mixBlendMode: "screen",
+                opacity: 0.16,
+                WebkitMaskImage:
+                  "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
+                maskImage:
+                  "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
               }}
             />
           ) : null}
@@ -1808,16 +1834,8 @@ useEffect(() => {
           {notesBootstrapping ? (
             <div aria-hidden style={{ position: "relative", zIndex: 1, height: "100%" }}>
               <div
-                className={
-                  isMobileLayout
-                    ? undefined
-                    : `ufo-boot-glow ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`
-                }
-                style={
-                  isMobileLayout
-                    ? notesBootPlaceholderMobileStyle
-                    : notesBootPlaceholderStyle
-                }
+                className={`ufo-boot-glow ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`}
+                style={notesBootPlaceholderStyle}
               />
               <div
                 style={{
