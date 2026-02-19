@@ -130,6 +130,7 @@ export default function MyHome() {
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
   const [authEpoch, setAuthEpoch] = useState(0);
+  const notesBootstrappedOnceRef = useRef(false);
   const touchPanelRef = useRef<HTMLDivElement | null>(null);
   const holoShipRef = useRef<HTMLDivElement | null>(null);
   const holoFlightTimersRef = useRef<number[]>([]);
@@ -608,7 +609,9 @@ export default function MyHome() {
   useEffect(() => {
 
     async function loadUserAndNotes() {
-      setNotesBootstrapping(true);
+      if (!notesBootstrappedOnceRef.current) {
+        setNotesBootstrapping(true);
+      }
       try {
         const user = await resolveActiveUser();
 
@@ -652,6 +655,7 @@ export default function MyHome() {
         await Promise.all([loadKeepInTouch(), loadDirectChats()]);
       } finally {
         setNotesBootstrapping(false);
+        notesBootstrappedOnceRef.current = true;
       }
     }
 
@@ -665,7 +669,7 @@ useEffect(() => {
       router.replace("/login?redirect=/my-home");
       return;
     }
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+    if (event === "SIGNED_IN" && !userIdRef.current) {
       setAuthEpoch((prev) => prev + 1);
     }
   });
