@@ -4989,7 +4989,7 @@ export default function Main() {
                   togglePlayPanel();
                 }}
               >
-                {playOpen ? "close" : "open"}
+                {playOpen ? "close" : "start"}
               </span>
             </div>
           </div>
