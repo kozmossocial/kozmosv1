@@ -6557,7 +6557,7 @@ const chatColumnStyle: React.CSSProperties = {
 };
 
 const sharedMessagesScrollStyle: React.CSSProperties = {
-  height: "clamp(360px, 45vh, 540px)",
+  height: "clamp(500px, 58vh, 720px)",
   overflowY: "auto",
   overflowX: "hidden",
   paddingRight: 8,

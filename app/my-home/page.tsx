@@ -41,6 +41,10 @@ type DirectMessage = {
   created_at: string;
 };
 
+type HoloFlightStyle = React.CSSProperties & {
+  [key: `--ufo-${string}`]: string | number;
+};
+
 const DIRECT_CHAT_SEEN_STORAGE_PREFIX = "kozmos:dm-seen:";
 const SECONDARY_AMBIENT_SRC = "/ambient-main.mp3";
 const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
@@ -102,8 +106,28 @@ export default function MyHome() {
   const [personalLastMessage, setPersonalLastMessage] = useState<string | null>(
     null
   );
+  const [ufoBeamActive, setUfoBeamActive] = useState(false);
+  const [ufoBeamHasFired, setUfoBeamHasFired] = useState(false);
+  const [holoFlightPhase, setHoloFlightPhase] = useState<
+    "idle" | "tour" | "exit" | "return" | "special"
+  >("idle");
+  const [holoFlightOrigin, setHoloFlightOrigin] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [holoFlightMotionStyle, setHoloFlightMotionStyle] =
+    useState<HoloFlightStyle>({});
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
+  const holoShipRef = useRef<HTMLImageElement | null>(null);
+  const holoFlightTimersRef = useRef<number[]>([]);
+  const holoFlightPhaseRef = useRef<"idle" | "tour" | "exit" | "return" | "special">(
+    "idle"
+  );
+  const holoLaunchRafRef = useRef<number | null>(null);
+  const holoSpecialRafRef = useRef<number | null>(null);
+  const holoSpecialLaunchTimerRef = useRef<number | null>(null);
+  const holoSpecialIntervalRef = useRef<number | null>(null);
 
   const loadKeepInTouch = useCallback(async () => {
     setTouchLoading(true);
@@ -689,6 +713,42 @@ useEffect(() => {
   }, [directChatEditMode]);
 
   useEffect(() => {
+    if (notesBootstrapping) {
+      setUfoBeamActive(false);
+      return;
+    }
+
+    let cancelled = false;
+    let cycleTimer: number | null = null;
+    let beamOffTimer: number | null = null;
+
+    const scheduleNext = (firstCycle: boolean) => {
+      if (cancelled) return;
+      const waitMs = firstCycle
+        ? 10000 + Math.random() * 5000
+        : 20000 + Math.random() * 10000; // 20-30s => ~2-3/min
+
+      cycleTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        setUfoBeamActive(true);
+        setUfoBeamHasFired(true);
+        beamOffTimer = window.setTimeout(() => {
+          setUfoBeamActive(false);
+        }, 5000);
+        scheduleNext(false);
+      }, waitMs);
+    };
+
+    scheduleNext(true);
+
+    return () => {
+      cancelled = true;
+      if (cycleTimer) window.clearTimeout(cycleTimer);
+      if (beamOffTimer) window.clearTimeout(beamOffTimer);
+    };
+  }, [notesBootstrapping]);
+
+  useEffect(() => {
     const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
     if (saved === "1") {
       setAmbientSoundOn(true);
@@ -823,7 +883,11 @@ useEffect(() => {
       });
 
       const data = await res.json();
-      setPersonalAxyReply(data.reply);
+      const reply =
+        typeof data?.reply === "string" && data.reply.trim().length > 0
+          ? data.reply
+          : "...";
+      setPersonalAxyReply(reply);
     } catch {
       setPersonalAxyReply("...");
     }
@@ -838,9 +902,292 @@ useEffect(() => {
     setPersonalAxyLoading(false);
   }
 
+  function clearHoloFlightTimers() {
+    holoFlightTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    holoFlightTimersRef.current = [];
+    if (holoLaunchRafRef.current !== null) {
+      window.cancelAnimationFrame(holoLaunchRafRef.current);
+      holoLaunchRafRef.current = null;
+    }
+    if (holoSpecialRafRef.current !== null) {
+      window.cancelAnimationFrame(holoSpecialRafRef.current);
+      holoSpecialRafRef.current = null;
+    }
+  }
+
+  function clearHoloSpecialSchedule() {
+    if (holoSpecialLaunchTimerRef.current !== null) {
+      window.clearTimeout(holoSpecialLaunchTimerRef.current);
+      holoSpecialLaunchTimerRef.current = null;
+    }
+    if (holoSpecialIntervalRef.current !== null) {
+      window.clearInterval(holoSpecialIntervalRef.current);
+      holoSpecialIntervalRef.current = null;
+    }
+  }
+
+  function launchHoloFlight() {
+    if (holoFlightPhaseRef.current !== "idle") return;
+    const ship = holoShipRef.current;
+    if (!ship) return;
+    const rng = Math.random;
+    const randomRange = (min: number, max: number) => min + rng() * (max - min);
+    const randomOffscreenPoint = () => {
+      const side = Math.floor(randomRange(0, 4));
+      if (side === 0) {
+        return { x: randomRange(120, 165), y: randomRange(-34, 120) };
+      }
+      if (side === 1) {
+        return { x: randomRange(-165, -120), y: randomRange(-34, 120) };
+      }
+      if (side === 2) {
+        return { x: randomRange(-36, 120), y: randomRange(-132, -84) };
+      }
+      return { x: randomRange(-36, 120), y: randomRange(124, 162) };
+    };
+
+    const exitPoint = randomOffscreenPoint();
+    const returnStartPoint = randomOffscreenPoint();
+    const motionStyle: HoloFlightStyle = {
+      "--ufo-r0": "-2deg",
+      "--ufo-r1": `${randomRange(-22, 24).toFixed(2)}deg`,
+      "--ufo-r2": `${randomRange(-24, 22).toFixed(2)}deg`,
+      "--ufo-r3": `${randomRange(-19, 25).toFixed(2)}deg`,
+      "--ufo-r4": `${randomRange(-24, 20).toFixed(2)}deg`,
+      "--ufo-r5": `${randomRange(-16, 18).toFixed(2)}deg`,
+      "--ufo-tour1-x": `${randomRange(10, 36).toFixed(2)}vw`,
+      "--ufo-tour1-y": `${randomRange(4, 18).toFixed(2)}vh`,
+      "--ufo-tour2-x": `${randomRange(-20, 56).toFixed(2)}vw`,
+      "--ufo-tour2-y": `${randomRange(14, 42).toFixed(2)}vh`,
+      "--ufo-tour3-x": `${randomRange(-12, 66).toFixed(2)}vw`,
+      "--ufo-tour3-y": `${randomRange(8, 52).toFixed(2)}vh`,
+      "--ufo-tour4-x": `${randomRange(-26, 58).toFixed(2)}vw`,
+      "--ufo-tour4-y": `${randomRange(10, 46).toFixed(2)}vh`,
+      "--ufo-tour-end-x": `${randomRange(14, 58).toFixed(2)}vw`,
+      "--ufo-tour-end-y": `${randomRange(12, 40).toFixed(2)}vh`,
+      "--ufo-exit-x": `${exitPoint.x.toFixed(2)}vw`,
+      "--ufo-exit-y": `${exitPoint.y.toFixed(2)}vh`,
+      "--ufo-exit-rot": `${randomRange(-46, 46).toFixed(2)}deg`,
+      "--ufo-return-start-x": `${returnStartPoint.x.toFixed(2)}vw`,
+      "--ufo-return-start-y": `${returnStartPoint.y.toFixed(2)}vh`,
+      "--ufo-return-mid-x": `${randomRange(-22, 24).toFixed(2)}vw`,
+      "--ufo-return-mid-y": `${randomRange(-2, 12).toFixed(2)}vh`,
+      "--ufo-return-mid-rot": `${randomRange(-18, 20).toFixed(2)}deg`,
+      "--ufo-return-rot": `${randomRange(-40, 40).toFixed(2)}deg`,
+    };
+
+    const rect = ship.getBoundingClientRect();
+    setHoloFlightOrigin({
+      x: rect.left + rect.width * 0.5,
+      y: rect.top + rect.height * 0.55,
+    });
+    setHoloFlightMotionStyle(motionStyle);
+    clearHoloFlightTimers();
+
+    holoLaunchRafRef.current = window.requestAnimationFrame(() => {
+      holoLaunchRafRef.current = null;
+      setHoloFlightPhase("tour");
+
+      const toExit = window.setTimeout(() => {
+        setHoloFlightPhase("exit");
+      }, 8000);
+      const toReturn = window.setTimeout(() => {
+        setHoloFlightPhase("return");
+      }, 8920);
+      const toIdle = window.setTimeout(() => {
+        finishHoloFlight();
+      }, 10080);
+
+      holoFlightTimersRef.current = [toExit, toReturn, toIdle];
+    });
+  }
+
+  function launchSpecialHoloFlight() {
+    if (holoFlightPhaseRef.current !== "idle") return;
+    const ship = holoShipRef.current;
+    if (!ship) return;
+    clearHoloFlightTimers();
+    const rect = ship.getBoundingClientRect();
+    const originX = rect.left + rect.width * 0.5;
+    const originY = rect.top + rect.height * 0.55;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const centerX = viewportW * 0.52;
+    const centerY = viewportH * 0.42;
+    const loopCount = 20;
+    const enterMs = 1900;
+    const hoverMs = 820;
+    const loopMs = 11200;
+    const slowMs = 1650;
+    const homeMs = 1950;
+    const totalMs = enterMs + hoverMs + loopMs + slowMs + homeMs;
+    const leftEntryX = -viewportW * 0.16;
+    const rightExitX = viewportW * 1.16;
+    const loopSpan = rightExitX - leftEntryX;
+    const startLoopFrac = Math.min(
+      0.96,
+      Math.max(0.04, (centerX - leftEntryX) / loopSpan)
+    );
+    const specialStart = performance.now();
+    setHoloFlightOrigin({ x: originX, y: originY });
+    setHoloFlightMotionStyle({
+      transform: "translate(-50%, -50%) translate(0px, 0px) rotate(-2deg) scale(1)",
+      opacity: 0.78,
+    });
+
+    const easeInOut = (value: number) =>
+      value < 0.5
+        ? 4 * value * value * value
+        : 1 - Math.pow(-2 * value + 2, 3) / 2;
+    const easeOut = (value: number) => 1 - Math.pow(1 - value, 3);
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+    const loopState = (progress: number) => {
+      const accel = Math.pow(progress, 2);
+      const cycles = startLoopFrac + accel * (loopCount - 0.02);
+      const frac = cycles - Math.floor(cycles);
+      const x = leftEntryX + loopSpan * frac;
+      const wave = Math.sin((cycles - startLoopFrac) * Math.PI * 2);
+      const y = centerY + wave * 20 + Math.sin(progress * Math.PI * 2.8) * 7;
+      const rotate = wave * 14 + progress * 10 - 6;
+      const scale = 1 + Math.sin(cycles * Math.PI * 2) * 0.016;
+      return { x, y, rotate, scale };
+    };
+
+    const specialTick = (now: number) => {
+      const elapsed = now - specialStart;
+      if (elapsed >= totalMs) {
+        finishHoloFlight();
+        holoSpecialRafRef.current = null;
+        return;
+      }
+
+      let x = originX;
+      let y = originY;
+      let rotate = -2;
+      let scale = 1;
+      let opacity = 0.78;
+
+      if (elapsed < enterMs) {
+        const t = easeOut(elapsed / enterMs);
+        x = lerp(originX, centerX, t);
+        y = lerp(originY, centerY, t) + Math.sin(t * Math.PI) * 6;
+        rotate = lerp(-2, 2, t);
+        scale = lerp(1, 1.03, t);
+      } else if (elapsed < enterMs + hoverMs) {
+        const t = (elapsed - enterMs) / hoverMs;
+        x = centerX + Math.sin(t * Math.PI * 2) * 10;
+        y = centerY + Math.sin(t * Math.PI * 4) * 4;
+        rotate = Math.sin(t * Math.PI * 2) * 5;
+        scale = 1.02;
+      } else if (elapsed < enterMs + hoverMs + loopMs) {
+        const t = (elapsed - enterMs - hoverMs) / loopMs;
+        const state = loopState(t);
+        x = state.x;
+        y = state.y;
+        rotate = state.rotate;
+        scale = state.scale;
+        opacity = 0.74 + Math.sin(t * Math.PI * 20) * 0.04;
+      } else if (elapsed < enterMs + hoverMs + loopMs + slowMs) {
+        const t = easeOut((elapsed - enterMs - hoverMs - loopMs) / slowMs);
+        const endState = loopState(1);
+        x = lerp(endState.x, centerX, t);
+        y = lerp(endState.y, centerY, t) + Math.sin((1 - t) * Math.PI) * 5;
+        rotate = lerp(endState.rotate, 1, t);
+        scale = lerp(endState.scale, 1.01, t);
+      } else {
+        const t = easeInOut((elapsed - enterMs - hoverMs - loopMs - slowMs) / homeMs);
+        x = lerp(centerX, originX, t);
+        y = lerp(centerY, originY, t);
+        rotate = lerp(1, -2, t);
+        scale = lerp(1.01, 1, t);
+      }
+
+      setHoloFlightMotionStyle({
+        transform: `translate(-50%, -50%) translate(${(x - originX).toFixed(2)}px, ${(y - originY).toFixed(2)}px) rotate(${rotate.toFixed(2)}deg) scale(${scale.toFixed(3)})`,
+        opacity,
+      });
+
+      holoSpecialRafRef.current = window.requestAnimationFrame(specialTick);
+    };
+
+    holoLaunchRafRef.current = window.requestAnimationFrame(() => {
+      holoLaunchRafRef.current = null;
+      setHoloFlightPhase("special");
+      holoSpecialRafRef.current = window.requestAnimationFrame(specialTick);
+    });
+  }
+
+  function finishHoloFlight() {
+    setHoloFlightPhase("idle");
+    setHoloFlightOrigin(null);
+    setHoloFlightMotionStyle({});
+  }
+
+  useEffect(() => {
+    holoFlightPhaseRef.current = holoFlightPhase;
+  }, [holoFlightPhase]);
+
+  useEffect(() => {
+    return () => {
+      clearHoloFlightTimers();
+      clearHoloSpecialSchedule();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (notesBootstrapping) return;
+    clearHoloSpecialSchedule();
+    holoSpecialLaunchTimerRef.current = window.setTimeout(() => {
+      launchSpecialHoloFlight();
+    }, 5000);
+    holoSpecialIntervalRef.current = window.setInterval(() => {
+      launchSpecialHoloFlight();
+    }, 5000);
+
+    return () => {
+      clearHoloSpecialSchedule();
+    };
+  }, [notesBootstrapping]);
+
   function renderTouchPanel() {
+    const holoClassName =
+      holoFlightPhase === "idle"
+        ? "ufo-holo-float"
+        : holoFlightPhase === "tour"
+          ? "ufo-holo-flight-tour"
+          : holoFlightPhase === "exit"
+            ? "ufo-holo-flight-exit"
+            : holoFlightPhase === "return"
+              ? "ufo-holo-flight-return"
+              : "ufo-holo-flight-special";
+
+    const holoStyle: React.CSSProperties =
+      holoFlightPhase === "idle"
+        ? {
+            ...touchHoloShipStyle,
+            opacity: touchHoloShipStyle.opacity,
+          }
+        : {
+            ...touchHoloFlightOverlayStyle,
+            ...holoFlightMotionStyle,
+            left: holoFlightOrigin?.x ?? 0,
+            top: holoFlightOrigin?.y ?? 0,
+          };
+
     return (
       <div style={touchPanelStyle}>
+        <img
+          ref={holoShipRef}
+          src="/ufoholo.png"
+          alt=""
+          aria-hidden
+          draggable={false}
+          className={holoClassName}
+          onClick={() => launchHoloFlight()}
+          style={holoStyle}
+        />
+        <div style={touchPanelContentLayerStyle}>
         <div style={touchPanelHeadStyle}>
           <div style={{ ...labelStyle, marginBottom: 0 }}>users in touch</div>
           <button
@@ -986,6 +1333,7 @@ useEffect(() => {
             </div>
           </div>
         ) : null}
+        </div>
       </div>
     );
   }
@@ -1310,7 +1658,7 @@ useEffect(() => {
           {!notesBootstrapping ? (
             <div
               aria-hidden
-              className="ufo-ambient-faint"
+              className={`ufo-ambient-faint ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`}
               style={{
                 position: "absolute",
                 inset: 0,
@@ -1331,7 +1679,10 @@ useEffect(() => {
           ) : null}
           {notesBootstrapping ? (
             <div aria-hidden style={{ position: "relative", zIndex: 1, height: "100%" }}>
-              <div className="ufo-boot-glow" style={notesBootPlaceholderStyle} />
+              <div
+                className={`ufo-boot-glow ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`}
+                style={notesBootPlaceholderStyle}
+              />
               <div
                 style={{
                   position: "absolute",
@@ -1740,6 +2091,37 @@ const touchPanelStyle: React.CSSProperties = {
   borderRadius: 10,
   padding: "12px 14px",
   background: "rgba(255,255,255,0.02)",
+  position: "relative",
+};
+
+const touchHoloShipStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 18,
+  top: -128,
+  width: 140,
+  height: "auto",
+  opacity: 0.72,
+  pointerEvents: "auto",
+  userSelect: "none",
+  cursor: "pointer",
+  zIndex: 1,
+};
+
+const touchHoloFlightOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  width: 140,
+  height: "auto",
+  pointerEvents: "none",
+  userSelect: "none",
+  zIndex: 4,
+  opacity: 0.76,
+  filter:
+    "drop-shadow(0 0 12px rgba(224,236,255,0.26)) drop-shadow(0 0 22px rgba(188,210,246,0.18))",
+};
+
+const touchPanelContentLayerStyle: React.CSSProperties = {
+  position: "relative",
+  zIndex: 2,
 };
 
 const touchMutedStyle: React.CSSProperties = {
