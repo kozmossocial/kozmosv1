@@ -1227,7 +1227,7 @@ body {
   .home-hero-runtime-mobile {
     position: absolute !important;
     left: 50% !important;
-    top: 91vh !important;
+    top: 107vh !important;
     transform: translateX(-50%) !important;
     z-index: 90 !important;
     pointer-events: auto !important;
@@ -1238,7 +1238,7 @@ body {
   .home-hero-runtime-mobile.runtime-mobile-expanded {
     position: absolute !important;
     left: 50% !important;
-    top: 91vh !important;
+    top: 107vh !important;
     transform: translateX(-50%) !important;
     width: min(320px, 94vw) !important;
     max-height: min(62vh, 520px) !important;
@@ -1342,7 +1342,7 @@ body {
 
   .home-hero-runtime-mobile {
     width: min(236px, 90vw) !important;
-    top: 93vh !important;
+    top: 109vh !important;
     margin-top: 0 !important;
   }
 
