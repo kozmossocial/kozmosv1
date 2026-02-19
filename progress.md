@@ -84,3 +84,25 @@ Validation log (latest):
   - fullscreen artifact: `output/web-game/starfall-fullscreen-v2/shot-fullscreen.png`
   - fullscreen layout sample: canvas centerX=720 on viewport width 1440 (horizontally centered).
   - no `errors-*.json` under v3 single/multi outputs.
+- Iteration update (stop/pause/name/fire-rate):
+  - Added new phase `paused` and a `pause/resume` button in Starfall controls.
+  - Replaced `menu` control label with `stop` while preserving reset-to-menu behavior.
+  - Increased player fire speed further:
+    - `PLAYER_FIRE_COOLDOWN`: 0.045
+    - `PLAYER_MAX_ACTIVE_BULLETS`: 3
+    - `PLAYER_BULLET_SPEED`: -620 (already increased earlier)
+  - Lowercased visible game naming:
+    - in-game title overlay to `starfall protocol`
+    - route breadcrumb label to `starfall protocol`
+    - kozmos play list entry text to `starfall protocol`.
+
+Validation log:
+- `npx eslint app/main/play/starfall-protocol/StarfallProtocolGame.tsx` passes.
+- `npx eslint app/main/page.tsx` passes with pre-existing warnings.
+- `npm run build` passes.
+- Playwright runs:
+  - single: `output/web-game/starfall-single-v5/*` (state shows score progress and active play)
+  - multi: clean rerun in `output/web-game/starfall-multi-v6/*` (no errors file)
+  - pause/resume check: `output/web-game/starfall-pause-v2/*`
+    - paused state contains `"phase":"paused"`
+    - resumed state returns to `"phase":"playing"`.

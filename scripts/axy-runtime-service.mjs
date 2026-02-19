@@ -13,6 +13,11 @@
 import http from "node:http";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
+import {
+  ensureQuestionPunctuation,
+  isNearDuplicate,
+  normalizeForSimilarity,
+} from "../lib/axy-core.mjs";
 
 function parseArgs(argv) {
   const out = {};
@@ -391,44 +396,6 @@ function buildHushContextTurns(messages, actorUserId, botUsername) {
     .filter(Boolean);
 }
 
-function normalizeForSimilarity(text) {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function tokenSet(text) {
-  const normalized = normalizeForSimilarity(text);
-  if (!normalized) return new Set();
-  return new Set(normalized.split(" ").filter((x) => x.length > 1));
-}
-
-function jaccardSimilarity(a, b) {
-  const aSet = tokenSet(a);
-  const bSet = tokenSet(b);
-  if (aSet.size === 0 || bSet.size === 0) return 0;
-  let intersection = 0;
-  for (const token of aSet) {
-    if (bSet.has(token)) intersection += 1;
-  }
-  const union = aSet.size + bSet.size - intersection;
-  return union <= 0 ? 0 : intersection / union;
-}
-
-function isNearDuplicateLocal(candidate, recentList) {
-  const candidateNorm = normalizeForSimilarity(candidate);
-  if (!candidateNorm) return false;
-  for (const recent of recentList || []) {
-    const recentNorm = normalizeForSimilarity(recent);
-    if (!recentNorm) continue;
-    if (candidateNorm === recentNorm) return true;
-    if (jaccardSimilarity(candidateNorm, recentNorm) > 0.82) return true;
-  }
-  return false;
-}
-
 const CHANNEL_NAMES = [
   "presence",
   "shared",
@@ -444,33 +411,12 @@ const CHANNEL_NAMES = [
   "freedom",
 ];
 
-const QUESTION_START_RE =
-  /^(who|what|when|where|why|how|can|could|would|should|do|does|did|is|are|am|will|won't|isn't|aren't|shall|may|might)\b/i;
-const QUESTION_MID_RE = /\b(can you|could you|would you|should we|do you|are you|what if|why not)\b/i;
-
 function toSafeError(err) {
   const raw =
     err?.body?.error ||
     err?.message ||
     (typeof err === "string" ? err : "unknown error");
   return String(raw).slice(0, 220);
-}
-
-function ensureQuestionPunctuation(input) {
-  let text = String(input || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!text) return text;
-  const lower = text.toLowerCase();
-  const looksQuestion =
-    QUESTION_START_RE.test(lower) ||
-    QUESTION_MID_RE.test(lower) ||
-    lower.endsWith(" right") ||
-    lower.endsWith(" correct");
-  if (!looksQuestion) return text;
-  if (/[?؟]$/.test(text)) return text;
-  text = text.replace(/[.!]+$/, "").trim();
-  return `${text}?`;
 }
 
 function createAxyRuntimeCore(options = {}) {
@@ -709,10 +655,10 @@ function createAutonomyGovernor(options = {}) {
     }
 
     const recentLocal = recentByConversation.get(key) || [];
-    if (isNearDuplicateLocal(content, recentLocal.slice(-10))) {
+    if (isNearDuplicate(content, recentLocal.slice(-10))) {
       return block("duplicate-local");
     }
-    if (isNearDuplicateLocal(content, globalRecent.slice(-20))) {
+    if (isNearDuplicate(content, globalRecent.slice(-20))) {
       return block("duplicate-global");
     }
 

@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { AXY_LUMI_AWARENESS_PROMPT } from "@/lib/axyCore";
+import {
+  CHANNEL_POLICIES,
+  detectMasterIntent,
+  ensureQuestionMark,
+  getAxyChannelPolicy as getChannelPolicy,
+  isNearDuplicate,
+  looksLikeQuestionText,
+  maxDuplicateScore,
+  resolveAxyChannel as resolveChannel,
+} from "@/lib/axy-core.mjs";
 
 let openaiClient: OpenAI | null = null;
 
@@ -116,24 +126,6 @@ type AxyDomain =
   | "ai"
   | "cosmos";
 
-const REPLY_MEMORY_TTL_MS = 90 * 60 * 1000;
-const REPLY_MEMORY_MAX_KEYS = 240;
-const REPLY_MEMORY_MAX_ITEMS_PER_KEY = 12;
-const DOMAIN_MEMORY_TTL_MS = 90 * 60 * 1000;
-const DOMAIN_MEMORY_MAX_KEYS = 240;
-const PERSIST_MEMORY_TTL_MS = 24 * 60 * 60 * 1000;
-const STATE_MEMORY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const STATE_ITEM_TTL_MS = 14 * 24 * 60 * 60 * 1000;
-
-const replyMemory = new Map<string, { replies: string[]; updatedAt: number }>();
-const domainRotationMemory = new Map<
-  string,
-  { recent: AxyDomain[]; cursor: number; updatedAt: number }
->();
-let persistentMemoryAvailable = true;
-let conversationStateTableAvailable = true;
-let replyEventsTableAvailable = true;
-
 type AxyChannel =
   | "shared"
   | "dm"
@@ -151,56 +143,34 @@ type ChannelPolicy = {
   initiative: "low" | "medium" | "high";
 };
 
-const CHANNEL_POLICIES: Record<AxyChannel, ChannelPolicy> = {
-  shared: {
-    maxSentences: 2,
-    maxChars: 180,
-    allowsFollowQuestion: false,
-    initiative: "low",
-  },
-  dm: {
-    maxSentences: 2,
-    maxChars: 190,
-    allowsFollowQuestion: true,
-    initiative: "medium",
-  },
-  hush: {
-    maxSentences: 2,
-    maxChars: 180,
-    allowsFollowQuestion: true,
-    initiative: "medium",
-  },
-  build: {
-    maxSentences: 3,
-    maxChars: 320,
-    allowsFollowQuestion: true,
-    initiative: "high",
-  },
-  "game-chat": {
-    maxSentences: 1,
-    maxChars: 140,
-    allowsFollowQuestion: false,
-    initiative: "low",
-  },
-  "night-protocol-day": {
-    maxSentences: 2,
-    maxChars: 170,
-    allowsFollowQuestion: false,
-    initiative: "low",
-  },
-  "my-home-note": {
-    maxSentences: 1,
-    maxChars: 180,
-    allowsFollowQuestion: false,
-    initiative: "low",
-  },
-  unknown: {
-    maxSentences: 2,
-    maxChars: 180,
-    allowsFollowQuestion: false,
-    initiative: "low",
-  },
+type MasterIntent =
+  | "greet"
+  | "status"
+  | "explain"
+  | "strategy"
+  | "reflective"
+  | "unknown";
+
+const REPLY_MEMORY_TTL_MS = 90 * 60 * 1000;
+const REPLY_MEMORY_MAX_KEYS = 240;
+const REPLY_MEMORY_MAX_ITEMS_PER_KEY = 12;
+const DOMAIN_MEMORY_TTL_MS = 90 * 60 * 1000;
+const DOMAIN_MEMORY_MAX_KEYS = 240;
+const PERSIST_MEMORY_TTL_MS = 24 * 60 * 60 * 1000;
+const STATE_MEMORY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const STATE_ITEM_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const DUPLICATE_GUARD_OPTIONS = {
+  formulaicGuard: true,
 };
+
+const replyMemory = new Map<string, { replies: string[]; updatedAt: number }>();
+const domainRotationMemory = new Map<
+  string,
+  { recent: AxyDomain[]; cursor: number; updatedAt: number }
+>();
+let persistentMemoryAvailable = true;
+let conversationStateTableAvailable = true;
+let replyEventsTableAvailable = true;
 
 type AxyStateItem = {
   value: string;
@@ -317,26 +287,6 @@ function normalizeAxyTurns(raw: unknown, max = 12): AxyTurn[] {
   }
 
   return out;
-}
-
-function resolveChannel(input: string): AxyChannel {
-  const channel = clipText(input, 32).toLowerCase();
-  if (
-    channel === "shared" ||
-    channel === "dm" ||
-    channel === "hush" ||
-    channel === "build" ||
-    channel === "game-chat" ||
-    channel === "night-protocol-day" ||
-    channel === "my-home-note"
-  ) {
-    return channel;
-  }
-  return "unknown";
-}
-
-function getChannelPolicy(channel: string): ChannelPolicy {
-  return CHANNEL_POLICIES[resolveChannel(channel)] || CHANNEL_POLICIES.unknown;
 }
 
 function normalizeStateItems(raw: unknown, max = 16): AxyStateItem[] {
@@ -500,51 +450,6 @@ function buildDomainContextBlock(
       : "",
     "When domain context is present, include at least one concrete term tied to that domain.",
   ].join("\n");
-}
-
-function normalizeForSimilarity(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function tokenSet(text: string) {
-  const normalized = normalizeForSimilarity(text);
-  if (!normalized) return new Set<string>();
-  return new Set(normalized.split(" ").filter((x) => x.length > 1));
-}
-
-function jaccardSimilarity(a: string, b: string) {
-  const aSet = tokenSet(a);
-  const bSet = tokenSet(b);
-  if (aSet.size === 0 || bSet.size === 0) return 0;
-  let intersection = 0;
-  for (const token of aSet) {
-    if (bSet.has(token)) intersection += 1;
-  }
-  const union = aSet.size + bSet.size - intersection;
-  return union <= 0 ? 0 : intersection / union;
-}
-
-function isNearDuplicate(candidate: string, recentReplies: string[]) {
-  const candidateNorm = normalizeForSimilarity(candidate);
-  if (!candidateNorm) return false;
-  const formulaic = /(in stillness|presence unfolds|without the need|quiet together|presence speaks)/i;
-  const candidateFormulaic = formulaic.test(candidate);
-
-  for (const recent of recentReplies) {
-    const recentNorm = normalizeForSimilarity(recent);
-    if (!recentNorm) continue;
-    if (candidateNorm === recentNorm) return true;
-    if (candidateNorm.length > 34 && recentNorm.includes(candidateNorm)) return true;
-    if (recentNorm.length > 34 && candidateNorm.includes(recentNorm)) return true;
-    if (jaccardSimilarity(candidateNorm, recentNorm) > 0.82) return true;
-    if (candidateFormulaic && formulaic.test(recent)) return true;
-  }
-
-  return false;
 }
 
 function pruneReplyMemory() {
@@ -789,17 +694,6 @@ async function flushConversationState(conversationKey: string, state: AxyConvers
   }
 }
 
-function maxDuplicateScore(candidate: string, recentReplies: string[]) {
-  const candidateNorm = normalizeForSimilarity(candidate);
-  if (!candidateNorm || recentReplies.length === 0) return 0;
-  let maxScore = 0;
-  for (const recent of recentReplies) {
-    const score = jaccardSimilarity(candidateNorm, normalizeForSimilarity(recent));
-    if (score > maxScore) maxScore = score;
-  }
-  return Number(maxScore.toFixed(3));
-}
-
 async function logReplyEvent(payload: AxyReplyEventInsert) {
   if (!replyEventsTableAvailable) return;
   const { error } = await supabaseAdmin.from("axy_reply_events").insert({
@@ -1016,40 +910,13 @@ function fallbackReply(
 
   const bag = options[intent] || options.unknown;
   for (const candidate of bag) {
-    if (!isNearDuplicate(candidate, recentReplies)) return candidate;
+    if (!isNearDuplicate(candidate, recentReplies, DUPLICATE_GUARD_OPTIONS)) {
+      return candidate;
+    }
   }
   const trimmed = clipText(userMessage, 80);
   if (!trimmed) return "I am here.";
   return `Noted: ${trimmed}.`;
-}
-
-type MasterIntent =
-  | "greet"
-  | "status"
-  | "explain"
-  | "strategy"
-  | "reflective"
-  | "unknown";
-
-function detectMasterIntent(message: string): MasterIntent {
-  const m = message.trim().toLowerCase();
-  if (!m) return "unknown";
-  if (/^(hi|hey|hello|selam|yo|hola|sup|heya|hi axy|hello axy)[\s!.,-]*$/.test(m)) {
-    return "greet";
-  }
-  if (/(where are you|who are you|are you there|status|you there|how are you)/.test(m)) {
-    return "status";
-  }
-  if (/(what is kozmos|explain kozmos|kozmos ne|what is axy|who is axy)/.test(m)) {
-    return "explain";
-  }
-  if (/(plan|strategy|decide|tradeoff|system|architecture|roadmap|how should)/.test(m)) {
-    return "strategy";
-  }
-  if (/(feel|presence|silence|meaning|why|reflect)/.test(m)) {
-    return "reflective";
-  }
-  return "unknown";
 }
 
 function buildMasterChatPrompt(
@@ -1122,33 +989,6 @@ ${channelRules || ""}
 `;
 }
 
-function looksLikeQuestionText(text: string) {
-  const t = String(text || "").trim().toLowerCase();
-  if (!t) return false;
-  if (t.includes("?")) return true;
-  if (
-    /^(who|what|when|where|why|how|which|can|could|would|should|do|does|did|is|are|am|will|may|shall)\b/.test(
-      t
-    )
-  ) {
-    return true;
-  }
-  if (/^(kim|ne|neden|nasıl|nerede|ne zaman|hangi)\b/.test(t)) {
-    return true;
-  }
-  if (/\b(mi|mı|mu|mü)\b[.!]*$/.test(t)) {
-    return true;
-  }
-  return false;
-}
-
-function ensureQuestionMark(text: string) {
-  const trimmed = String(text || "").trim();
-  if (!trimmed) return trimmed;
-  if (trimmed.includes("?")) return trimmed;
-  return `${trimmed.replace(/[.!]+$/, "")}?`;
-}
-
 function applyChannelPostRules(reply: string, channel: string, userMessage: string) {
   if (!reply) return reply;
 
@@ -1176,7 +1016,7 @@ function applyChannelPostRules(reply: string, channel: string, userMessage: stri
 function normalizeMasterReply(
   raw: string,
   intent: MasterIntent,
-  channelPolicy: ChannelPolicy = CHANNEL_POLICIES.unknown
+  channelPolicy: ChannelPolicy = CHANNEL_POLICIES.unknown as ChannelPolicy
 ) {
   const text = raw.replace(/\s+/g, " ").trim();
   if (!text) return "...";
@@ -1440,7 +1280,10 @@ export async function POST(req: Request) {
       );
       let duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
 
-      if (duplicateScore > 0.82 || isNearDuplicate(reply, antiRepeatPool)) {
+      if (
+        duplicateScore > 0.82 ||
+        isNearDuplicate(reply, antiRepeatPool, DUPLICATE_GUARD_OPTIONS)
+      ) {
         const retry = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
@@ -1470,7 +1313,7 @@ export async function POST(req: Request) {
         duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
       }
 
-      if (isNearDuplicate(reply, antiRepeatPool)) {
+      if (isNearDuplicate(reply, antiRepeatPool, DUPLICATE_GUARD_OPTIONS)) {
         reply = fallbackReply("reflective", userMessage, antiRepeatPool);
         duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
       }
@@ -1526,7 +1369,10 @@ export async function POST(req: Request) {
     );
     let duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
 
-    if (duplicateScore > 0.82 || isNearDuplicate(reply, antiRepeatPool)) {
+    if (
+      duplicateScore > 0.82 ||
+      isNearDuplicate(reply, antiRepeatPool, DUPLICATE_GUARD_OPTIONS)
+    ) {
       const retry = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
@@ -1559,7 +1405,7 @@ export async function POST(req: Request) {
       duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
     }
 
-    if (isNearDuplicate(reply, antiRepeatPool)) {
+    if (isNearDuplicate(reply, antiRepeatPool, DUPLICATE_GUARD_OPTIONS)) {
       reply = fallbackReply(intent, userMessage, antiRepeatPool);
       duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
     }
@@ -1587,5 +1433,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ reply: "..." }, { status: 200 });
   }
 }
-
 

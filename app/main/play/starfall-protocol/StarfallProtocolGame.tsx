@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type PlayMode = "single" | "multi";
-type Phase = "menu" | "playing" | "game-over";
+type Phase = "menu" | "playing" | "paused" | "game-over";
 type EnemyTier = "top" | "mid" | "low";
 
 type Player = {
@@ -107,8 +107,8 @@ const PLAYER_HEIGHT = 22;
 const PLAYER_Y = WORLD_HEIGHT - 56;
 const PLAYER_SPEED = 330;
 const PLAYER_BULLET_SPEED = -620;
-const PLAYER_FIRE_COOLDOWN = 0.09;
-const PLAYER_MAX_ACTIVE_BULLETS = 2;
+const PLAYER_FIRE_COOLDOWN = 0.045;
+const PLAYER_MAX_ACTIVE_BULLETS = 3;
 const ENEMY_BULLET_SPEED = 250;
 const ENEMY_ROWS = 5;
 const ENEMY_COLS = 11;
@@ -435,6 +435,19 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     gameRef.current = next;
     touchRef.current = {};
     syncHud(true);
+  }, [syncHud]);
+
+  const togglePause = useCallback(() => {
+    const state = gameRef.current;
+    if (state.phase === "playing") {
+      state.phase = "paused";
+      syncHud(true);
+      return;
+    }
+    if (state.phase === "paused") {
+      state.phase = "playing";
+      syncHud(true);
+    }
   }, [syncHud]);
 
   const toggleFullscreen = useCallback(async () => {
@@ -798,10 +811,12 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       ctx.fillStyle = "#f2f2f2";
       ctx.textAlign = "center";
       ctx.font = "bold 40px 'Courier New', monospace";
-      if (state.phase === "menu") ctx.fillText("STARFALL PROTOCOL", WORLD_WIDTH / 2, 248);
+      if (state.phase === "menu") ctx.fillText("starfall protocol", WORLD_WIDTH / 2, 248);
+      if (state.phase === "paused") ctx.fillText("paused", WORLD_WIDTH / 2, 248);
       if (state.phase === "game-over") ctx.fillText("GAME OVER", WORLD_WIDTH / 2, 248);
       ctx.font = "16px 'Courier New', monospace";
       if (state.phase === "menu") ctx.fillText("Use Start. Space only shoots.", WORLD_WIDTH / 2, 286);
+      else if (state.phase === "paused") ctx.fillText("Use Pause to resume.", WORLD_WIDTH / 2, 286);
       else ctx.fillText("Use Restart to run again.", WORLD_WIDTH / 2, 286);
       ctx.textAlign = "start";
     }
@@ -1024,7 +1039,19 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
           restart
         </button>
         <button type="button" onClick={goMenu} style={secondaryButton}>
-          menu
+          stop
+        </button>
+        <button
+          type="button"
+          onClick={togglePause}
+          disabled={hud.phase !== "playing" && hud.phase !== "paused"}
+          style={{
+            ...secondaryButton,
+            opacity: hud.phase === "playing" || hud.phase === "paused" ? 1 : 0.55,
+            cursor: hud.phase === "playing" || hud.phase === "paused" ? "pointer" : "not-allowed",
+          }}
+        >
+          {hud.phase === "paused" ? "resume" : "pause"}
         </button>
       </div>
 
@@ -1125,7 +1152,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
           {" / "}
           <span style={{ opacity: 0.85 }}>kozmos play</span>
           {" / "}
-          <span style={{ opacity: 0.85 }}>Starfall Protocol</span>
+          <span style={{ opacity: 0.85 }}>starfall protocol</span>
         </div>
       </div>
 
