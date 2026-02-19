@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
@@ -9,6 +9,7 @@ import {
   getMyHomeAttentionPending,
   refreshMyHomeAttention,
 } from "@/lib/myHomeAttention";
+import StarfallProtocolGame from "@/app/main/play/starfall-protocol/StarfallProtocolGame";
 
 type Message = {
   id: string;
@@ -139,6 +140,7 @@ type HushMessage = {
 };
 
 const ORBIT_TRACK_SIZE = 12;
+const STARFALL_PROTOCOL_MODE = "starfall-protocol";
 const QUITE_SWARM_MODE = "quite-swarm";
 const CHAT_REQUIRED_PLAYS = new Set<string>([QUITE_SWARM_MODE, NIGHT_PROTOCOL_MODE]);
 const NIGHT_PROTOCOL_ROLE_LABEL: Record<
@@ -759,6 +761,7 @@ export default function Main() {
   const [hushCreateUserId, setHushCreateUserId] = useState("");
   const [playOpen, setPlayOpen] = useState(false);
   const [activePlay, setActivePlay] = useState<
+    | typeof STARFALL_PROTOCOL_MODE
     | "signal-drift"
     | "slow-orbit"
     | "hush-puzzle"
@@ -828,10 +831,8 @@ export default function Main() {
   const prevInvitesCountRef = useRef(0);
   const prevRequestsCountRef = useRef(0);
   const newsPaperLatestItemIdRef = useRef<number | null>(null);
-  const newsPaperPrimedRef = useRef(false);
   const prevNewsPaperOpenRef = useRef(false);
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
-  const chatViewportReadyRafRef = useRef<number | null>(null);
   const sharedStickToBottomRef = useRef(true);
   const presentUsersPanelRef = useRef<HTMLDivElement | null>(null);
   const vsMoveKeysRef = useRef<{
@@ -1614,11 +1615,21 @@ export default function Main() {
         )
         .slice(0, 10);
       const latestId = parsed[0]?.id ?? null;
-      const previousLatestId = newsPaperLatestItemIdRef.current;
-      if (!newsPaperPrimedRef.current) {
-        newsPaperPrimedRef.current = true;
-      } else if (latestId && latestId !== previousLatestId) {
-        setNewsPaperUnreadSignal(true);
+      let lastReadId = 0;
+      if (typeof window !== "undefined" && userId) {
+        const readKey = `kozmos.newsPaper.lastReadId:${userId}`;
+        const raw = window.localStorage.getItem(readKey);
+        const parsedReadId = Number(raw || 0);
+        if (Number.isFinite(parsedReadId) && parsedReadId > 0) {
+          lastReadId = parsedReadId;
+        }
+      }
+      const hasUnread =
+        parsed.length > 0 &&
+        ((lastReadId > 0 && Boolean(latestId && latestId > lastReadId)) ||
+          lastReadId <= 0);
+      setNewsPaperUnreadSignal(hasUnread);
+      if (!hasUnread) {
         setNewsPaperOpenedAfterUnread(false);
       }
       newsPaperLatestItemIdRef.current = latestId;
@@ -1628,7 +1639,7 @@ export default function Main() {
     } finally {
       setNewsPaperLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   const maybeRunDailyNewsAuto = useCallback(async () => {
     const {
@@ -2527,23 +2538,15 @@ export default function Main() {
     setChatViewportReady(false);
     const raf1 = window.requestAnimationFrame(() => {
       el.scrollTop = el.scrollHeight;
-      chatViewportReadyRafRef.current = window.requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-        sharedStickToBottomRef.current = true;
-        setChatViewportReady(true);
-        chatViewportReadyRafRef.current = null;
-      });
+      sharedStickToBottomRef.current = true;
+      setChatViewportReady(true);
     });
     return () => {
       window.cancelAnimationFrame(raf1);
-      if (chatViewportReadyRafRef.current !== null) {
-        window.cancelAnimationFrame(chatViewportReadyRafRef.current);
-        chatViewportReadyRafRef.current = null;
-      }
     };
   }, [chatBootstrapReady]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = sharedMessagesRef.current;
     if (!el) return;
     if (!sharedStickToBottomRef.current) return;
@@ -2793,6 +2796,13 @@ export default function Main() {
   }, [loadNewsPaper, maybeRunDailyNewsAuto, userId]);
 
   useEffect(() => {
+    prevNewsPaperOpenRef.current = false;
+    newsPaperLatestItemIdRef.current = null;
+    setNewsPaperOpenedAfterUnread(false);
+    setNewsPaperUnreadSignal(false);
+  }, [userId]);
+
+  useEffect(() => {
     if (newsPaperOpen && newsPaperUnreadSignal && !newsPaperOpenedAfterUnread) {
       setNewsPaperOpenedAfterUnread(true);
     }
@@ -2805,9 +2815,14 @@ export default function Main() {
     ) {
       setNewsPaperUnreadSignal(false);
       setNewsPaperOpenedAfterUnread(false);
+      const latestId = newsPaperLatestItemIdRef.current;
+      if (typeof window !== "undefined" && userId && latestId) {
+        const readKey = `kozmos.newsPaper.lastReadId:${userId}`;
+        window.localStorage.setItem(readKey, String(latestId));
+      }
     }
     prevNewsPaperOpenRef.current = newsPaperOpen;
-  }, [newsPaperOpen, newsPaperOpenedAfterUnread, newsPaperUnreadSignal]);
+  }, [newsPaperOpen, newsPaperOpenedAfterUnread, newsPaperUnreadSignal, userId]);
 
   /*  send */
   async function sendMessage() {
@@ -2952,6 +2967,7 @@ export default function Main() {
 
   function openPlay(
     game:
+      | typeof STARFALL_PROTOCOL_MODE
       | "signal-drift"
       | "slow-orbit"
       | "hush-puzzle"
@@ -4658,10 +4674,8 @@ export default function Main() {
             ref={sharedMessagesRef}
             style={{
               ...sharedMessagesScrollStyle,
-              overflowY: chatViewportReady ? "auto" : "hidden",
-              paddingRight: chatViewportReady
-                ? sharedMessagesScrollStyle.paddingRight
-                : 0,
+              overflowY: "auto",
+              paddingRight: sharedMessagesScrollStyle.paddingRight,
             }}
             onScroll={syncSharedStickToBottom}
           >
@@ -5275,7 +5289,7 @@ export default function Main() {
                   style={{ opacity: 0.84, cursor: "pointer", marginBottom: 6 }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    router.push("/main/play/starfall-protocol");
+                    openPlay(STARFALL_PROTOCOL_MODE);
                   }}
                 >
                   Starfall Protocol🛦
@@ -5336,6 +5350,8 @@ export default function Main() {
                   hush puzzle
                 </div>
               </div>
+
+              {activePlay === STARFALL_PROTOCOL_MODE && <StarfallProtocolGame embedded />}
 
               {activePlay === NIGHT_PROTOCOL_MODE && (
                 <div
