@@ -300,6 +300,34 @@ body {
     0 0 16px rgba(107, 255, 142, 0.5);
 }
 
+.panel-tap-hush:active {
+  color: rgba(150, 255, 176, 0.96);
+  text-shadow:
+    0 0 8px rgba(107, 255, 142, 0.84),
+    0 0 16px rgba(107, 255, 142, 0.5);
+}
+
+.panel-tap-play:active {
+  color: rgba(255, 189, 252, 0.96);
+  text-shadow:
+    0 0 8px rgba(255, 138, 245, 0.82),
+    0 0 18px rgba(255, 138, 245, 0.52);
+}
+
+.panel-tap-build:active {
+  color: rgba(229, 255, 148, 0.96);
+  text-shadow:
+    0 0 8px rgba(201, 255, 112, 0.84),
+    0 0 18px rgba(201, 255, 112, 0.52);
+}
+
+.panel-tap-news:active {
+  color: rgba(178, 235, 255, 0.97);
+  text-shadow:
+    0 0 8px rgba(112, 210, 255, 0.82),
+    0 0 18px rgba(112, 210, 255, 0.5);
+}
+
 @keyframes hushPanelAlertPulse {
   0% {
     box-shadow:

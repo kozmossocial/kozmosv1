@@ -237,6 +237,25 @@ type QuiteSwarmPositionBroadcast = {
   sentAt: string;
 };
 
+type NewsPaperTopic =
+  | "science"
+  | "space"
+  | "technology"
+  | "cinema_movies"
+  | "music"
+  | "gaming"
+  | "global_wars";
+
+type NewsPaperItem = {
+  id: number;
+  topic: NewsPaperTopic;
+  title: string;
+  summary: string;
+  sourceName: string;
+  sourceUrl: string;
+  createdAt: string;
+};
+
 const VS_PLAYER_COLORS = [
   "#7df9ff",
   "#8cb8ff",
@@ -645,6 +664,12 @@ export default function Main() {
   const [gameMessages, setGameMessages] = useState<Message[]>([]);
   const [buildInput, setBuildInput] = useState("");
   const [buildMessages, setBuildMessages] = useState<Message[]>([]);
+  const [newsPaperItems, setNewsPaperItems] = useState<NewsPaperItem[]>([]);
+  const [newsPaperLoading, setNewsPaperLoading] = useState(true);
+  const [newsPaperExpandedId, setNewsPaperExpandedId] = useState<number | null>(
+    null
+  );
+  const [newsPaperOpen, setNewsPaperOpen] = useState(false);
   const [gameLoading, setGameLoading] = useState(false);
   const [buildLoading, setBuildLoading] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>("open");
@@ -784,6 +809,7 @@ export default function Main() {
   >(null);
   const [nightProtocolError, setNightProtocolError] = useState("");
   const hushPanelRef = useRef<HTMLDivElement | null>(null);
+  const hushMessagesScrollRef = useRef<HTMLDivElement | null>(null);
   const hushMembersRef = useRef<HushMember[]>([]);
   const hushAlertTimeoutRef = useRef<number | null>(null);
   const prevInvitesCountRef = useRef(0);
@@ -1466,6 +1492,52 @@ export default function Main() {
     }
     return body;
   }
+
+  const loadNewsPaper = useCallback(async () => {
+    try {
+      const res = await fetch("/api/news-paper", { cache: "no-store" });
+      const body = (await res.json().catch(() => ({}))) as {
+        items?: Array<Record<string, unknown>>;
+      };
+      const rows = Array.isArray(body.items) ? body.items : [];
+      const parsed = rows
+        .map((row) => ({
+          id: Number(row.id || 0),
+          topic: String(row.topic || "science") as NewsPaperTopic,
+          title: String(row.title || "").trim(),
+          summary: String(row.summary || "").trim(),
+          sourceName: String(row.sourceName || "").trim() || "source",
+          sourceUrl: String(row.sourceUrl || "").trim(),
+          createdAt: String(row.createdAt || ""),
+        }))
+        .filter(
+          (row) =>
+            Number.isFinite(row.id) &&
+            row.id > 0 &&
+            row.title.length > 0 &&
+            row.sourceUrl.length > 0
+        )
+        .slice(0, 10);
+      setNewsPaperItems(parsed);
+    } catch {
+      setNewsPaperItems([]);
+    } finally {
+      setNewsPaperLoading(false);
+    }
+  }, []);
+
+  const maybeRunDailyNewsAuto = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    await fetch("/api/news-paper/auto", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }).catch(() => null);
+  }, []);
 
   const loadNightProtocolLobby = useCallback(async () => {
     try {
@@ -2550,6 +2622,43 @@ export default function Main() {
     };
   }, [loadTouchState, userId]);
 
+  useEffect(() => {
+    if (!userId) return;
+
+    const run = () => {
+      void loadNewsPaper();
+    };
+
+    const first = window.setTimeout(run, 0);
+    const poll = window.setInterval(run, 90 * 1000);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(poll);
+    };
+  }, [loadNewsPaper, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const run = async () => {
+      await maybeRunDailyNewsAuto();
+      await loadNewsPaper();
+    };
+
+    const first = window.setTimeout(() => {
+      void run();
+    }, 0);
+    const poll = window.setInterval(() => {
+      void run();
+    }, 6 * 60 * 60 * 1000);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(poll);
+    };
+  }, [loadNewsPaper, maybeRunDailyNewsAuto, userId]);
+
   /*  send */
   async function sendMessage() {
     if (!input.trim() || !userId) return;
@@ -3348,6 +3457,92 @@ export default function Main() {
     }
   }, [selectedHushChatId]);
 
+  useEffect(() => {
+    if (!selectedHushChatId || !canChatInSelectedHush) return;
+    const el = hushMessagesScrollRef.current;
+    if (!el) return;
+    const raf = window.requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
+  }, [canChatInSelectedHush, selectedChatMessages.length, selectedHushChatId]);
+
+  const renderNewsPaperEntries = () => {
+    if (newsPaperLoading) {
+      return <div style={{ opacity: 0.52, fontSize: 11 }}>loading headlines...</div>;
+    }
+    if (newsPaperItems.length === 0) {
+      return <div style={{ opacity: 0.52, fontSize: 11 }}>no headlines yet</div>;
+    }
+    return (
+      <div
+        style={{
+          display: "grid",
+          gap: 8,
+          maxHeight: 372,
+          overflowY: "auto",
+          overflowX: "hidden",
+          paddingRight: 4,
+        }}
+      >
+        {newsPaperItems.map((item) => {
+          const expanded = newsPaperExpandedId === item.id;
+          return (
+            <div
+              key={`news-paper-item-${item.id}`}
+              style={{
+                border: "1px solid rgba(120,190,255,0.26)",
+                borderRadius: 8,
+                padding: "6px 8px",
+                background: expanded
+                  ? "rgba(98,172,245,0.16)"
+                  : "rgba(255,255,255,0.02)",
+              }}
+            >
+              <div
+                className="kozmos-tap"
+                style={{ fontSize: 11, cursor: "pointer", opacity: 0.9 }}
+                onClick={() =>
+                  setNewsPaperExpandedId((prev) => (prev === item.id ? null : item.id))
+                }
+              >
+                {item.title}
+              </div>
+              <div style={{ fontSize: 10, opacity: 0.56, marginTop: 3 }}>
+                {new Date(item.createdAt).toLocaleDateString("en-US")}
+              </div>
+              {expanded ? (
+                <div style={{ marginTop: 6, fontSize: 10, opacity: 0.82, lineHeight: 1.45 }}>
+                  <div>{item.summary}</div>
+                  <a
+                    className="kozmos-tap"
+                    href={item.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title={item.sourceUrl}
+                    style={{
+                      color: "rgba(156,214,255,0.94)",
+                      display: "inline-block",
+                      marginTop: 6,
+                      textDecoration: "underline",
+                      textUnderlineOffset: 2,
+                      cursor: "pointer",
+                      opacity: 0.9,
+                    }}
+                  >
+                    source: {item.sourceName} (open link)
+                  </a>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <main
       className="main-page-shell"
@@ -3483,7 +3678,7 @@ export default function Main() {
           </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div
-            className="kozmos-tap hush-refresh"
+            className="kozmos-tap hush-refresh panel-tap-hush"
             style={{ opacity: 0.4, cursor: "pointer" }}
             onClick={(e) => {
               e.stopPropagation();
@@ -3493,7 +3688,7 @@ export default function Main() {
             refresh
           </div>
           <div
-            className="kozmos-tap"
+            className="kozmos-tap panel-tap-hush"
             style={{ opacity: 0.52, cursor: "pointer" }}
             onClick={(e) => {
               e.stopPropagation();
@@ -3578,7 +3773,7 @@ export default function Main() {
             >
               <span>{hushInviteTarget.username}</span>
               <span
-                className="kozmos-tap"
+                className="kozmos-tap panel-tap-play"
                 style={{ cursor: "pointer", opacity: 0.7 }}
                 onClick={() => {
                   if (hushInviteTarget.chatId) {
@@ -3860,6 +4055,7 @@ export default function Main() {
             {canChatInSelectedHush ? (
               <>
                 <div
+                  ref={hushMessagesScrollRef}
                   style={{
                     maxHeight: 160,
                     overflowY: "auto",
@@ -3997,17 +4193,24 @@ export default function Main() {
                 marginBottom: 12,
               }}
             >
-              <div style={{ opacity: 0.8, letterSpacing: "0.2em" }}>
+              <div
+                style={{ opacity: 0.8, letterSpacing: "0.2em" }}
+              >
                 {"news📰paper"}
               </div>
-              <div style={{ opacity: 0.5 }}>soon</div>
+              <div className="kozmos-tap panel-tap-news" style={{ opacity: 0.58, cursor: "pointer" }} onClick={() => setNewsPaperOpen((prev) => !prev)}>{newsPaperOpen ? "hide" : "show"}</div>
             </div>
 
-            <div style={{ opacity: 0.62, marginBottom: 6 }}>bright pulses from kozmos</div>
-
-            <div style={{ opacity: 0.52, fontSize: 11 }}>
-              headlines will appear here
-            </div>
+            {newsPaperOpen ? (
+              renderNewsPaperEntries()
+            ) : (
+              <>
+                <div style={{ opacity: 0.62, fontSize: 11, marginBottom: 6 }}>
+                  news from around the kozmos
+                </div>
+                <div style={{ opacity: 0.48, fontSize: 11 }}>keep informed by Axy.</div>
+              </>
+            )}
           </div>
 
           <div className="hush-panel space-tv-panel" style={spaceTvPanelStyle}>
@@ -5970,7 +6173,7 @@ export default function Main() {
                 {"user🔨build"}
               </div>
               <div
-                className="kozmos-tap"
+                className="kozmos-tap panel-tap-build"
                 style={{ opacity: 0.66, cursor: "pointer" }}
                 onClick={() => router.push("/build")}
               >
@@ -5997,17 +6200,24 @@ export default function Main() {
                 marginBottom: 12,
               }}
             >
-              <div style={{ opacity: 0.8, letterSpacing: "0.2em" }}>
+              <div
+                style={{ opacity: 0.8, letterSpacing: "0.2em" }}
+              >
                 {"news📰paper"}
               </div>
-              <div style={{ opacity: 0.52 }}>soon</div>
+              <div className="kozmos-tap panel-tap-news" style={{ opacity: 0.58, cursor: "pointer" }} onClick={() => setNewsPaperOpen((prev) => !prev)}>{newsPaperOpen ? "hide" : "show"}</div>
             </div>
 
-            <div style={{ opacity: 0.62, marginBottom: 6 }}>bright pulses from kozmos</div>
-
-            <div style={{ opacity: 0.52, fontSize: 11 }}>
-              headlines will appear here
-            </div>
+            {newsPaperOpen ? (
+              renderNewsPaperEntries()
+            ) : (
+              <>
+                <div style={{ opacity: 0.62, fontSize: 11, marginBottom: 6 }}>
+                  news from around the kozmos
+                </div>
+                <div style={{ opacity: 0.48, fontSize: 11 }}>keep informed by Axy.</div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -6164,5 +6374,8 @@ const rightPanelStackStyle: React.CSSProperties = {
   width: "100%",
   marginRight: 16,
 };
+
+
+
 
 

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/news-paper/auto",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}
