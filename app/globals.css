@@ -1225,24 +1225,26 @@ body {
   }
 
   .home-hero-runtime-mobile {
-    position: relative !important;
+    position: absolute !important;
+    left: 50% !important;
+    top: 83vh !important;
+    transform: translateX(-50%) !important;
     z-index: 90 !important;
     pointer-events: auto !important;
     touch-action: manipulation !important;
-    top: auto !important;
-    margin-top: 26px !important;
+    margin-top: 0 !important;
   }
 
   .home-hero-runtime-mobile.runtime-mobile-expanded {
-    position: relative !important;
-    left: auto !important;
-    bottom: auto !important;
-    transform: none !important;
+    position: absolute !important;
+    left: 50% !important;
+    top: 83vh !important;
+    transform: translateX(-50%) !important;
     width: min(320px, 94vw) !important;
     max-height: min(62vh, 520px) !important;
     overflow-y: auto !important;
     overscroll-behavior: contain;
-    margin-top: 26px !important;
+    margin-top: 0 !important;
     z-index: 90 !important;
   }
 
@@ -1340,7 +1342,8 @@ body {
 
   .home-hero-runtime-mobile {
     width: min(236px, 90vw) !important;
-    margin-top: 18px !important;
+    top: 85vh !important;
+    margin-top: 0 !important;
   }
 
   .main-grid {
