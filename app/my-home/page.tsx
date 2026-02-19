@@ -1678,6 +1678,30 @@ useEffect(() => {
           {ambientSoundOn ? "🔉" : "🔇"}
         </button>
       </div>
+      {isMobileLayout ? (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: 44,
+            top: 35,
+            width: holoShipWidth,
+            opacity: 0.78,
+            pointerEvents: "none",
+            userSelect: "none",
+            zIndex: 3,
+          }}
+        >
+          <img
+            src="/ufoholo.png"
+            alt=""
+            aria-hidden
+            draggable={false}
+            className="ufo-holo-mobile-hover"
+            style={touchHoloShipImageMobileStyle}
+          />
+        </div>
+      ) : null}
 
       {/* TOP RIGHT */}
       <div style={topRightStyle}>
@@ -1698,28 +1722,6 @@ useEffect(() => {
 
       {/* CONTENT */}
       <div style={contentStyle}>
-        {isMobileLayout ? (
-          <div
-            aria-hidden
-            style={{
-              width: holoShipWidth,
-              margin: "-39px auto 16px",
-              transform: "translateX(-10px)",
-              opacity: 0.78,
-              pointerEvents: "none",
-              userSelect: "none",
-            }}
-          >
-            <img
-              src="/ufoholo.png"
-              alt=""
-              aria-hidden
-              draggable={false}
-              className="ufo-holo-mobile-hover"
-              style={touchHoloShipImageMobileStyle}
-            />
-          </div>
-        ) : null}
         <div style={{ opacity: 0.6, marginBottom: 6 }}>
           this is your space.
         </div>
