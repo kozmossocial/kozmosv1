@@ -726,6 +726,11 @@ useEffect(() => {
   }, [directChatEditMode]);
 
   useEffect(() => {
+    if (isMobileLayout) {
+      setUfoBeamActive(false);
+      setUfoBeamHasFired(false);
+      return;
+    }
     if (notesBootstrapping) {
       setUfoBeamActive(false);
       return;
@@ -759,7 +764,7 @@ useEffect(() => {
       if (cycleTimer) window.clearTimeout(cycleTimer);
       if (beamOffTimer) window.clearTimeout(beamOffTimer);
     };
-  }, [notesBootstrapping]);
+  }, [isMobileLayout, notesBootstrapping]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
@@ -1811,7 +1816,11 @@ useEffect(() => {
           {!notesBootstrapping ? (
             <div
               aria-hidden
-              className={`ufo-ambient-faint ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`}
+              className={
+                isMobileLayout
+                  ? "ufo-ambient-faint"
+                  : `ufo-ambient-faint ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`
+              }
               style={{
                 position: "absolute",
                 inset: 0,
@@ -1834,8 +1843,12 @@ useEffect(() => {
           {notesBootstrapping ? (
             <div aria-hidden style={{ position: "relative", zIndex: 1, height: "100%" }}>
               <div
-                className={`ufo-boot-glow ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`}
-                style={notesBootPlaceholderStyle}
+                className={
+                  isMobileLayout
+                    ? "ufo-boot-glow-soft"
+                    : `ufo-boot-glow ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`
+                }
+                style={isMobileLayout ? notesBootPlaceholderMobileStyle : notesBootPlaceholderStyle}
               />
               <div
                 style={{
