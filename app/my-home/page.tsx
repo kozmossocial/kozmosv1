@@ -102,6 +102,8 @@ export default function MyHome() {
   const directChatsInitializedRef = useRef(false);
   const directChatUpdatedAtRef = useRef<Record<string, string>>({});
   const directChatSeenAtRef = useRef<Record<string, string>>({});
+  const selectedDirectChatIdRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
@@ -127,6 +129,7 @@ export default function MyHome() {
   const [lumiMobileTapHintVisible, setLumiMobileTapHintVisible] = useState(false);
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
+  const [authEpoch, setAuthEpoch] = useState(0);
   const touchPanelRef = useRef<HTMLDivElement | null>(null);
   const holoShipRef = useRef<HTMLDivElement | null>(null);
   const holoFlightTimersRef = useRef<number[]>([]);
@@ -141,6 +144,33 @@ export default function MyHome() {
   const holoDockLeft = isMobileLayout ? 12 : 18;
   const holoDockTop = isMobileLayout ? -92 : -128;
   const holoShipWidth = isMobileLayout ? 94 : 140;
+
+  const resolveActiveUser = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) return user;
+    } catch {
+      // continue with session fallback
+    }
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) return session.user;
+    } catch {
+      // continue with refresh fallback
+    }
+
+    try {
+      const { data } = await supabase.auth.refreshSession();
+      return data.session?.user ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const loadKeepInTouch = useCallback(async () => {
     setTouchLoading(true);
@@ -223,9 +253,11 @@ export default function MyHome() {
         }, {});
 
         const nextUnread: Record<string, true> = {};
+        const selectedChatId = selectedDirectChatIdRef.current;
+        const activeUserId = userIdRef.current;
         nextChats.forEach((chat) => {
-          if (chat.chat_id === selectedDirectChatId) return;
-          if (chat.last_message_sender_id && chat.last_message_sender_id === userId) {
+          if (chat.chat_id === selectedChatId) return;
+          if (chat.last_message_sender_id && chat.last_message_sender_id === activeUserId) {
             return;
           }
 
@@ -266,7 +298,7 @@ export default function MyHome() {
     } catch {
       // ignore transient fetch failures
     }
-  }, [selectedDirectChatId, userId]);
+  }, []);
 
   const persistDirectSeenMap = useCallback(
     (nextMap: Record<string, string>) => {
@@ -566,16 +598,24 @@ export default function MyHome() {
   }
 
   useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
+
+  useEffect(() => {
+    selectedDirectChatIdRef.current = selectedDirectChatId;
+  }, [selectedDirectChatId]);
+
+  useEffect(() => {
 
     async function loadUserAndNotes() {
       setNotesBootstrapping(true);
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const user = await resolveActiveUser();
 
         if (!user) {
-          router.push("/login");
+          setUserId(null);
+          setUsername(null);
+          router.replace("/login?redirect=/my-home");
           return;
         }
 
@@ -616,13 +656,17 @@ export default function MyHome() {
     }
 
     loadUserAndNotes();
-  }, [loadDirectChats, loadKeepInTouch, router]);
+  }, [authEpoch, loadDirectChats, loadKeepInTouch, resolveActiveUser, router]);
 useEffect(() => {
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((event) => {
     if (event === "SIGNED_OUT") {
-      router.replace("/login");
+      router.replace("/login?redirect=/my-home");
+      return;
+    }
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      setAuthEpoch((prev) => prev + 1);
     }
   });
 
@@ -831,8 +875,16 @@ useEffect(() => {
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push("/");
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((resolve) => window.setTimeout(resolve, 2500)),
+      ]);
+    } catch {
+      // ignore logout API failures and still navigate out
+    } finally {
+      router.replace("/");
+    }
   }
 
   async function saveNote() {

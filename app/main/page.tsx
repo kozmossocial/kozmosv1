@@ -721,6 +721,34 @@ export default function Main() {
   const [myHomeAttentionPending, setMyHomeAttentionPending] = useState(false);
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
+  const [authEpoch, setAuthEpoch] = useState(0);
+
+  const resolveActiveUser = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) return user;
+    } catch {
+      // continue with session fallback
+    }
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) return session.user;
+    } catch {
+      // continue with refresh fallback
+    }
+
+    try {
+      const { data } = await supabase.auth.refreshSession();
+      return data.session?.user ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
@@ -1344,12 +1372,12 @@ export default function Main() {
     async function load() {
       setChatBootstrapReady(false);
       const bootstrapStartedAt = Date.now();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await resolveActiveUser();
 
       if (!user) {
-        router.push("/login");
+        setUserId(null);
+        setUsername(null);
+        router.replace("/login?redirect=/main");
         return;
       }
 
@@ -1400,6 +1428,24 @@ export default function Main() {
 
     return () => {
       cancelled = true;
+    };
+  }, [authEpoch, resolveActiveUser, router]);
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        router.replace("/login?redirect=/main");
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        setAuthEpoch((prev) => prev + 1);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
     };
   }, [router]);
 
@@ -3479,8 +3525,16 @@ export default function Main() {
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push("/");
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((resolve) => window.setTimeout(resolve, 2500)),
+      ]);
+    } catch {
+      // ignore logout API failures and still navigate out
+    } finally {
+      router.replace("/");
+    }
   }
 
   const invitesForMe = userId
