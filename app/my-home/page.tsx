@@ -125,6 +125,7 @@ export default function MyHome() {
     "idle"
   );
   const holoLaunchRafRef = useRef<number | null>(null);
+  const holoDockRafRef = useRef<number | null>(null);
   const holoSpecialRafRef = useRef<number | null>(null);
   const holoSpecialLaunchTimerRef = useRef<number | null>(null);
   const holoSpecialIntervalRef = useRef<number | null>(null);
@@ -909,6 +910,10 @@ useEffect(() => {
       window.cancelAnimationFrame(holoLaunchRafRef.current);
       holoLaunchRafRef.current = null;
     }
+    if (holoDockRafRef.current !== null) {
+      window.cancelAnimationFrame(holoDockRafRef.current);
+      holoDockRafRef.current = null;
+    }
     if (holoSpecialRafRef.current !== null) {
       window.cancelAnimationFrame(holoSpecialRafRef.current);
       holoSpecialRafRef.current = null;
@@ -1119,9 +1124,23 @@ useEffect(() => {
   }
 
   function finishHoloFlight() {
-    setHoloFlightPhase("idle");
-    setHoloFlightOrigin(null);
-    setHoloFlightMotionStyle({});
+    if (holoFlightPhaseRef.current === "idle") return;
+    if (holoDockRafRef.current !== null) {
+      window.cancelAnimationFrame(holoDockRafRef.current);
+      holoDockRafRef.current = null;
+    }
+
+    setHoloFlightMotionStyle({
+      transform: "translate(-50%, -50%) translate(0px, 0px) rotate(-2deg) scale(1)",
+      opacity: 0.78,
+    });
+
+    holoDockRafRef.current = window.requestAnimationFrame(() => {
+      holoDockRafRef.current = null;
+      setHoloFlightPhase("idle");
+      setHoloFlightOrigin(null);
+      setHoloFlightMotionStyle({});
+    });
   }
 
   useEffect(() => {
