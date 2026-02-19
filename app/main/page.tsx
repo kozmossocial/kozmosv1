@@ -185,6 +185,8 @@ type VsProjectile = {
   ttl: number;
 };
 
+type VsMoveDirection = "up" | "down" | "left" | "right";
+
 type VsSession = {
   running: boolean;
   timeLeft: number;
@@ -1066,6 +1068,23 @@ export default function Main() {
         : "Axy moderator: synchronized start pulse incoming."
       : "Axy moderator: multiplayer room idle. host can trigger synced start."
     : vsSession.moderatorLine;
+  const clearVsMoveDirections = useCallback(() => {
+    vsMoveKeysRef.current.up = false;
+    vsMoveKeysRef.current.down = false;
+    vsMoveKeysRef.current.left = false;
+    vsMoveKeysRef.current.right = false;
+  }, []);
+  const setVsMoveDirection = useCallback(
+    (direction: VsMoveDirection, pressed: boolean) => {
+      if (pressed) {
+        if (!playOpen || activePlay !== QUITE_SWARM_MODE || !quiteSwarmRunning) {
+          return;
+        }
+      }
+      vsMoveKeysRef.current[direction] = pressed;
+    },
+    [activePlay, playOpen, quiteSwarmRunning]
+  );
   const nightProtocolAliveTargets = useMemo(() => {
     if (!nightProtocolState) return [];
     return nightProtocolState.players.filter((player) => player.isAlive);
@@ -1982,22 +2001,19 @@ export default function Main() {
     if (!playOpen || activePlay !== QUITE_SWARM_MODE || !quiteSwarmRunning) return;
 
     function resetKeys() {
-      vsMoveKeysRef.current.up = false;
-      vsMoveKeysRef.current.down = false;
-      vsMoveKeysRef.current.left = false;
-      vsMoveKeysRef.current.right = false;
+      clearVsMoveDirections();
     }
 
     function applyKey(key: string, pressed: boolean) {
       const normalized = key.toLowerCase();
       if (normalized === "w" || normalized === "arrowup") {
-        vsMoveKeysRef.current.up = pressed;
+        setVsMoveDirection("up", pressed);
       } else if (normalized === "s" || normalized === "arrowdown") {
-        vsMoveKeysRef.current.down = pressed;
+        setVsMoveDirection("down", pressed);
       } else if (normalized === "a" || normalized === "arrowleft") {
-        vsMoveKeysRef.current.left = pressed;
+        setVsMoveDirection("left", pressed);
       } else if (normalized === "d" || normalized === "arrowright") {
-        vsMoveKeysRef.current.right = pressed;
+        setVsMoveDirection("right", pressed);
       } else {
         return false;
       }
@@ -2026,7 +2042,13 @@ export default function Main() {
       window.removeEventListener("blur", resetKeys);
       resetKeys();
     };
-  }, [activePlay, playOpen, quiteSwarmRunning]);
+  }, [
+    activePlay,
+    clearVsMoveDirections,
+    playOpen,
+    quiteSwarmRunning,
+    setVsMoveDirection,
+  ]);
 
   useEffect(() => {
     if (
@@ -5854,6 +5876,7 @@ export default function Main() {
                   </div>
 
                   <div
+                    className="quite-swarm-arena"
                     style={{
                       position: "relative",
                       height: 184,
@@ -6021,13 +6044,127 @@ export default function Main() {
                             );
                           })
                       : null}
+                    <div className="quite-swarm-touch-controls">
+                      <button
+                        type="button"
+                        className="quite-swarm-touch-arrow quite-swarm-touch-up"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("up", true);
+                        }}
+                        onPointerUp={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("up", false);
+                        }}
+                        onPointerCancel={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("up", false);
+                        }}
+                        onPointerLeave={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("up", false);
+                        }}
+                        disabled={!quiteSwarmRunning}
+                        aria-label="move up"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="quite-swarm-touch-arrow quite-swarm-touch-right"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("right", true);
+                        }}
+                        onPointerUp={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("right", false);
+                        }}
+                        onPointerCancel={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("right", false);
+                        }}
+                        onPointerLeave={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("right", false);
+                        }}
+                        disabled={!quiteSwarmRunning}
+                        aria-label="move right"
+                      >
+                        →
+                      </button>
+                      <button
+                        type="button"
+                        className="quite-swarm-touch-arrow quite-swarm-touch-left"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("left", true);
+                        }}
+                        onPointerUp={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("left", false);
+                        }}
+                        onPointerCancel={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("left", false);
+                        }}
+                        onPointerLeave={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("left", false);
+                        }}
+                        disabled={!quiteSwarmRunning}
+                        aria-label="move left"
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        className="quite-swarm-touch-arrow quite-swarm-touch-down"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("down", true);
+                        }}
+                        onPointerUp={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("down", false);
+                        }}
+                        onPointerCancel={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("down", false);
+                        }}
+                        onPointerLeave={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setVsMoveDirection("down", false);
+                        }}
+                        disabled={!quiteSwarmRunning}
+                        aria-label="move down"
+                      >
+                        ↓
+                      </button>
+                    </div>
                   </div>
 
                   <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 8 }}>
                     {quiteSwarmModeratorLine}
                   </div>
                   <div style={{ fontSize: 10, opacity: 0.62, marginBottom: 8 }}>
-                    control: WASD or Arrow keys (you)
+                    control: WASD / Arrow keys (desktop) · corner arrows (mobile)
                   </div>
 
                   {!isQuiteSwarmMultiMode ? (

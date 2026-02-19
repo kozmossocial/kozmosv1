@@ -1072,6 +1072,74 @@ body {
   cursor: text !important;
 }
 
+.quite-swarm-touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+  z-index: 4;
+}
+
+.quite-swarm-touch-arrow {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(152, 212, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(18, 36, 62, 0.24);
+  color: rgba(212, 239, 255, 0.92);
+  box-shadow:
+    0 0 12px rgba(96, 182, 255, 0.2),
+    inset 0 0 8px rgba(126, 198, 255, 0.12);
+  font-size: 18px;
+  line-height: 1;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease,
+    background 0.14s ease,
+    opacity 0.14s ease;
+}
+
+.quite-swarm-touch-arrow:active {
+  border-color: rgba(176, 226, 255, 0.66);
+  background: rgba(40, 84, 140, 0.46);
+  color: rgba(236, 248, 255, 0.98);
+  box-shadow:
+    0 0 14px rgba(102, 192, 255, 0.5),
+    0 0 28px rgba(102, 192, 255, 0.32),
+    inset 0 0 12px rgba(132, 206, 255, 0.24);
+}
+
+.quite-swarm-touch-arrow:disabled {
+  opacity: 0.38;
+}
+
+.quite-swarm-touch-up {
+  top: 8px;
+  left: 8px;
+}
+
+.quite-swarm-touch-right {
+  top: 8px;
+  right: 8px;
+}
+
+.quite-swarm-touch-left {
+  bottom: 8px;
+  left: 8px;
+}
+
+.quite-swarm-touch-down {
+  bottom: 8px;
+  right: 8px;
+}
+
 /* Main layout responsive */
 @media (max-width: 900px) {
   .main-page-shell {
@@ -1115,6 +1183,10 @@ body {
   .home-hero-content {
     margin-top: 198px !important;
     line-height: 1.95 !important;
+  }
+
+  .home-hero-copy {
+    transform: translateY(18px);
   }
 
   .home-hero-logo-wrap {
@@ -1233,12 +1305,20 @@ body {
   .right-panel-stack .news-paper-desktop {
     display: none !important;
   }
+
+  .quite-swarm-touch-controls {
+    display: block;
+  }
 }
 
 @media (max-width: 360px) {
   .home-hero-content {
     margin-top: 212px !important;
     line-height: 1.82 !important;
+  }
+
+  .home-hero-copy {
+    transform: translateY(14px);
   }
 
   .home-hero-title {

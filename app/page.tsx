@@ -1099,6 +1099,7 @@ export default function Home() {
             </a>
           </div>
 
+          <div className="home-hero-copy">
           <h1
             className="home-hero-title"
             style={{
@@ -1136,6 +1137,7 @@ export default function Home() {
                 {label}
               </div>
             ))}
+          </div>
           </div>
 
           <div
