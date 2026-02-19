@@ -42,9 +42,12 @@ type DirectMessage = {
 };
 
 const DIRECT_CHAT_SEEN_STORAGE_PREFIX = "kozmos:dm-seen:";
+const SECONDARY_AMBIENT_SRC = "/ambient-main.mp3";
+const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
 
 export default function MyHome() {
   const router = useRouter();
+  const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [username, setUsername] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -99,6 +102,8 @@ export default function MyHome() {
   const [personalLastMessage, setPersonalLastMessage] = useState<string | null>(
     null
   );
+  const [ambientSoundOn, setAmbientSoundOn] = useState(false);
+  const [ambientPrefReady, setAmbientPrefReady] = useState(false);
 
   const loadKeepInTouch = useCallback(async () => {
     setTouchLoading(true);
@@ -683,6 +688,51 @@ useEffect(() => {
     setTouchHoverUserId(null);
   }, [directChatEditMode]);
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
+    if (saved === "1") {
+      setAmbientSoundOn(true);
+    } else {
+      setAmbientSoundOn(false);
+    }
+    setAmbientPrefReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ambientPrefReady) return;
+    window.localStorage.setItem(
+      SECONDARY_AMBIENT_PREF_KEY,
+      ambientSoundOn ? "1" : "0"
+    );
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  useEffect(() => {
+    const audio = ambientAudioRef.current;
+    if (!audio || !ambientPrefReady) return;
+    audio.volume = 0.24;
+    audio.loop = true;
+    if (ambientSoundOn) {
+      void audio.play().catch(() => {
+        // autoplay can be blocked
+      });
+      return;
+    }
+    audio.pause();
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  function toggleAmbientSound() {
+    const audio = ambientAudioRef.current;
+    if (!audio) return;
+    if (ambientSoundOn) {
+      audio.pause();
+      setAmbientSoundOn(false);
+      return;
+    }
+    void audio.play().then(() => setAmbientSoundOn(true)).catch(() => {
+      setAmbientSoundOn(false);
+    });
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/");
@@ -1128,6 +1178,14 @@ useEffect(() => {
 
   return (
     <main className="my-home-shell" style={pageStyle}>
+      <audio
+        ref={ambientAudioRef}
+        src={SECONDARY_AMBIENT_SRC}
+        preload="auto"
+        loop
+        playsInline
+        style={{ display: "none" }}
+      />
 {/*  KOZMOS LOGO */}
 <div
   style={{
@@ -1184,6 +1242,25 @@ useEffect(() => {
         >
           my home
         </span>
+        <button
+          type="button"
+          onClick={toggleAmbientSound}
+          style={{
+            marginLeft: 12,
+            background: "transparent",
+            border: "none",
+            color: "inherit",
+            fontSize: 13,
+            cursor: "pointer",
+            padding: 0,
+            opacity: 0.9,
+            lineHeight: 1,
+          }}
+          aria-label={ambientSoundOn ? "mute ambient" : "unmute ambient"}
+          title={ambientSoundOn ? "mute ambient" : "unmute ambient"}
+        >
+          {ambientSoundOn ? "🔉" : "🔇"}
+        </button>
       </div>
 
       {/* TOP RIGHT */}

@@ -67,6 +67,8 @@ const ROOM_NEAR_DISTANCE = 5.2;
 const ROOM_ENTER_DISTANCE = 2.3;
 const ROOM_POLL_MS = 2000;
 const ENTER_TRANSITION_MS = 260;
+const SECONDARY_AMBIENT_SRC = "/ambient-main.mp3";
+const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -125,6 +127,7 @@ function projectOrb(x: number, z: number) {
 
 export default function MainSpacePage() {
   const router = useRouter();
+  const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [bootLoading, setBootLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -146,6 +149,8 @@ export default function MainSpacePage() {
   const [infoText, setInfoText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [mobileControls, setMobileControls] = useState(false);
+  const [ambientSoundOn, setAmbientSoundOn] = useState(false);
+  const [ambientPrefReady, setAmbientPrefReady] = useState(false);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const keysRef = useRef<Record<string, boolean>>({});
@@ -256,6 +261,51 @@ export default function MainSpacePage() {
 
     void boot();
   }, [fetchAuthedJson, router]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
+    if (saved === "1") {
+      setAmbientSoundOn(true);
+    } else {
+      setAmbientSoundOn(false);
+    }
+    setAmbientPrefReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ambientPrefReady) return;
+    window.localStorage.setItem(
+      SECONDARY_AMBIENT_PREF_KEY,
+      ambientSoundOn ? "1" : "0"
+    );
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  useEffect(() => {
+    const audio = ambientAudioRef.current;
+    if (!audio || !ambientPrefReady) return;
+    audio.volume = 0.24;
+    audio.loop = true;
+    if (ambientSoundOn) {
+      void audio.play().catch(() => {
+        // autoplay can be blocked
+      });
+      return;
+    }
+    audio.pause();
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  function toggleAmbientSound() {
+    const audio = ambientAudioRef.current;
+    if (!audio) return;
+    if (ambientSoundOn) {
+      audio.pause();
+      setAmbientSoundOn(false);
+      return;
+    }
+    void audio.play().then(() => setAmbientSoundOn(true)).catch(() => {
+      setAmbientSoundOn(false);
+    });
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -580,6 +630,14 @@ export default function MainSpacePage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#0b0b0b", color: "#eaeaea", padding: "18px 18px 28px" }}>
+      <audio
+        ref={ambientAudioRef}
+        src={SECONDARY_AMBIENT_SRC}
+        preload="auto"
+        loop
+        playsInline
+        style={{ display: "none" }}
+      />
       <div
         style={{
           display: "flex",
@@ -598,6 +656,25 @@ export default function MainSpacePage() {
           <span style={{ opacity: 0.92, cursor: "default", userSelect: "none" }}>
             space
           </span>
+          <button
+            type="button"
+            onClick={toggleAmbientSound}
+            style={{
+              marginLeft: 12,
+              background: "transparent",
+              border: "none",
+              color: "inherit",
+              fontSize: 13,
+              cursor: "pointer",
+              padding: 0,
+              opacity: 0.9,
+              lineHeight: 1,
+            }}
+            aria-label={ambientSoundOn ? "mute ambient" : "unmute ambient"}
+            title={ambientSoundOn ? "mute ambient" : "unmute ambient"}
+          >
+            {ambientSoundOn ? "🔉" : "🔇"}
+          </button>
         </div>
         <div>
           <span

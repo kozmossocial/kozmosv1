@@ -944,31 +944,33 @@ body {
   opacity: 0.16;
 }
 
-.my-home-shell::before {
+.my-home-shell::before,
+.main-page-shell::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   mix-blend-mode: screen;
-  opacity: 0.16;
+  opacity: 0.2;
   background:
-    radial-gradient(circle at 24% 24%, rgba(226, 230, 238, 0.16), transparent 52%),
-    radial-gradient(circle at 78% 30%, rgba(188, 196, 212, 0.12), transparent 56%),
-    radial-gradient(circle at 58% 76%, rgba(148, 156, 172, 0.1), transparent 58%),
+    radial-gradient(circle at 24% 24%, rgba(236, 240, 246, 0.2), transparent 52%),
+    radial-gradient(circle at 78% 30%, rgba(204, 212, 226, 0.16), transparent 56%),
+    radial-gradient(circle at 58% 76%, rgba(164, 172, 188, 0.12), transparent 58%),
     linear-gradient(
       128deg,
-      rgba(214, 220, 232, 0.08) 0%,
-      rgba(166, 174, 192, 0.08) 40%,
-      rgba(236, 240, 248, 0.06) 72%,
-      rgba(138, 146, 164, 0.06) 100%
+      rgba(226, 232, 242, 0.1) 0%,
+      rgba(178, 186, 204, 0.1) 40%,
+      rgba(242, 246, 252, 0.08) 72%,
+      rgba(152, 160, 178, 0.08) 100%
     );
   background-size: 220% 220%;
   filter: blur(22px);
   animation: myHomeAmbientFlow 16s ease-in-out infinite;
 }
 
-.my-home-shell > * {
+.my-home-shell > *,
+.main-page-shell > * {
   position: relative;
   z-index: 1;
 }

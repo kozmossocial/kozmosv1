@@ -266,6 +266,8 @@ const VS_PLAYER_COLORS = [
   "#ffd28f",
   "#c2a7ff",
 ];
+const SECONDARY_AMBIENT_SRC = "/ambient-main.mp3";
+const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
 
 function uniqueNames(names: string[]) {
   const seen = new Set<string>();
@@ -656,6 +658,7 @@ function buildQuiteSwarmSharedEnemies(
 
 export default function Main() {
   const router = useRouter();
+  const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [username, setUsername] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -709,6 +712,8 @@ export default function Main() {
   const [touchBusy, setTouchBusy] = useState(false);
   const [inTouchByName, setInTouchByName] = useState<Record<string, boolean>>({});
   const [myHomeAttentionPending, setMyHomeAttentionPending] = useState(false);
+  const [ambientSoundOn, setAmbientSoundOn] = useState(false);
+  const [ambientPrefReady, setAmbientPrefReady] = useState(false);
 
   /* AXY reflection (messages) */
   const [axyMsgReflection, setAxyMsgReflection] = useState<
@@ -1130,6 +1135,51 @@ export default function Main() {
       window.clearTimeout(timer);
     };
   }, [userId]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
+    if (saved === "1") {
+      setAmbientSoundOn(true);
+    } else {
+      setAmbientSoundOn(false);
+    }
+    setAmbientPrefReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ambientPrefReady) return;
+    window.localStorage.setItem(
+      SECONDARY_AMBIENT_PREF_KEY,
+      ambientSoundOn ? "1" : "0"
+    );
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  useEffect(() => {
+    const audio = ambientAudioRef.current;
+    if (!audio || !ambientPrefReady) return;
+    audio.volume = 0.26;
+    audio.loop = true;
+    if (ambientSoundOn) {
+      void audio.play().catch(() => {
+        // autoplay can be blocked
+      });
+      return;
+    }
+    audio.pause();
+  }, [ambientPrefReady, ambientSoundOn]);
+
+  function toggleAmbientSound() {
+    const audio = ambientAudioRef.current;
+    if (!audio) return;
+    if (ambientSoundOn) {
+      audio.pause();
+      setAmbientSoundOn(false);
+      return;
+    }
+    void audio.play().then(() => setAmbientSoundOn(true)).catch(() => {
+      setAmbientSoundOn(false);
+    });
+  }
 
   useEffect(() => {
     if (!presenceReady) return;
@@ -3578,6 +3628,14 @@ export default function Main() {
         position: "relative",
       }}
     >
+      <audio
+        ref={ambientAudioRef}
+        src={SECONDARY_AMBIENT_SRC}
+        preload="auto"
+        loop
+        playsInline
+        style={{ display: "none" }}
+      />
 {/* LOGO */}
 <div
   style={{
@@ -3652,6 +3710,25 @@ export default function Main() {
         >
           my home
         </span>
+        <button
+          type="button"
+          onClick={toggleAmbientSound}
+          style={{
+            marginLeft: 12,
+            background: "transparent",
+            border: "none",
+            color: "inherit",
+            fontSize: 13,
+            cursor: "pointer",
+            padding: 0,
+            opacity: 0.9,
+            lineHeight: 1,
+          }}
+          aria-label={ambientSoundOn ? "mute ambient" : "unmute ambient"}
+          title={ambientSoundOn ? "mute ambient" : "unmute ambient"}
+        >
+          {ambientSoundOn ? "🔉" : "🔇"}
+        </button>
       </div>
 
       {/* TOP RIGHT */}
