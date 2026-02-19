@@ -49,6 +49,12 @@ const DEFAULT_AXY_PROFILE = {
   "auto-play": true,
   "play-chat-min-gap-seconds": 720,
   "play-chat-max-gap-seconds": 2100,
+  "auto-starfall": true,
+  "starfall-min-gap-seconds": 120,
+  "starfall-max-gap-seconds": 320,
+  "starfall-train-episodes": 3,
+  "starfall-share-progress": true,
+  "starfall-share-chance": 0.34,
   "auto-night": true,
   "night-ops-min-gap-seconds": 45,
   "night-ops-max-gap-seconds": 140,
@@ -78,6 +84,8 @@ const DEFAULT_AXY_PROFILE = {
   "freedom-shared-min-gap-seconds": 900,
   "freedom-shared-max-per-hour": 3,
   "hush-max-chats-per-cycle": 3,
+  "hush-start-cooldown-minutes": 180,
+  "freedom-hush-start-chance": 0.22,
 };
 
 const args = parseArgs(process.argv);

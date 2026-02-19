@@ -4401,7 +4401,7 @@ export default function Main() {
                 <div style={{ opacity: 0.62, fontSize: 11, marginBottom: 6 }}>
                   news from around the kozmos
                 </div>
-                <div style={{ opacity: 0.48, fontSize: 11 }}>keep informed by Axy.</div>
+                <div style={{ opacity: 0.48, fontSize: 11 }}>keep informed by Axy</div>
               </>
             )}
             <div
@@ -6625,7 +6625,7 @@ export default function Main() {
                 <div style={{ opacity: 0.62, fontSize: 11, marginBottom: 6 }}>
                   news from around the kozmos
                 </div>
-                <div style={{ opacity: 0.48, fontSize: 11 }}>keep informed by Axy.</div>
+                <div style={{ opacity: 0.48, fontSize: 11 }}>keep informed by Axy</div>
               </>
             )}
             <div

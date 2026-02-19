@@ -826,6 +826,51 @@ async function main() {
       960
     )
   );
+  const autoStarfall = toBool(
+    args["auto-starfall"] ?? process.env.KOZMOS_AUTO_STARFALL,
+    true
+  );
+  const starfallMinGapSeconds = Math.max(
+    45,
+    toInt(
+      args["starfall-min-gap-seconds"] ||
+        process.env.KOZMOS_STARFALL_MIN_GAP_SECONDS,
+      120
+    )
+  );
+  const starfallMaxGapSeconds = Math.max(
+    starfallMinGapSeconds,
+    toInt(
+      args["starfall-max-gap-seconds"] ||
+        process.env.KOZMOS_STARFALL_MAX_GAP_SECONDS,
+      320
+    )
+  );
+  const starfallTrainEpisodes = Math.max(
+    1,
+    Math.min(
+      12,
+      toInt(
+        args["starfall-train-episodes"] ||
+          process.env.KOZMOS_STARFALL_TRAIN_EPISODES,
+        3
+      )
+    )
+  );
+  const starfallShareProgress = toBool(
+    args["starfall-share-progress"] ?? process.env.KOZMOS_STARFALL_SHARE_PROGRESS,
+    true
+  );
+  const starfallShareChance = Math.max(
+    0,
+    Math.min(
+      1,
+      toFloat(
+        args["starfall-share-chance"] || process.env.KOZMOS_STARFALL_SHARE_CHANCE,
+        0.34
+      )
+    )
+  );
   const autoNight = toBool(args["auto-night"] ?? process.env.KOZMOS_AUTO_NIGHT, true);
   const nightOpsMinGapSeconds = Math.max(
     15,
@@ -1004,6 +1049,25 @@ async function main() {
       3
     )
   );
+  const hushStartCooldownMinutes = Math.max(
+    30,
+    toInt(
+      args["hush-start-cooldown-minutes"] ||
+        process.env.KOZMOS_HUSH_START_COOLDOWN_MINUTES,
+      180
+    )
+  );
+  const freedomHushStartChance = Math.max(
+    0,
+    Math.min(
+      1,
+      toFloat(
+        args["freedom-hush-start-chance"] ||
+          process.env.KOZMOS_FREEDOM_HUSH_START_CHANCE,
+        0.22
+      )
+    )
+  );
   const buildSpaceId = String(
     args["build-space-id"] || process.env.KOZMOS_BUILD_SPACE_ID || ""
   ).trim();
@@ -1055,6 +1119,8 @@ async function main() {
     Date.now() + randomIntRange(buildFreedomMinSeconds, buildFreedomMaxSeconds) * 1000;
   let nextPlayChatAt =
     Date.now() + randomIntRange(playChatMinGapSeconds, playChatMaxGapSeconds) * 1000;
+  let nextStarfallAt =
+    Date.now() + randomIntRange(starfallMinGapSeconds, starfallMaxGapSeconds) * 1000;
   let nextNightOpsAt =
     Date.now() + randomIntRange(nightOpsMinGapSeconds, nightOpsMaxGapSeconds) * 1000;
   let nextQuiteSwarmAt =
@@ -1074,6 +1140,7 @@ async function main() {
   let quiteSwarmRoomOpsEnabled = autoQuiteSwarmRoom;
   let nightFailureStreak = 0;
   let nightDisabledUntil = 0;
+  let starfallOpsEnabled = true;
   let autoFreedomMatrixBooted = false;
   let lastFreedomSharedAt = 0;
   const freedomSharedSentAt = [];
@@ -1144,6 +1211,7 @@ async function main() {
       autoDm,
       autoBuild,
       autoPlay,
+      autoStarfall,
       autoNight,
       autoQuiteSwarm,
       autoQuiteSwarmRoom,
@@ -1218,7 +1286,7 @@ async function main() {
     `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
   );
   console.log(
-    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoTouchRequest=${autoTouchRequest} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoBuildFreedom=${autoBuildFreedom} autoPlay=${autoPlay} autoNight=${autoNight} autoQuiteSwarm=${autoQuiteSwarm} autoQuiteSwarmRoom=${autoQuiteSwarmRoom} autoMatrix=${autoMatrix} autoFreedom=${autoFreedom}`
+    `[${now()}] ops=${opsSeconds}s autoTouch=${autoTouch} autoTouchRequest=${autoTouchRequest} autoHush=${autoHush} hushReplyAll=${hushReplyAll} autoDm=${autoDm} dmReplyAll=${dmReplyAll} autoBuild=${autoBuild} autoBuildFreedom=${autoBuildFreedom} autoPlay=${autoPlay} autoStarfall=${autoStarfall} autoNight=${autoNight} autoQuiteSwarm=${autoQuiteSwarm} autoQuiteSwarmRoom=${autoQuiteSwarmRoom} autoMatrix=${autoMatrix} autoFreedom=${autoFreedom}`
   );
   if (autoBuild) {
     console.log(
@@ -1233,6 +1301,11 @@ async function main() {
   if (autoPlay) {
     console.log(
       `[${now()}] play game-chat interval=${playChatMinGapSeconds}-${playChatMaxGapSeconds}s`
+    );
+  }
+  if (autoStarfall) {
+    console.log(
+      `[${now()}] starfall interval=${starfallMinGapSeconds}-${starfallMaxGapSeconds}s trainEpisodes=${starfallTrainEpisodes} shareProgress=${starfallShareProgress} shareChance=${starfallShareChance}`
     );
   }
   if (autoNight) {
@@ -1255,7 +1328,7 @@ async function main() {
       `[${now()}] freedom=${freedomMinSeconds}-${freedomMaxSeconds}s weights(matrix=${freedomMatrixWeight},note=${freedomNoteWeight},shared=${freedomSharedWeight},hush=${freedomHushWeight}) matrix(exit=${freedomMatrixExitChance},drift=${freedomMatrixDriftChance},scale=${freedomMatrixDriftScale})`
     );
     console.log(
-      `[${now()}] freedom shared limits minGap=${freedomSharedMinGapSeconds}s maxPerHour=${freedomSharedMaxPerHour} hushMaxChatsPerCycle=${hushMaxChatsPerCycle}`
+      `[${now()}] freedom shared limits minGap=${freedomSharedMinGapSeconds}s maxPerHour=${freedomSharedMaxPerHour} hushMaxChatsPerCycle=${hushMaxChatsPerCycle} hushStartChance=${freedomHushStartChance} hushCooldown=${hushStartCooldownMinutes}m`
     );
   }
   console.log(`[${now()}] eval write=${evalWriteSeconds}s file=${evalPath}`);
@@ -2122,7 +2195,79 @@ async function main() {
           }
         }
 
+        if (autoStarfall && starfallOpsEnabled && Date.now() >= nextStarfallAt) {
+          runtimeCore.transition("play", "starfall");
+          try {
+            const focusPool = ["balanced", "aim", "survival", "aggression"];
+            const focus = focusPool[randomIntRange(0, focusPool.length - 1)];
+            const singleRes = await callAxyOps(baseUrl, token, "play.starfall.single", {
+              mode: "single",
+              focus,
+            });
+            const singleData = singleRes?.data || {};
+            const run = singleData?.run || {};
+            let profile = singleData?.profile || {};
+
+            if (starfallTrainEpisodes > 1) {
+              const trainRes = await callAxyOps(baseUrl, token, "play.starfall.train", {
+                episodes: starfallTrainEpisodes - 1,
+              });
+              profile = trainRes?.data?.profile || profile;
+            }
+
+            const score = Math.floor(Number(run?.score || 0));
+            const round = Math.floor(Number(run?.round || 1));
+            const won = Boolean(run?.won);
+            const rating = Number(profile?.skill_rating || 0);
+            runtimeCore.markSent("play", { conversationId: "kozmos-play:starfall" });
+            console.log(
+              `[${now()}] starfall: score=${score} round=${round} won=${won} rating=${rating.toFixed(1)}`
+            );
+
+            if (
+              starfallShareProgress &&
+              Math.random() < starfallShareChance &&
+              score > 0
+            ) {
+              const line = won
+                ? `starfall single clear • score ${score} • round ${round} • rating ${Math.round(
+                    rating
+                  )}`
+                : `starfall single run • score ${score} • round ${round} • rating ${Math.round(
+                    rating
+                  )}`;
+              await sendManagedOutput({
+                channel: "game-chat",
+                conversationId: "kozmos-play:starfall",
+                content: line,
+                minGapMs: 22000,
+                send: async (safeContent) => {
+                  runtimeCore.transition("play", "sending", "starfall-share");
+                  await callAxyOps(baseUrl, token, "play.game_chat.send", {
+                    content: safeContent,
+                  });
+                },
+                logLabel: "starfall",
+              });
+            }
+          } catch (starfallErr) {
+            const msg =
+              starfallErr?.body?.error || starfallErr.message || "starfall ops failed";
+            console.log(`[${now()}] starfall fail: ${msg}`);
+            runtimeCore.markError("play", starfallErr, { context: "play.starfall" });
+            if (/unknown action|route unavailable|capability|not found/i.test(String(msg))) {
+              starfallOpsEnabled = false;
+              console.log(`[${now()}] starfall ops disabled (backend action unavailable)`);
+            }
+          } finally {
+            runtimeCore.transition("play", "idle");
+            nextStarfallAt =
+              Date.now() + randomIntRange(starfallMinGapSeconds, starfallMaxGapSeconds) * 1000;
+          }
+        }
+
         if (autoNight && Date.now() >= nextNightOpsAt && Date.now() >= nightDisabledUntil) {
+          runtimeCore.transition("night", "scanning");
           runtimeCore.transition("night", "scanning");
           try {
             const lobbiesRes = await callAxyOps(baseUrl, token, "night.lobbies");
@@ -2556,11 +2701,15 @@ async function main() {
               } else if (freedomAction === "hush") {
                 runtimeCore.transition("freedom", "hush");
                 freedomMatrixStreak = 0;
+                if (Math.random() > freedomHushStartChance) {
+                  runtimeCore.markSkipped("freedom", "hush-start-chance");
+                  continue;
+                }
                 const presentUsers = Array.isArray(snapshot?.data?.present_users)
                   ? snapshot.data.present_users
                   : [];
                 const nowMs = Date.now();
-                const cooldownMs = 90 * 60 * 1000;
+                const cooldownMs = hushStartCooldownMinutes * 60 * 1000;
                 for (const [targetUserId, ts] of hushStarterCooldown.entries()) {
                   if (nowMs - ts > cooldownMs) hushStarterCooldown.delete(targetUserId);
                 }

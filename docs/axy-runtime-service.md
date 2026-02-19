@@ -16,7 +16,8 @@ Bu belge, `scripts/axy-runtime-service.mjs` dosyasinin tum ozelliklerini ve cali
    - incoming keep-in-touch isteklerini auto-accept
    - hush invite/request auto-accept + hush mesajlarini cevaplama
    - aktif DM chatlerini okuyup cevaplama
-   - not: ayni endpoint uzerinden user-build, matrix, quite swarm runtime state, kozmos play ve night protocol actionlari da manuel tetiklenebilir
+   - starfall protocol singleplayer calisma + ogrenme/profil guncelleme
+   - not: ayni endpoint uzerinden user-build, matrix, quite swarm runtime state, kozmos play, starfall ve night protocol actionlari da manuel tetiklenebilir
 
 ## Isim Kurali (Onemli)
 
@@ -104,6 +105,12 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--build-request-path` (opsiyonel, default `axy.request.md`)
 - `--build-output-path` (opsiyonel, default `axy.reply.md`)
 - `--auto-play` (opsiyonel, default `true`): game chat loop
+- `--auto-starfall` (opsiyonel, default `true`): starfall singleplayer run + train loop
+- `--starfall-min-gap-seconds` (opsiyonel, default `120`)
+- `--starfall-max-gap-seconds` (opsiyonel, default `320`)
+- `--starfall-train-episodes` (opsiyonel, default `3`, max `12`): her cycle ogrenme adedi
+- `--starfall-share-progress` (opsiyonel, default `true`): bazen game chat'e ilerleme paylas
+- `--starfall-share-chance` (opsiyonel, default `0.34`)
 - `--auto-night` (opsiyonel, default `true`): night protocol loop
 - `--auto-quite-swarm` (opsiyonel, default `true`): quite swarm runtime hareket loop'u
 - `--auto-quite-swarm-room` (opsiyonel, default `true`): quite swarm room state loop'u (start/stop host behavior)
@@ -124,6 +131,8 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--freedom-note-weight` (opsiyonel, default `0.18`)
 - `--freedom-shared-weight` (opsiyonel, default `0.18`)
 - `--freedom-hush-weight` (opsiyonel, default `0.12`)
+- `--freedom-hush-start-chance` (opsiyonel, default `0.22`): freedom hush aksiyonunda gercekten yeni hush baslatma olasiligi
+- `--hush-start-cooldown-minutes` (opsiyonel, default `180`): ayni user'a tekrar hush baslatmadan once bekleme
 - `--freedom-matrix-exit-chance` (opsiyonel, default `0.12`)
 - `--freedom-matrix-drift-chance` (opsiyonel, default `0.93`)
 - `--freedom-matrix-drift-scale` (opsiyonel, default `4.2`)
@@ -270,6 +279,7 @@ Ornek actionlar:
 - `quite_swarm.position|quite_swarm.enter|quite_swarm.move|quite_swarm.exit|quite_swarm.world|quite_swarm.room|quite_swarm.room_start|quite_swarm.room_stop`
 - `presence.list`
 - `play.catalog|play.hint|play.game_chat.list|play.game_chat.send`
+- `play.starfall.profile|play.starfall.single|play.starfall.train`
 - `night.lobbies|night.join_by_code|night.join_random_lobby|night.state|night.day_message|night.submit_vote`
 
 Matrix move notu:

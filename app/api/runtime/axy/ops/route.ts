@@ -11,6 +11,7 @@ const QUITE_SWARM_ROOM_ID = "main";
 const QUITE_SWARM_ROOM_START_DELAY_MS = 1800;
 const QUITE_SWARM_ROOM_DURATION_MS = 75 * 1000;
 const AXY_OPS_IDEMPOTENCY_TTL_MS = 2 * 60 * 1000;
+const STARFALL_SCORE_CAP = 20000;
 
 const ACTION_ALIASES: Record<string, string> = {
   "snapshot": "context.snapshot",
@@ -35,6 +36,9 @@ const ACTION_ALIASES: Record<string, string> = {
   "swarm.room.stop": "quite_swarm.room_stop",
   "play.gamechat.list": "play.game_chat.list",
   "play.gamechat.send": "play.game_chat.send",
+  "play.starfall.profile": "play.starfall.profile",
+  "play.starfall.single": "play.starfall.single",
+  "play.starfall.train": "play.starfall.train",
 };
 
 const KNOWN_ACTIONS = new Set<string>([
@@ -91,6 +95,9 @@ const KNOWN_ACTIONS = new Set<string>([
   "play.hint",
   "play.game_chat.list",
   "play.game_chat.send",
+  "play.starfall.profile",
+  "play.starfall.single",
+  "play.starfall.train",
   "night.lobbies",
   "night.join_by_code",
   "night.join_random_lobby",
@@ -207,6 +214,21 @@ type QuiteSwarmRoomRow = {
   started_at: string | null;
   host_user_id: string | null;
   updated_at: string;
+};
+
+type StarfallSkillRow = {
+  user_id: string;
+  skill_rating: number;
+  reaction_ms: number;
+  aim_accuracy: number;
+  aggression: number;
+  episodes: number;
+  wins: number;
+  best_score: number;
+  last_score: number;
+  average_score: number;
+  last_round: number;
+  updated_at?: string;
 };
 
 type NightSessionRow = {
@@ -355,6 +377,20 @@ function clampQuiteSwarm(value: number) {
     -QUITE_SWARM_WORLD_LIMIT,
     Math.min(QUITE_SWARM_WORLD_LIMIT, value)
   );
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function toSafeNumber(input: unknown, fallback: number) {
+  const n = Number(input);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function randomRange(min: number, max: number) {
+  if (max <= min) return min;
+  return min + Math.random() * (max - min);
 }
 
 function isQuiteSwarmRoomSchemaError(message: string) {
@@ -950,6 +986,12 @@ const KOZMOS_PLAY_CATALOG = [
     title: "quite swarm",
     status: "active",
     objective: "move as a swarm and outlast the wave",
+  },
+  {
+    id: "starfall-protocol",
+    title: "starfall protocol",
+    status: "active",
+    objective: "survive waves, tune aim, and raise precision over time",
   },
 ] as const;
 
@@ -2015,6 +2057,8 @@ function getKozmosPlayHint(gameIdInput: string) {
       "watch vote flow and speaker order; timing and trust shifts decide the circle.",
     "quite-swarm":
       "coordinate trajectories with nearby orbs; controlled movement beats frantic chasing.",
+    "starfall-protocol":
+      "stabilize movement first, then optimize fire timing; precision beats panic shots.",
   };
 
   return {
@@ -2051,6 +2095,283 @@ async function sendGameChatMessage(userId: string, username: string, contentInpu
 
   if (error || !data) throw new Error("game chat send failed");
   return data;
+}
+
+function normalizeStarfallSkill(row: Partial<StarfallSkillRow>, userId: string): StarfallSkillRow {
+  return {
+    user_id: userId,
+    skill_rating: clampNumber(toSafeNumber(row.skill_rating, 1000), 700, 2200),
+    reaction_ms: clampNumber(toSafeNumber(row.reaction_ms, 255), 120, 380),
+    aim_accuracy: clampNumber(toSafeNumber(row.aim_accuracy, 0.52), 0.25, 0.99),
+    aggression: clampNumber(toSafeNumber(row.aggression, 0.48), 0.1, 0.95),
+    episodes: Math.max(0, Math.floor(toSafeNumber(row.episodes, 0))),
+    wins: Math.max(0, Math.floor(toSafeNumber(row.wins, 0))),
+    best_score: Math.max(0, Math.floor(toSafeNumber(row.best_score, 0))),
+    last_score: Math.max(0, Math.floor(toSafeNumber(row.last_score, 0))),
+    average_score: Math.max(0, toSafeNumber(row.average_score, 0)),
+    last_round: Math.max(1, Math.floor(toSafeNumber(row.last_round, 1))),
+    updated_at: typeof row.updated_at === "string" ? row.updated_at : undefined,
+  };
+}
+
+async function getOrCreateStarfallSkill(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("runtime_starfall_skill")
+    .select(
+      "user_id, skill_rating, reaction_ms, aim_accuracy, aggression, episodes, wins, best_score, last_score, average_score, last_round, updated_at"
+    )
+    .eq("user_id", userId)
+    .maybeSingle<StarfallSkillRow>();
+
+  if (error) {
+    if (error.code === "42P01") {
+      throw new Error("starfall schema missing (run migration)");
+    }
+    throw new Error("starfall profile load failed");
+  }
+
+  if (data) return normalizeStarfallSkill(data, userId);
+
+  const base = normalizeStarfallSkill({}, userId);
+  const insertRes = await supabaseAdmin
+    .from("runtime_starfall_skill")
+    .upsert(base, { onConflict: "user_id" })
+    .select(
+      "user_id, skill_rating, reaction_ms, aim_accuracy, aggression, episodes, wins, best_score, last_score, average_score, last_round, updated_at"
+    )
+    .single<StarfallSkillRow>();
+
+  if (insertRes.error || !insertRes.data) {
+    const msg = String(insertRes.error?.message || "");
+    if (/runtime_starfall_skill/i.test(msg)) {
+      throw new Error("starfall schema missing (run migration)");
+    }
+    throw new Error("starfall profile init failed");
+  }
+
+  return normalizeStarfallSkill(insertRes.data, userId);
+}
+
+async function saveStarfallSkill(skill: StarfallSkillRow) {
+  const payload = normalizeStarfallSkill(skill, skill.user_id);
+  const { data, error } = await supabaseAdmin
+    .from("runtime_starfall_skill")
+    .upsert(payload, { onConflict: "user_id" })
+    .select(
+      "user_id, skill_rating, reaction_ms, aim_accuracy, aggression, episodes, wins, best_score, last_score, average_score, last_round, updated_at"
+    )
+    .single<StarfallSkillRow>();
+
+  if (error || !data) {
+    const msg = String(error?.message || "");
+    if (/runtime_starfall_skill/i.test(msg)) {
+      throw new Error("starfall schema missing (run migration)");
+    }
+    throw new Error("starfall profile save failed");
+  }
+
+  return normalizeStarfallSkill(data, payload.user_id);
+}
+
+type StarfallRunSummary = {
+  score: number;
+  round: number;
+  lives_left: number;
+  shots_fired: number;
+  hits: number;
+  accuracy: number;
+  won: boolean;
+};
+
+function simulateStarfallSingleRun(
+  skill: StarfallSkillRow,
+  mode: "single",
+  focus: "balanced" | "aim" | "survival" | "aggression"
+) {
+  const reactionFactor = clampNumber((360 - skill.reaction_ms) / 240, 0.08, 1.15);
+  const baseAim = skill.aim_accuracy;
+  const aggressionBase = skill.aggression;
+  const focusAim = focus === "aim" ? 0.06 : 0;
+  const focusSurvival = focus === "survival" ? 0.08 : 0;
+  const focusAggression = focus === "aggression" ? 0.12 : 0;
+  const pressure = randomRange(0.82, 1.22);
+  const shotsFired = Math.max(
+    25,
+    Math.floor(90 + aggressionBase * 125 + focusAggression * 80 + randomRange(-24, 36))
+  );
+  const accuracy = clampNumber(
+    baseAim +
+      focusAim +
+      reactionFactor * 0.06 -
+      pressure * 0.035 +
+      randomRange(-0.11, 0.09),
+    0.22,
+    0.97
+  );
+  const hits = Math.max(0, Math.floor(shotsFired * accuracy * randomRange(0.29, 0.42)));
+  const round = clampNumber(
+    Math.floor(1 + hits / 19 + reactionFactor * 1.7 + randomRange(-0.5, 1.8)),
+    1,
+    10
+  );
+  const livesLeft = clampNumber(
+    Math.floor(
+      3 +
+        focusSurvival * 4.2 +
+        reactionFactor * 1.5 -
+        pressure * 2.35 +
+        randomRange(-0.8, 1.15)
+    ),
+    0,
+    3
+  );
+  const score = clampNumber(
+    Math.floor(
+      hits * (11 + round * 3.3) +
+        livesLeft * 190 +
+        reactionFactor * 210 +
+        randomRange(40, 260)
+    ),
+    0,
+    STARFALL_SCORE_CAP
+  );
+  const won = round >= 5 && livesLeft > 0;
+
+  const expected = 1 / (1 + Math.exp(-(skill.skill_rating - 1000) / 240));
+  const performance = clampNumber(score / 6800 + round * 0.055 + (won ? 0.1 : 0), 0, 1.7);
+  const k = 42 / (1 + skill.episodes / 70);
+  const rating = clampNumber(skill.skill_rating + k * (performance - expected), 700, 2200);
+
+  const targetReaction = clampNumber(
+    332 - (rating - 900) * 0.115 - performance * 14,
+    120,
+    380
+  );
+  const targetAim = clampNumber(
+    0.38 + (rating - 860) / 1600 + performance * 0.045,
+    0.25,
+    0.99
+  );
+  const targetAggression = clampNumber(
+    0.3 + round * 0.047 + (won ? 0.06 : 0) + focusAggression * 0.18,
+    0.1,
+    0.95
+  );
+
+  const episodes = skill.episodes + 1;
+  const wins = skill.wins + (won ? 1 : 0);
+  const averageScore =
+    skill.episodes <= 0
+      ? score
+      : (skill.average_score * skill.episodes + score) / episodes;
+
+  const next: StarfallSkillRow = {
+    ...skill,
+    skill_rating: rating,
+    reaction_ms: clampNumber(skill.reaction_ms * 0.84 + targetReaction * 0.16, 120, 380),
+    aim_accuracy: clampNumber(skill.aim_accuracy * 0.8 + targetAim * 0.2, 0.25, 0.99),
+    aggression: clampNumber(skill.aggression * 0.84 + targetAggression * 0.16, 0.1, 0.95),
+    episodes,
+    wins,
+    best_score: Math.max(skill.best_score, score),
+    last_score: score,
+    average_score: averageScore,
+    last_round: round,
+  };
+
+  const run: StarfallRunSummary = {
+    score,
+    round,
+    lives_left: livesLeft,
+    shots_fired: shotsFired,
+    hits,
+    accuracy: Number(accuracy.toFixed(3)),
+    won,
+  };
+
+  return {
+    mode,
+    focus,
+    run,
+    profile: next,
+    delta: {
+      rating: Number((next.skill_rating - skill.skill_rating).toFixed(2)),
+      reaction_ms: Number((next.reaction_ms - skill.reaction_ms).toFixed(2)),
+      aim_accuracy: Number((next.aim_accuracy - skill.aim_accuracy).toFixed(4)),
+      aggression: Number((next.aggression - skill.aggression).toFixed(4)),
+    },
+  };
+}
+
+async function getStarfallProfile(userId: string) {
+  return getOrCreateStarfallSkill(userId);
+}
+
+async function runStarfallSingle(
+  userId: string,
+  payload: Record<string, unknown>
+) {
+  const mode =
+    asTrimmedString(payload.mode).toLowerCase() === "single" ? "single" : "single";
+  const rawFocus = asTrimmedString(payload.focus).toLowerCase();
+  const focus: "balanced" | "aim" | "survival" | "aggression" =
+    rawFocus === "aim" ||
+    rawFocus === "survival" ||
+    rawFocus === "aggression"
+      ? rawFocus
+      : "balanced";
+  const base = await getOrCreateStarfallSkill(userId);
+  const simulated = simulateStarfallSingleRun(base, mode, focus);
+  const saved = await saveStarfallSkill(simulated.profile);
+
+  return {
+    mode,
+    focus,
+    run: simulated.run,
+    delta: simulated.delta,
+    profile: saved,
+  };
+}
+
+async function trainStarfallSkill(
+  userId: string,
+  payload: Record<string, unknown>
+) {
+  const episodesRequested = Math.floor(toSafeNumber(payload.episodes, 3));
+  const episodes = clampNumber(episodesRequested, 1, 12);
+  let current = await getOrCreateStarfallSkill(userId);
+  const recentRuns: StarfallRunSummary[] = [];
+  const focuses: Array<"balanced" | "aim" | "survival" | "aggression"> = [
+    "balanced",
+    "aim",
+    "survival",
+    "aggression",
+  ];
+
+  for (let i = 0; i < episodes; i += 1) {
+    const focus = focuses[i % focuses.length];
+    const simulated = simulateStarfallSingleRun(current, "single", focus);
+    current = simulated.profile;
+    recentRuns.push(simulated.run);
+  }
+
+  const saved = await saveStarfallSkill(current);
+  const lastRun = recentRuns[recentRuns.length - 1];
+
+  return {
+    episodes,
+    last_run: lastRun || null,
+    avg_score_last_batch:
+      recentRuns.length > 0
+        ? Number(
+            (
+              recentRuns.reduce((sum, row) => sum + row.score, 0) /
+              recentRuns.length
+            ).toFixed(2)
+          )
+        : 0,
+    profile: saved,
+  };
 }
 
 async function listNightPlayers(sessionId: string) {
@@ -2942,6 +3263,7 @@ async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
 }
 
 async function buildSnapshot(actor: RuntimeActor) {
+  const starfallProfilePromise = getStarfallProfile(actor.userId).catch(() => null);
   const [
     notes,
     touch,
@@ -2952,6 +3274,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     quiteSwarmPosition,
     quiteSwarmRoom,
     present,
+    starfallProfile,
   ] = await Promise.all([
     listNotes(actor.userId),
     listTouch(actor.userId),
@@ -2962,6 +3285,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     getQuiteSwarmPosition(actor.userId),
     getQuiteSwarmRoom(),
     listPresentRuntimeUsers(),
+    starfallProfilePromise,
   ]);
 
   return {
@@ -2977,6 +3301,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     matrix_position: matrixPosition,
     quite_swarm_position: quiteSwarmPosition,
     quite_swarm_room: quiteSwarmRoom,
+    starfall_profile: starfallProfile,
     present_users: present,
     play: listKozmosPlay(),
   };
@@ -3396,6 +3721,21 @@ export async function POST(req: Request) {
       const content = asTrimmedString((payload as { content?: unknown })?.content);
       const message = await sendGameChatMessage(actor.userId, actor.username, content);
       return respond(200, { ok: true, action, data: message });
+    }
+
+    if (action === "play.starfall.profile") {
+      const profile = await getStarfallProfile(actor.userId);
+      return respond(200, { ok: true, action, data: profile });
+    }
+
+    if (action === "play.starfall.single") {
+      const result = await runStarfallSingle(actor.userId, payload as Record<string, unknown>);
+      return respond(200, { ok: true, action, data: result });
+    }
+
+    if (action === "play.starfall.train") {
+      const result = await trainStarfallSkill(actor.userId, payload as Record<string, unknown>);
+      return respond(200, { ok: true, action, data: result });
     }
 
     if (action === "night.lobbies") {
