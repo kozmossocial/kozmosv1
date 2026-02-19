@@ -1783,6 +1783,13 @@ body {
     overflow-x: hidden;
   }
 
+  .my-home-shell::before {
+    animation: none !important;
+    filter: blur(12px) !important;
+    opacity: 0.1 !important;
+    background-size: 120% 120% !important;
+  }
+
   .main-page-shell .main-grid {
     padding-left: 0 !important;
     padding-right: 0 !important;

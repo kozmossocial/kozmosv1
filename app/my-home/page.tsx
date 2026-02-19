@@ -718,6 +718,11 @@ useEffect(() => {
   }, [directChatEditMode]);
 
   useEffect(() => {
+    if (isMobileLayout) {
+      setUfoBeamActive(false);
+      setUfoBeamHasFired(false);
+      return;
+    }
     if (notesBootstrapping) {
       setUfoBeamActive(false);
       return;
@@ -751,7 +756,7 @@ useEffect(() => {
       if (cycleTimer) window.clearTimeout(cycleTimer);
       if (beamOffTimer) window.clearTimeout(beamOffTimer);
     };
-  }, [notesBootstrapping]);
+  }, [isMobileLayout, notesBootstrapping]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
@@ -1742,7 +1747,11 @@ useEffect(() => {
           {!notesBootstrapping ? (
             <div
               aria-hidden
-              className={`ufo-ambient-faint ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`}
+              className={
+                isMobileLayout
+                  ? "ufo-ambient-faint"
+                  : `ufo-ambient-faint ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`
+              }
               style={{
                 position: "absolute",
                 inset: 0,
@@ -1752,20 +1761,30 @@ useEffect(() => {
                 backgroundRepeat: "no-repeat",
                 backgroundPosition: "center 62%",
                 backgroundSize: "min(380px, 82%) auto",
-                mixBlendMode: "screen",
-                opacity: 0.16,
-                WebkitMaskImage:
-                  "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
-                maskImage:
-                  "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
+                mixBlendMode: isMobileLayout ? "normal" : "screen",
+                opacity: isMobileLayout ? 0.1 : 0.16,
+                WebkitMaskImage: isMobileLayout
+                  ? "none"
+                  : "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
+                maskImage: isMobileLayout
+                  ? "none"
+                  : "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
               }}
             />
           ) : null}
           {notesBootstrapping ? (
             <div aria-hidden style={{ position: "relative", zIndex: 1, height: "100%" }}>
               <div
-                className={`ufo-boot-glow ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`}
-                style={notesBootPlaceholderStyle}
+                className={
+                  isMobileLayout
+                    ? undefined
+                    : `ufo-boot-glow ufo-ambient-beam ${ufoBeamActive ? "ufo-beam-on" : ufoBeamHasFired ? "ufo-beam-off" : "ufo-beam-idle"}`
+                }
+                style={
+                  isMobileLayout
+                    ? notesBootPlaceholderMobileStyle
+                    : notesBootPlaceholderStyle
+                }
               />
               <div
                 style={{
@@ -2066,6 +2085,14 @@ const notesBootPlaceholderStyle: React.CSSProperties = {
     "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.92) 42%, rgba(0,0,0,0.44) 66%, rgba(0,0,0,0) 84%)",
   maskImage:
     "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.92) 42%, rgba(0,0,0,0.44) 66%, rgba(0,0,0,0) 84%)",
+};
+
+const notesBootPlaceholderMobileStyle: React.CSSProperties = {
+  ...notesBootPlaceholderStyle,
+  mixBlendMode: "normal",
+  WebkitMaskImage: "none",
+  maskImage: "none",
+  opacity: 0.2,
 };
 
 const noteContentStyle: React.CSSProperties = {
