@@ -684,6 +684,7 @@ export default function Main() {
     startX: number;
   }>({ active: false, pointerId: null, startX: 0 });
   const [loading, setLoading] = useState(false);
+  const [chatBootstrapReady, setChatBootstrapReady] = useState(false);
   const [realtimePresentUsers, setRealtimePresentUsers] = useState<string[]>(
     []
   );
@@ -1260,6 +1261,7 @@ export default function Main() {
   /*  load user + messages */
   useEffect(() => {
     async function load() {
+      setChatBootstrapReady(false);
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -1271,37 +1273,38 @@ export default function Main() {
 
       setUserId(user.id);
 
-      const { data: profile } = await supabase
-        .from("profileskozmos")
-        .select("username, avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
+      try {
+        const [profileRes, mainRes, gameRes, buildRes] = await Promise.all([
+          supabase
+            .from("profileskozmos")
+            .select("username, avatar_url")
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("main_messages")
+            .select("id, user_id, username, content")
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("game_chat_messages")
+            .select("id, user_id, username, content")
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("build_chat_messages")
+            .select("id, user_id, username, content")
+            .order("created_at", { ascending: true }),
+        ]);
 
-      setUsername(profile?.username?.trim() || "user");
-      setSelfAvatarUrl(
-        typeof profile?.avatar_url === "string" ? profile.avatar_url : null
-      );
-
-      const { data } = await supabase
-        .from("main_messages")
-        .select("id, user_id, username, content")
-        .order("created_at", { ascending: true });
-
-      setMessages(data || []);
-
-      const { data: gameData } = await supabase
-        .from("game_chat_messages")
-        .select("id, user_id, username, content")
-        .order("created_at", { ascending: true });
-
-      setGameMessages(gameData || []);
-
-      const { data: buildData } = await supabase
-        .from("build_chat_messages")
-        .select("id, user_id, username, content")
-        .order("created_at", { ascending: true });
-
-      setBuildMessages(buildData || []);
+        const profile = profileRes.data;
+        setUsername(profile?.username?.trim() || "user");
+        setSelfAvatarUrl(
+          typeof profile?.avatar_url === "string" ? profile.avatar_url : null
+        );
+        setMessages(mainRes.data || []);
+        setGameMessages(gameRes.data || []);
+        setBuildMessages(buildRes.data || []);
+      } finally {
+        setChatBootstrapReady(true);
+      }
     }
 
     load();
@@ -4474,6 +4477,51 @@ export default function Main() {
           style={sharedMessagesScrollStyle}
           onScroll={syncSharedStickToBottom}
         >
+          {!chatBootstrapReady && activeMessages.length === 0 ? (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: 10,
+                pointerEvents: "none",
+                overflow: "hidden",
+                background:
+                  "radial-gradient(70% 55% at 50% 46%, rgba(182,206,240,0.16) 0%, rgba(102,132,180,0.08) 38%, rgba(8,10,16,0.04) 70%, transparent 100%)",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: "10% 0 12%",
+                  backgroundImage: "url('/japancopy.png')",
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "center",
+                  backgroundSize: "min(300px, 48%) auto",
+                  opacity: 0.3,
+                  filter:
+                    "drop-shadow(0 0 12px rgba(216,232,255,0.45)) drop-shadow(0 0 26px rgba(168,198,255,0.28))",
+                  mixBlendMode: "screen",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  bottom: 14,
+                  transform: "translateX(-50%)",
+                  fontSize: 11,
+                  letterSpacing: "0.12em",
+                  opacity: 0.42,
+                  color: "rgba(226,236,255,0.9)",
+                  textShadow: "0 0 8px rgba(180,210,255,0.32)",
+                  textTransform: "lowercase",
+                }}
+              >
+                syncing chat stream...
+              </div>
+            </div>
+          ) : null}
           {activeMessages.map((m) => {
             const reflectionKey = `${chatMode}:${m.id}`;
             return (
@@ -6273,6 +6321,7 @@ const sharedMessagesScrollStyle: React.CSSProperties = {
   overflowX: "hidden",
   paddingRight: 8,
   marginBottom: 12,
+  position: "relative",
 };
 
 const playPanelStyle: React.CSSProperties = {
