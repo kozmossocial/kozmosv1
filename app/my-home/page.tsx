@@ -1703,7 +1703,8 @@ useEffect(() => {
             aria-hidden
             style={{
               width: holoShipWidth,
-              margin: "-34px auto 16px",
+              margin: "-39px auto 16px",
+              transform: "translateX(-10px)",
               opacity: 0.78,
               pointerEvents: "none",
               userSelect: "none",
