@@ -4571,11 +4571,32 @@ export default function Main() {
           />
         </div>
 
-        <div
-          ref={sharedMessagesRef}
-          style={sharedMessagesScrollStyle}
-          onScroll={syncSharedStickToBottom}
-        >
+        <div style={{ position: "relative" }}>
+          <div
+            aria-hidden
+            className="ufo-ambient-faint"
+            style={{
+              position: "absolute",
+              inset: "6% 0 8%",
+              pointerEvents: "none",
+              zIndex: 0,
+              backgroundImage: "url('/ufo.png')",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center 62%",
+              backgroundSize: "min(460px, 74%) auto",
+              mixBlendMode: "screen",
+              opacity: 0.12,
+              WebkitMaskImage:
+                "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.74) 52%, rgba(0,0,0,0.28) 72%, rgba(0,0,0,0) 88%)",
+              maskImage:
+                "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.74) 52%, rgba(0,0,0,0.28) 72%, rgba(0,0,0,0) 88%)",
+            }}
+          />
+          <div
+            ref={sharedMessagesRef}
+            style={sharedMessagesScrollStyle}
+            onScroll={syncSharedStickToBottom}
+          >
           {!chatBootstrapReady && activeMessages.length === 0 ? (
             <div
               aria-hidden
@@ -4585,6 +4606,7 @@ export default function Main() {
                 borderRadius: 10,
                 pointerEvents: "none",
                 overflow: "hidden",
+                zIndex: 1,
                 background:
                   "radial-gradient(72% 58% at 50% 52%, rgba(170,186,214,0.14) 0%, rgba(98,112,138,0.06) 44%, rgba(8,10,16,0.02) 72%, transparent 100%)",
               }}
@@ -4623,128 +4645,131 @@ export default function Main() {
               </div>
             </div>
           ) : null}
-          {activeMessages.map((m) => {
-            const reflectionKey = `${chatMode}:${m.id}`;
-            return (
-            <div
-              key={`${chatMode}-${m.id}`}
-              style={{
-                marginBottom: 12,
-                paddingBottom: 10,
-                borderBottom: "1px solid rgba(255,255,255,0.14)",
-                display: "flex",
-                gap: 16,
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-              }}
-            >
-              <div style={{ flex: 1, lineHeight: 1.6 }}>
-                <div>
-                  <span
-                    style={{
-                      opacity: 0.6,
-                      cursor: "default",
-                    }}
-                  >
-                    {m.username}:
-                  </span>{" "}
-                  <span className="selectable-text">{m.content}</span>
-                  {m.user_id === userId && (
+          <div style={{ position: "relative", zIndex: 2 }}>
+            {activeMessages.map((m) => {
+              const reflectionKey = `${chatMode}:${m.id}`;
+              return (
+              <div
+                key={`${chatMode}-${m.id}`}
+                style={{
+                  marginBottom: 12,
+                  paddingBottom: 10,
+                  borderBottom: "1px solid rgba(255,255,255,0.14)",
+                  display: "flex",
+                  gap: 16,
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div style={{ flex: 1, lineHeight: 1.6 }}>
+                  <div>
                     <span
-                      onClick={() => {
-                        if (chatMode === "open") {
-                          void deleteMessage(m.id);
-                        } else if (chatMode === "game") {
-                          void deleteGameMessage(m.id);
-                        } else if (chatMode === "build") {
-                          void deleteBuildMessage(m.id);
-                        }
-                      }}
                       style={{
-                        marginLeft: 8,
-                        fontSize: 11,
-                        opacity: 0.4,
-                        cursor: "pointer",
+                        opacity: 0.6,
+                        cursor: "default",
                       }}
                     >
-                      delete
-                    </span>
+                      {m.username}:
+                    </span>{" "}
+                    <span className="selectable-text">{m.content}</span>
+                    {m.user_id === userId && (
+                      <span
+                        onClick={() => {
+                          if (chatMode === "open") {
+                            void deleteMessage(m.id);
+                          } else if (chatMode === "game") {
+                            void deleteGameMessage(m.id);
+                          } else if (chatMode === "build") {
+                            void deleteBuildMessage(m.id);
+                          }
+                        }}
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 11,
+                          opacity: 0.4,
+                          cursor: "pointer",
+                        }}
+                      >
+                        delete
+                      </span>
+                    )}
+                  </div>
+
+                  {chatMode === "open" && axyMsgReflection[reflectionKey] && (
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontSize: 13,
+                        opacity: 0.75,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "#6BFF8E",
+                          letterSpacing: "0.12em",
+                          marginRight: 4,
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          setAxyMsgFadeId(reflectionKey);
+
+                          setAxyMsgReflection((prev) => {
+                            const copy = { ...prev };
+                            delete copy[reflectionKey];
+                            return copy;
+                          });
+
+                          setTimeout(() => {
+                            setAxyMsgFadeId(null);
+                          }, 400);
+                        }}
+                      >
+                        Axy reflects:
+                      </span>
+                      {axyMsgReflection[reflectionKey]}
+                    </div>
                   )}
                 </div>
 
-                {chatMode === "open" && axyMsgReflection[reflectionKey] && (
-                  <div
+                {chatMode === "open" ? (
+                  <Image
+                    src="/axy-logofav.png"
+                    alt="Axy"
+                    width={22}
+                    height={22}
                     style={{
-                      marginTop: 6,
-                      fontSize: 13,
-                      opacity: 0.75,
-                      fontStyle: "italic",
+                      width: 22,
+                      height: 22,
+                      cursor: "pointer",
+                      opacity: axyMsgFadeId === reflectionKey ? 0.25 : 0.6,
+                      transform:
+                        axyMsgPulseId === reflectionKey ? "scale(1.2)" : "scale(1)",
+                      transition:
+                        "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
                     }}
-                  >
-                    <span
-                      style={{
-                        color: "#6BFF8E",
-                        letterSpacing: "0.12em",
-                        marginRight: 4,
-                        cursor: "pointer",
-                      }}
-                      onClick={() => {
-                        setAxyMsgFadeId(reflectionKey);
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.filter =
+                        "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.filter = "none";
+                    }}
+                    onClick={() => {
+                      setAxyMsgPulseId(reflectionKey);
+                      askAxyOnMessage(chatMode, m.id, m.content);
 
-                        setAxyMsgReflection((prev) => {
-                          const copy = { ...prev };
-                          delete copy[reflectionKey];
-                          return copy;
-                        });
-
-                        setTimeout(() => {
-                          setAxyMsgFadeId(null);
-                        }, 400);
-                      }}
-                    >
-                      Axy reflects:
-                    </span>
-                    {axyMsgReflection[reflectionKey]}
-                  </div>
-                )}
+                      setTimeout(() => {
+                        setAxyMsgPulseId(null);
+                      }, 300);
+                    }}
+                  />
+                ) : null}
               </div>
-
-              {chatMode === "open" ? (
-                <Image
-                  src="/axy-logofav.png"
-                  alt="Axy"
-                  width={22}
-                  height={22}
-                  style={{
-                    width: 22,
-                    height: 22,
-                    cursor: "pointer",
-                    opacity: axyMsgFadeId === reflectionKey ? 0.25 : 0.6,
-                    transform:
-                      axyMsgPulseId === reflectionKey ? "scale(1.2)" : "scale(1)",
-                    transition:
-                      "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.filter =
-                      "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.filter = "none";
-                  }}
-                  onClick={() => {
-                    setAxyMsgPulseId(reflectionKey);
-                    askAxyOnMessage(chatMode, m.id, m.content);
-
-                    setTimeout(() => {
-                      setAxyMsgPulseId(null);
-                    }, 300);
-                  }}
-                />
-              ) : null}
-            </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          </div>
         </div>
 
         <textarea

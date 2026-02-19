@@ -1307,8 +1307,30 @@ useEffect(() => {
 
         {/* NOTES */}
         <div style={notesListStyle}>
+          {!notesBootstrapping ? (
+            <div
+              aria-hidden
+              className="ufo-ambient-faint"
+              style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                zIndex: 0,
+                backgroundImage: "url('/ufo.png')",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "center 62%",
+                backgroundSize: "min(380px, 82%) auto",
+                mixBlendMode: "screen",
+                opacity: 0.16,
+                WebkitMaskImage:
+                  "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
+                maskImage:
+                  "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
+              }}
+            />
+          ) : null}
           {notesBootstrapping ? (
-            <div aria-hidden style={{ position: "relative", height: "100%" }}>
+            <div aria-hidden style={{ position: "relative", zIndex: 1, height: "100%" }}>
               <div className="ufo-boot-glow" style={notesBootPlaceholderStyle} />
               <div
                 style={{
@@ -1327,96 +1349,100 @@ useEffect(() => {
                 syncing notes...
               </div>
             </div>
-          ) : notes.map((note) => (
-            <div
-              key={note.id}
-              style={{
-                ...noteStyle,
-                display: "flex",
-                gap: 16,
-                justifyContent: "space-between",
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={noteContentStyle}>
-                  {note.content}
-                </div>
+          ) : (
+            <div style={{ position: "relative", zIndex: 1 }}>
+              {notes.map((note) => (
+                <div
+                  key={note.id}
+                  style={{
+                    ...noteStyle,
+                    display: "flex",
+                    gap: 16,
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={noteContentStyle}>
+                      {note.content}
+                    </div>
 
-                {axyReflection[note.id] && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 13,
-                      opacity: 0.75,
-                      fontStyle: "italic",
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "#6BFF8E",
-                        letterSpacing: "0.12em",
-                        marginRight: 4,
-                        cursor: "pointer",
-                      }}
-                      onClick={() => {
-                        setAxyFadeId(note.id);
+                    {axyReflection[note.id] && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontSize: 13,
+                          opacity: 0.75,
+                          fontStyle: "italic",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "#6BFF8E",
+                            letterSpacing: "0.12em",
+                            marginRight: 4,
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setAxyFadeId(note.id);
 
-                        setAxyReflection((prev) => {
-                          const copy = { ...prev };
-                          delete copy[note.id];
-                          return copy;
-                        });
+                            setAxyReflection((prev) => {
+                              const copy = { ...prev };
+                              delete copy[note.id];
+                              return copy;
+                            });
 
-                        setTimeout(() => {
-                          setAxyFadeId(null);
-                        }, 400);
-                      }}
-                    >
-                      Axy reflects:
-                    </span>
-                    {axyReflection[note.id]}
+                            setTimeout(() => {
+                              setAxyFadeId(null);
+                            }, 400);
+                          }}
+                        >
+                          Axy reflects:
+                        </span>
+                        {axyReflection[note.id]}
+                      </div>
+                    )}
+
+                    <div style={noteActionsStyle}>
+                      <span onClick={() => deleteNote(note.id)}>delete</span>
+                    </div>
                   </div>
-                )}
 
-                <div style={noteActionsStyle}>
-                  <span onClick={() => deleteNote(note.id)}>delete</span>
+                  {/* AXY LOGO */}
+                  <Image
+                    src="/axy-logofav.png"
+                    alt="Axy"
+                    width={22}
+                    height={22}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      cursor: "pointer",
+                      opacity: axyFadeId === note.id ? 0.25 : 0.6,
+                      transform: axyPulseId === note.id ? "scale(1.2)" : "scale(1)",
+                      transition:
+                        "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.filter =
+                        "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.filter = "none";
+                    }}
+                    onClick={() => {
+                      setAxyPulseId(note.id);
+                      askAxy(note.id, note.content);
+
+                      setTimeout(() => {
+                        setAxyPulseId(null);
+                      }, 300);
+                    }}
+                  />
+
                 </div>
-              </div>
-
-              {/* AXY LOGO */}
-              <Image
-                src="/axy-logofav.png"
-                alt="Axy"
-                width={22}
-                height={22}
-                style={{
-                  width: 22,
-                  height: 22,
-                  cursor: "pointer",
-                  opacity: axyFadeId === note.id ? 0.25 : 0.6,
-                  transform: axyPulseId === note.id ? "scale(1.2)" : "scale(1)",
-                  transition:
-                    "opacity 0.4s ease, transform 0.3s ease, filter 0.25s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.filter =
-                    "drop-shadow(0 0 4px rgba(107,255,142,0.35))";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.filter = "none";
-                }}
-                onClick={() => {
-                  setAxyPulseId(note.id);
-                  askAxy(note.id, note.content);
-
-                  setTimeout(() => {
-                    setAxyPulseId(null);
-                  }, 300);
-                }}
-              />
-
+              ))}
             </div>
-          ))}
+          )}
         </div>
 
         {isMobileLayout ? (
@@ -1594,11 +1620,12 @@ const notesListStyle: React.CSSProperties = {
   overflowY: "auto",
   overflowX: "hidden",
   paddingRight: 8,
+  position: "relative",
 };
 
 const notesBootPlaceholderStyle: React.CSSProperties = {
   height: "100%",
-  background: "url('/ufo.png') no-repeat center 58% / min(360px, 84%) auto",
+  background: "url('/ufo.png') no-repeat center 62% / min(380px, 82%) auto",
   mixBlendMode: "screen",
   WebkitMaskImage:
     "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.92) 42%, rgba(0,0,0,0.44) 66%, rgba(0,0,0,0) 84%)",

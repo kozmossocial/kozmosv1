@@ -1174,6 +1174,71 @@ body {
   animation: ufoBootGlowPulse 2.8s ease-in-out infinite;
 }
 
+@keyframes ufoBootGlowPulseSoft {
+  0% {
+    opacity: 0.18;
+    filter:
+      contrast(1.01)
+      saturate(0.22)
+      brightness(0.9)
+      drop-shadow(0 0 8px rgba(222, 228, 238, 0.1))
+      drop-shadow(0 0 18px rgba(142, 150, 166, 0.06));
+  }
+  50% {
+    opacity: 0.27;
+    filter:
+      contrast(1.03)
+      saturate(0.26)
+      brightness(0.96)
+      drop-shadow(0 0 12px rgba(232, 238, 248, 0.16))
+      drop-shadow(0 0 28px rgba(160, 170, 190, 0.1));
+  }
+  100% {
+    opacity: 0.18;
+    filter:
+      contrast(1.01)
+      saturate(0.22)
+      brightness(0.9)
+      drop-shadow(0 0 8px rgba(222, 228, 238, 0.1))
+      drop-shadow(0 0 18px rgba(142, 150, 166, 0.06));
+  }
+}
+
+.ufo-boot-glow-soft {
+  animation: ufoBootGlowPulseSoft 2.8s ease-in-out infinite;
+}
+
+@keyframes ufoAmbientFaintPulse {
+  0% {
+    filter:
+      contrast(1.01)
+      saturate(0.2)
+      brightness(0.88)
+      drop-shadow(0 0 8px rgba(222, 228, 238, 0.1))
+      drop-shadow(0 0 18px rgba(142, 150, 166, 0.06));
+  }
+  50% {
+    filter:
+      contrast(1.03)
+      saturate(0.24)
+      brightness(0.96)
+      drop-shadow(0 0 12px rgba(232, 238, 248, 0.16))
+      drop-shadow(0 0 30px rgba(160, 170, 190, 0.1));
+  }
+  100% {
+    filter:
+      contrast(1.01)
+      saturate(0.2)
+      brightness(0.88)
+      drop-shadow(0 0 8px rgba(222, 228, 238, 0.1))
+      drop-shadow(0 0 18px rgba(142, 150, 166, 0.06));
+  }
+}
+
+.ufo-ambient-faint {
+  animation: ufoAmbientFaintPulse 5.6s ease-in-out infinite;
+}
+
 /* Main panel text behavior */
 .main-grid .hush-panel,
 .main-grid .chat-panel,
