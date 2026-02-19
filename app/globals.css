@@ -944,6 +944,35 @@ body {
   opacity: 0.16;
 }
 
+.my-home-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: screen;
+  opacity: 0.16;
+  background:
+    radial-gradient(circle at 24% 24%, rgba(226, 230, 238, 0.16), transparent 52%),
+    radial-gradient(circle at 78% 30%, rgba(188, 196, 212, 0.12), transparent 56%),
+    radial-gradient(circle at 58% 76%, rgba(148, 156, 172, 0.1), transparent 58%),
+    linear-gradient(
+      128deg,
+      rgba(214, 220, 232, 0.08) 0%,
+      rgba(166, 174, 192, 0.08) 40%,
+      rgba(236, 240, 248, 0.06) 72%,
+      rgba(138, 146, 164, 0.06) 100%
+    );
+  background-size: 220% 220%;
+  filter: blur(22px);
+  animation: myHomeAmbientFlow 16s ease-in-out infinite;
+}
+
+.my-home-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
 .build-shell {
   display: grid;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
@@ -1092,6 +1121,52 @@ body {
   100% {
     background-position: 50% 100%;
   }
+}
+
+@keyframes myHomeAmbientFlow {
+  0% {
+    background-position: 0% 24%;
+  }
+  50% {
+    background-position: 100% 76%;
+  }
+  100% {
+    background-position: 0% 24%;
+  }
+}
+
+@keyframes ufoBootGlowPulse {
+  0% {
+    opacity: 0.38;
+    filter:
+      contrast(1.02)
+      saturate(0.26)
+      brightness(0.9)
+      drop-shadow(0 0 8px rgba(220, 226, 238, 0.16))
+      drop-shadow(0 0 18px rgba(144, 152, 168, 0.1));
+  }
+  50% {
+    opacity: 0.56;
+    filter:
+      contrast(1.05)
+      saturate(0.32)
+      brightness(0.98)
+      drop-shadow(0 0 12px rgba(232, 238, 248, 0.24))
+      drop-shadow(0 0 28px rgba(166, 176, 196, 0.16));
+  }
+  100% {
+    opacity: 0.38;
+    filter:
+      contrast(1.02)
+      saturate(0.26)
+      brightness(0.9)
+      drop-shadow(0 0 8px rgba(220, 226, 238, 0.16))
+      drop-shadow(0 0 18px rgba(144, 152, 168, 0.1));
+  }
+}
+
+.ufo-boot-glow {
+  animation: ufoBootGlowPulse 2.8s ease-in-out infinite;
 }
 
 /* Main panel text behavior */

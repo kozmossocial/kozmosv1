@@ -1127,7 +1127,7 @@ useEffect(() => {
     : null;
 
   return (
-    <main style={pageStyle}>
+    <main className="my-home-shell" style={pageStyle}>
 {/*  KOZMOS LOGO */}
 <div
   style={{
@@ -1229,14 +1229,9 @@ useEffect(() => {
         </div>
 
         {/* NOTES */}
-        <div
-          style={{
-            ...notesListStyle,
-            minHeight: notesBootstrapping ? "clamp(220px, 34vh, 360px)" : undefined,
-          }}
-        >
+        <div style={notesListStyle}>
           {notesBootstrapping ? (
-            <div style={notesBootPlaceholderStyle} aria-hidden />
+            <div className="ufo-boot-glow" style={notesBootPlaceholderStyle} aria-hidden />
           ) : notes.map((note) => (
             <div
               key={note.id}
@@ -1499,6 +1494,7 @@ const noteActionsStyle: React.CSSProperties = {
 
 const notesListStyle: React.CSSProperties = {
   marginTop: 24,
+  height: "clamp(340px, 46vh, 560px)",
   maxHeight: "clamp(340px, 46vh, 560px)",
   overflowY: "auto",
   overflowX: "hidden",
@@ -1506,15 +1502,13 @@ const notesListStyle: React.CSSProperties = {
 };
 
 const notesBootPlaceholderStyle: React.CSSProperties = {
-  height: "clamp(220px, 34vh, 360px)",
-  background:
-    "radial-gradient(circle at 50% 62%, rgba(180,194,222,0.08) 0%, rgba(11,11,11,0) 62%), url('/ufo.png')",
-  backgroundRepeat: "no-repeat, no-repeat",
-  backgroundPosition: "center, center 58%",
-  backgroundSize: "100% 100%, min(330px, 78%) auto",
-  opacity: 0.56,
-  filter:
-    "drop-shadow(0 0 8px rgba(166,186,220,0.14)) drop-shadow(0 0 18px rgba(126,146,180,0.1))",
+  height: "100%",
+  background: "url('/ufo.png') no-repeat center 58% / min(360px, 84%) auto",
+  mixBlendMode: "screen",
+  WebkitMaskImage:
+    "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.92) 42%, rgba(0,0,0,0.44) 66%, rgba(0,0,0,0) 84%)",
+  maskImage:
+    "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.92) 42%, rgba(0,0,0,0.44) 66%, rgba(0,0,0,0) 84%)",
 };
 
 const noteContentStyle: React.CSSProperties = {
