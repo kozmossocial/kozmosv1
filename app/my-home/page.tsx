@@ -1231,7 +1231,25 @@ useEffect(() => {
         {/* NOTES */}
         <div style={notesListStyle}>
           {notesBootstrapping ? (
-            <div className="ufo-boot-glow" style={notesBootPlaceholderStyle} aria-hidden />
+            <div aria-hidden style={{ position: "relative", height: "100%" }}>
+              <div className="ufo-boot-glow" style={notesBootPlaceholderStyle} />
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  bottom: 14,
+                  transform: "translateX(-50%)",
+                  fontSize: 11,
+                  letterSpacing: "0.12em",
+                  opacity: 0.42,
+                  color: "rgba(226,236,255,0.9)",
+                  textShadow: "0 0 8px rgba(180,210,255,0.32)",
+                  textTransform: "lowercase",
+                }}
+              >
+                syncing notes...
+              </div>
+            </div>
           ) : notes.map((note) => (
             <div
               key={note.id}
