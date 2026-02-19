@@ -452,6 +452,50 @@ body {
 }
 
 /* Matrix-style rain on screen 3 */
+.matrix-logo-ambient {
+  position: absolute;
+  inset: 0;
+  left: 50%;
+  width: calc(100vw + 6px);
+  margin-left: calc(-50vw - 3px);
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(
+      44% 30% at 50% 58%,
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(255, 255, 255, 0.06) 48%,
+      rgba(255, 255, 255, 0) 84%
+    ),
+    radial-gradient(
+      62% 46% at 50% 58%,
+      rgba(198, 216, 244, 0.12) 0%,
+      rgba(120, 142, 172, 0.06) 44%,
+      rgba(0, 0, 0, 0) 78%
+    ),
+    url("/axyufologo.png");
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-position: center 58%, center 58%, center 58%;
+  background-size: 88% auto, 76% auto, min(760px, 68vw) auto;
+  mix-blend-mode: screen;
+  opacity: 0.18;
+  filter: blur(0.45px) saturate(0.82) brightness(0.92);
+  -webkit-mask-image: radial-gradient(
+    ellipse at 50% 58%,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.78) 48%,
+    rgba(0, 0, 0, 0.32) 72%,
+    rgba(0, 0, 0, 0) 90%
+  );
+  mask-image: radial-gradient(
+    ellipse at 50% 58%,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.78) 48%,
+    rgba(0, 0, 0, 0.32) 72%,
+    rgba(0, 0, 0, 0) 90%
+  );
+}
+
 .matrix-rain {
   position: absolute;
   inset: 0;
@@ -950,7 +994,7 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
   mix-blend-mode: screen;
   opacity: 0.2;
   background:
@@ -967,6 +1011,14 @@ body {
   background-size: 220% 220%;
   filter: blur(22px);
   animation: myHomeAmbientFlow 16s ease-in-out infinite;
+}
+
+@media (max-width: 900px) {
+  .matrix-logo-ambient {
+    background-position: center 56%, center 56%, center 56%;
+    background-size: 96% auto, 92% auto, min(560px, 86vw) auto;
+    opacity: 0.14;
+  }
 }
 
 .my-home-shell > *,

@@ -1172,11 +1172,9 @@ export default function Home() {
           flexDirection: "column",
         }}
       >
-        <Image
-          src="/kozmos-logo.png"
+        <img
+          src="/kozmos-logo.png?v=20260220-1"
           alt="Kozmos"
-          width={1536}
-          height={768}
           style={{ maxWidth: "60%", height: "auto" }}
         />
         <div style={{ marginTop: 40, fontSize: 12, opacity: 0.4 }}>
@@ -1198,6 +1196,7 @@ export default function Home() {
           zIndex: 2,
         }}
       >
+        <div className="matrix-logo-ambient" aria-hidden />
         <div
           className={`matrix-rain${matrixMotionActive ? "" : " matrix-rain-paused"}${
             lowPerfMotion ? " matrix-rain-low-perf" : ""
