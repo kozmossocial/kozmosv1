@@ -78,6 +78,11 @@ export default function MyHome() {
   const [touchSavingOrder, setTouchSavingOrder] = useState(false);
   const [touchRemovingUserId, setTouchRemovingUserId] = useState<string | null>(null);
   const [touchHoverUserId, setTouchHoverUserId] = useState<string | null>(null);
+  const [touchAvatarPreview, setTouchAvatarPreview] = useState<{
+    userId: string;
+    src: string;
+    username: string;
+  } | null>(null);
   const [chatStartBusyUserId, setChatStartBusyUserId] = useState<string | null>(null);
   const [activeChats, setActiveChats] = useState<DirectChat[]>([]);
   const [selectedDirectChatId, setSelectedDirectChatId] = useState<string | null>(null);
@@ -720,6 +725,21 @@ useEffect(() => {
   }, [touchEditMode]);
 
   useEffect(() => {
+    if (!touchAvatarPreview) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-touch-avatar-trigger]")) return;
+      if (target.closest("[data-touch-avatar-preview]")) return;
+      setTouchAvatarPreview(null);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [touchAvatarPreview]);
+
+  useEffect(() => {
     if (!directChatEditMode) return;
     setTouchHoverUserId(null);
   }, [directChatEditMode]);
@@ -1302,7 +1322,12 @@ useEffect(() => {
             {touchUsers.map((user, idx) => (
               <div
                 key={user.id}
-                style={touchUserRowStyle}
+                style={{
+                  ...touchUserRowStyle,
+                  position: "relative",
+                  zIndex: touchAvatarPreview?.userId === user.id ? 40 : 1,
+                  overflow: "visible",
+                }}
                 onMouseEnter={() => {
                   if (!touchEditMode) {
                     setTouchHoverUserId(user.id);
@@ -1316,16 +1341,40 @@ useEffect(() => {
               >
                 <div style={touchAvatarStyle}>
                   {user.avatar_url ? (
-                    <img
-                      src={user.avatar_url}
-                      alt={`${user.username} avatar`}
-                      style={touchAvatarImageStyle}
-                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTouchAvatarPreview({
+                          userId: user.id,
+                          src: user.avatar_url as string,
+                          username: user.username,
+                        });
+                      }}
+                      style={touchAvatarPreviewTriggerStyle}
+                      data-touch-avatar-trigger
+                      aria-label={`${user.username} avatar preview`}
+                    >
+                      <img
+                        src={user.avatar_url}
+                        alt={`${user.username} avatar`}
+                        style={touchAvatarImageStyle}
+                      />
+                    </button>
                   ) : (
                     <span style={{ fontSize: 12, opacity: 0.72 }}>
                       {(user.username[0] ?? "?").toUpperCase()}
                     </span>
                   )}
+                  {touchAvatarPreview?.userId === user.id ? (
+                    <div data-touch-avatar-preview style={touchAvatarPreviewBubbleStyle}>
+                      <img
+                        src={touchAvatarPreview.src}
+                        alt={`${touchAvatarPreview.username} avatar preview`}
+                        style={touchAvatarPreviewBubbleImageStyle}
+                      />
+                    </div>
+                  ) : null}
                 </div>
                 <span style={{ opacity: 0.82 }}>{user.username}</span>
                 {!touchEditMode && touchHoverUserId === user.id ? (
@@ -2343,6 +2392,8 @@ const touchListStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 8,
+  position: "relative",
+  overflow: "visible",
 };
 
 const touchUserRowStyle: React.CSSProperties = {
@@ -2388,14 +2439,51 @@ const touchAvatarStyle: React.CSSProperties = {
   height: 24,
   borderRadius: "50%",
   border: "1px solid rgba(255,255,255,0.2)",
-  overflow: "hidden",
+  overflow: "visible",
   display: "grid",
   placeItems: "center",
   background: "rgba(255,255,255,0.05)",
   flexShrink: 0,
+  position: "relative",
+  zIndex: 2,
 };
 
 const touchAvatarImageStyle: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+};
+
+const touchAvatarPreviewTriggerStyle: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  border: "none",
+  padding: 0,
+  margin: 0,
+  borderRadius: "50%",
+  background: "transparent",
+  cursor: "pointer",
+  overflow: "hidden",
+};
+
+const touchAvatarPreviewBubbleStyle: React.CSSProperties = {
+  position: "absolute",
+  left: "50%",
+  top: "50%",
+  transform: "translate(-50%, -50%)",
+  width: 88,
+  height: 88,
+  borderRadius: "50%",
+  overflow: "hidden",
+  border: "1px solid rgba(210,232,255,0.32)",
+  background: "rgba(8,14,24,0.92)",
+  boxShadow: "0 0 24px rgba(120,190,255,0.24)",
+  zIndex: 20,
+  pointerEvents: "none",
+};
+
+const touchAvatarPreviewBubbleImageStyle: React.CSSProperties = {
   width: "100%",
   height: "100%",
   objectFit: "cover",
