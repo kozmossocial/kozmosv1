@@ -1684,7 +1684,7 @@ useEffect(() => {
           style={{
             position: "absolute",
             left: 44,
-            top: 35,
+            top: 47,
             width: holoShipWidth,
             opacity: 0.78,
             pointerEvents: "none",
