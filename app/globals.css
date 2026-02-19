@@ -1457,6 +1457,21 @@ body {
   opacity: 0;
 }
 
+@keyframes ufoBeamMobilePulse {
+  0% {
+    opacity: 0.12;
+    transform: translate(-50%, 0) scaleX(0.8) scaleY(0.8);
+  }
+  50% {
+    opacity: 0.2;
+    transform: translate(-50%, 0) scaleX(0.84) scaleY(0.9);
+  }
+  100% {
+    opacity: 0.13;
+    transform: translate(-50%, 0) scaleX(0.8) scaleY(0.82);
+  }
+}
+
 @keyframes ufoHoloFloat {
   0% {
     transform: translateY(0) translateX(0) rotate(-2deg);
@@ -1818,6 +1833,38 @@ body {
     filter: blur(12px) !important;
     opacity: 0.1 !important;
     background-size: 120% 120% !important;
+  }
+
+  /* Mobile-safe beam profile: keep effect, reduce GPU load */
+  .ufo-ambient-beam::after {
+    display: none !important;
+  }
+
+  .ufo-ambient-beam::before {
+    width: min(220px, 52%) !important;
+    height: min(520px, 92%) !important;
+    top: 65.8% !important;
+    clip-path: polygon(49.4% 0%, 50.6% 0%, 90% 100%, 10% 100%) !important;
+    filter: blur(8px) saturate(1.08) brightness(1.08) !important;
+    background: linear-gradient(
+      180deg,
+      rgba(232, 244, 255, 0.24) 0%,
+      rgba(196, 220, 246, 0.14) 35%,
+      rgba(148, 174, 202, 0.06) 72%,
+      rgba(120, 140, 166, 0) 100%
+    ) !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+
+  .ufo-ambient-beam.ufo-beam-on::before {
+    animation: ufoBeamMobilePulse 1.7s ease-in-out infinite !important;
+  }
+
+  .ufo-ambient-beam.ufo-beam-off::before,
+  .ufo-ambient-beam.ufo-beam-idle::before {
+    animation: none !important;
+    opacity: 0 !important;
   }
 
   .main-page-shell .main-grid {
