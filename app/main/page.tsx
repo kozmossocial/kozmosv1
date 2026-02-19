@@ -4509,21 +4509,23 @@ export default function Main() {
                 pointerEvents: "none",
                 overflow: "hidden",
                 background:
-                  "radial-gradient(70% 55% at 50% 46%, rgba(182,206,240,0.16) 0%, rgba(102,132,180,0.08) 38%, rgba(8,10,16,0.04) 70%, transparent 100%)",
+                  "radial-gradient(72% 58% at 50% 52%, rgba(170,186,214,0.14) 0%, rgba(98,112,138,0.06) 44%, rgba(8,10,16,0.02) 72%, transparent 100%)",
               }}
             >
               <div
+                className="ufo-boot-glow"
                 style={{
                   position: "absolute",
-                  inset: "10% 0 12%",
-                  backgroundImage: "url('/japancopy.png')",
+                  inset: "10% 0 10%",
+                  backgroundImage: "url('/ufo.png')",
                   backgroundRepeat: "no-repeat",
-                  backgroundPosition: "center",
-                  backgroundSize: "min(300px, 48%) auto",
-                  opacity: 0.3,
-                  filter:
-                    "drop-shadow(0 0 12px rgba(216,232,255,0.45)) drop-shadow(0 0 26px rgba(168,198,255,0.28))",
+                  backgroundPosition: "center 62%",
+                  backgroundSize: "min(500px, 76%) auto",
                   mixBlendMode: "screen",
+                  WebkitMaskImage:
+                    "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.9) 48%, rgba(0,0,0,0.44) 68%, rgba(0,0,0,0) 86%)",
+                  maskImage:
+                    "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.9) 48%, rgba(0,0,0,0.44) 68%, rgba(0,0,0,0) 86%)",
                 }}
               />
               <div
