@@ -603,6 +603,49 @@ body {
   z-index: 2;
 }
 
+.runtime-connect-content {
+  position: relative;
+  z-index: 2;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(164, 206, 255, 0.85) rgba(255, 255, 255, 0.08);
+}
+
+.runtime-connect-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.runtime-connect-content::-webkit-scrollbar-track {
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+}
+
+.runtime-connect-content::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 92, 180, 0.9) 0%,
+    rgba(82, 154, 255, 0.9) 35%,
+    rgba(66, 236, 198, 0.9) 68%,
+    rgba(196, 104, 255, 0.9) 100%
+  );
+  background-size: 100% 240%;
+  box-shadow:
+    0 0 8px rgba(146, 126, 255, 0.38),
+    inset 0 0 4px rgba(255, 255, 255, 0.26);
+  animation: runtimeScrollbarFlow 4.2s linear infinite;
+}
+
+.runtime-connect-content::-webkit-scrollbar-thumb:hover {
+  box-shadow:
+    0 0 12px rgba(170, 146, 255, 0.52),
+    inset 0 0 6px rgba(255, 255, 255, 0.32);
+}
+
 .runtime-connect-desktop {
   display: block;
 }
@@ -1042,6 +1085,15 @@ body {
   }
 }
 
+@keyframes runtimeScrollbarFlow {
+  0% {
+    background-position: 50% 0%;
+  }
+  100% {
+    background-position: 50% 100%;
+  }
+}
+
 /* Main panel text behavior */
 .main-grid .hush-panel,
 .main-grid .chat-panel,
@@ -1227,7 +1279,7 @@ body {
   .home-hero-runtime-mobile {
     position: absolute !important;
     left: 50% !important;
-    top: 107vh !important;
+    top: 110vh !important;
     transform: translateX(-50%) !important;
     z-index: 90 !important;
     pointer-events: auto !important;
@@ -1238,14 +1290,21 @@ body {
   .home-hero-runtime-mobile.runtime-mobile-expanded {
     position: absolute !important;
     left: 50% !important;
-    top: 107vh !important;
+    top: 110vh !important;
     transform: translateX(-50%) !important;
     width: min(320px, 94vw) !important;
     max-height: min(62vh, 520px) !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
+    overflow: hidden !important;
     margin-top: 0 !important;
     z-index: 90 !important;
+  }
+
+  .home-hero-runtime-mobile.runtime-mobile-expanded .runtime-connect-content {
+    max-height: min(62vh, 520px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
   }
 
   .runtime-connect-desktop {
@@ -1342,7 +1401,7 @@ body {
 
   .home-hero-runtime-mobile {
     width: min(236px, 90vw) !important;
-    top: 109vh !important;
+    top: 112vh !important;
     margin-top: 0 !important;
   }
 

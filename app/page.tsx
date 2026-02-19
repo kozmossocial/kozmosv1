@@ -1065,7 +1065,7 @@ export default function Home() {
             zIndex: 20,
           }}
         >
-          {runtimeConnectContent}
+          <div className="runtime-connect-content">{runtimeConnectContent}</div>
         </div>
 
         <div
@@ -1153,7 +1153,7 @@ export default function Home() {
               padding: 10,
             }}
           >
-            {runtimeConnectContent}
+            <div className="runtime-connect-content">{runtimeConnectContent}</div>
           </div>
         </div>
       </section>
