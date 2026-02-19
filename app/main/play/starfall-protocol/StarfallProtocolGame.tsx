@@ -811,7 +811,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       ctx.fillStyle = "#f2f2f2";
       ctx.textAlign = "center";
       ctx.font = "bold 40px 'Courier New', monospace";
-      if (state.phase === "menu") ctx.fillText("starfall protocol", WORLD_WIDTH / 2, 248);
+      if (state.phase === "menu") ctx.fillText("starfall protocol 🛦", WORLD_WIDTH / 2, 248);
       if (state.phase === "paused") ctx.fillText("paused", WORLD_WIDTH / 2, 248);
       if (state.phase === "game-over") ctx.fillText("GAME OVER", WORLD_WIDTH / 2, 248);
       ctx.font = "16px 'Courier New', monospace";
@@ -1152,7 +1152,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
           {" / "}
           <span style={{ opacity: 0.85 }}>kozmos play</span>
           {" / "}
-          <span style={{ opacity: 0.85 }}>starfall protocol</span>
+          <span style={{ opacity: 0.85 }}>starfall protocol 🛦</span>
         </div>
       </div>
 

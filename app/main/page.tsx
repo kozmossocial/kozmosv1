@@ -5292,7 +5292,7 @@ export default function Main() {
                     openPlay(STARFALL_PROTOCOL_MODE);
                   }}
                 >
-                  starfall protocol
+                  starfall protocol 🛦
                 </div>
 
                 <div
