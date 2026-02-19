@@ -698,7 +698,11 @@ useEffect(() => {
   }, [directMessages, markDirectChatSeen, selectedDirectChatId]);
 
   useEffect(() => {
-    const sync = () => setIsMobileLayout(window.innerWidth <= 1080);
+    const sync = () => {
+      const narrowViewport = window.innerWidth <= 1080;
+      const coarsePointer = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+      setIsMobileLayout(narrowViewport && coarsePointer);
+    };
     sync();
     window.addEventListener("resize", sync);
     return () => {
