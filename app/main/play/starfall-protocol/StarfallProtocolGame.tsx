@@ -416,12 +416,12 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     if (hud.mode === "single") {
       return "Move: A/D or Left/Right | Fire: Space | Restart: button";
     }
-    return "Online multi: each player controls one ship | Restart: button";
+    return "Online multi: Move A/D or Left/Right | Fire Space or Enter";
   }, [hud.mode]);
 
   const activeRoomPeers = useMemo(() => {
     return [...roomPeers]
-      .sort((a, b) => a.joinedAt - b.joinedAt || a.id.localeCompare(b.id))
+      .sort((a, b) => a.id.localeCompare(b.id))
       .slice(0, 2);
   }, [roomPeers]);
 
@@ -1024,18 +1024,24 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
   }, []);
 
   const getLocalMultiInput = useCallback((): NetInput => {
-    if (localSeat === "p1") {
+    if (localSeat === "p1" || localSeat === "p2") {
+      const touchPrefix = localSeat === "p1" ? "p1" : "p2";
       return {
-        left: Boolean(keysRef.current.KeyA || touchRef.current.p1Left),
-        right: Boolean(keysRef.current.KeyD || touchRef.current.p1Right),
-        fire: Boolean(keysRef.current.Space || touchRef.current.p1Shoot),
-      };
-    }
-    if (localSeat === "p2") {
-      return {
-        left: Boolean(keysRef.current.ArrowLeft || touchRef.current.p2Left),
-        right: Boolean(keysRef.current.ArrowRight || touchRef.current.p2Right),
-        fire: Boolean(keysRef.current.Enter || touchRef.current.p2Shoot),
+        left: Boolean(
+          keysRef.current.KeyA ||
+            keysRef.current.ArrowLeft ||
+            touchRef.current[`${touchPrefix}Left`]
+        ),
+        right: Boolean(
+          keysRef.current.KeyD ||
+            keysRef.current.ArrowRight ||
+            touchRef.current[`${touchPrefix}Right`]
+        ),
+        fire: Boolean(
+          keysRef.current.Space ||
+            keysRef.current.Enter ||
+            touchRef.current[`${touchPrefix}Shoot`]
+        ),
       };
     }
     return { left: false, right: false, fire: false };
@@ -1147,7 +1153,9 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
   useEffect(() => {
     const syncMobileControls = () => {
       const coarse = window.matchMedia("(pointer: coarse)").matches;
-      setMobileControls(coarse || window.innerWidth <= 900);
+      const noHover = window.matchMedia("(hover: none)").matches;
+      const hasTouch = (navigator.maxTouchPoints || 0) > 0;
+      setMobileControls(coarse || (noHover && hasTouch));
     };
     syncMobileControls();
     window.addEventListener("resize", syncMobileControls);
