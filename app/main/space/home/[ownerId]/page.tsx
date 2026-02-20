@@ -10,19 +10,6 @@ type HomeOwner = {
   isSelf: boolean;
 };
 
-type HomeSpaceRow = {
-  id: string;
-  ownerId: string;
-  title: string;
-  buildClass: string;
-  isPublic: boolean;
-  description: string;
-  updatedAt: string;
-  canEdit: boolean;
-  x: number;
-  z: number;
-};
-
 type HomeSpaceRender = {
   id: string;
   ownerId: string;

@@ -150,13 +150,6 @@ function normalizeRoomIcon(value: unknown): RoomIcon {
   return value === "dot" || value === "square" ? value : "ring";
 }
 
-function roomAuraColor(aura: RoomAura) {
-  if (aura === "bright") return "#ffe38f";
-  if (aura === "heavy") return "#7ea2ff";
-  if (aura === "fast") return "#9dffbe";
-  return "#7df9ff";
-}
-
 const ROOM_CLASS_SET = new Set([
   "utility",
   "web-app",

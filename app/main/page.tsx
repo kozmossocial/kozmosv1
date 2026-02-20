@@ -770,7 +770,6 @@ export default function Main() {
   const [, setAxyMsgLoadingId] = useState<string | null>(null);
   const [axyMsgPulseId, setAxyMsgPulseId] = useState<string | null>(null);
   const [axyMsgFadeId, setAxyMsgFadeId] = useState<string | null>(null);
-  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [hoveredHushChatId, setHoveredHushChatId] = useState<string | null>(
     null
   );
@@ -6835,18 +6834,6 @@ export default function Main() {
     </main>
   );
 }
-
-const hushPillStyle: React.CSSProperties = {
-  display: "inline-block",
-  marginRight: 6,
-  padding: "2px 6px",
-  border: "1px solid rgba(255,255,255,0.18)",
-  borderRadius: 999,
-  fontSize: 10,
-  letterSpacing: "0.12em",
-  textTransform: "lowercase",
-  opacity: 0.6,
-};
 
 const hushPanelStyle: React.CSSProperties = {
   width: "100%",

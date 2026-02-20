@@ -19,7 +19,6 @@ import {
   isNearDuplicate,
   normalizeIdeaKey,
   normalizeForSimilarity,
-  pickBestMissionIdea,
   scoreMissionIdea,
   scoreMissionBundleQuality,
 } from "../lib/axy-core.mjs";
@@ -1691,7 +1690,9 @@ async function requestJson(url, init = {}) {
     }
   }
 
-  const { signal: _signal, __allowDuringAbort: _allowDuringAbort, ...restInit } = init;
+  const restInit = { ...init };
+  delete restInit.signal;
+  delete restInit.__allowDuringAbort;
   let res;
   try {
     res = await fetch(url, { ...restInit, signal: controller.signal });
@@ -2766,7 +2767,6 @@ async function main() {
   let matrixVisible = false;
   let quiteSwarmVisible = false;
   let quiteSwarmRoomStatus = "idle";
-  let quiteSwarmRoomHostUserId = "";
   let quiteSwarmRoomOpsEnabled = autoQuiteSwarmRoom;
   let nightFailureStreak = 0;
   let nightDisabledUntil = 0;
@@ -3332,9 +3332,6 @@ async function main() {
           String(snapshot?.data?.quite_swarm_room?.status || "idle").toLowerCase() === "running"
             ? "running"
             : "idle";
-        quiteSwarmRoomHostUserId = String(
-          snapshot?.data?.quite_swarm_room?.host_user_id || ""
-        ).trim();
 
         if (missionRequired && !missionCompleted && Date.now() >= nextMissionAttemptAt) {
           runtimeCore.transition("build", "mission-running");
@@ -4089,10 +4086,10 @@ async function main() {
               score > 0
             ) {
               const line = won
-                ? `starfall single clear â€¢ score ${score} â€¢ round ${round} â€¢ rating ${Math.round(
+                ? `starfall single clear - score ${score} - round ${round} - rating ${Math.round(
                     rating
                   )}`
-                : `starfall single run â€¢ score ${score} â€¢ round ${round} â€¢ rating ${Math.round(
+                : `starfall single run - score ${score} - round ${round} - rating ${Math.round(
                     rating
                   )}`;
               await sendManagedOutput({
@@ -4307,7 +4304,6 @@ async function main() {
             const isHost = Boolean(user?.id) && roomHostUserId === String(user?.id || "");
 
             quiteSwarmRoomStatus = roomStatus;
-            quiteSwarmRoomHostUserId = roomHostUserId;
 
             if (roomStatus !== "running") {
               if (Math.random() < quiteSwarmRoomStartChance) {
@@ -4325,9 +4321,6 @@ async function main() {
                   String(startedRoom?.status || "idle").toLowerCase() === "running"
                     ? "running"
                     : "idle";
-                quiteSwarmRoomHostUserId = String(
-                  startedRoom?.host_user_id || user?.id || ""
-                ).trim();
                 quiteSwarmVisible = true;
                 runtimeCore.markSent("swarm", { conversationId: "quite-swarm-room" });
                 console.log(`[${now()}] quite-swarm room started`);
@@ -4335,7 +4328,6 @@ async function main() {
             } else if (isHost && Math.random() < quiteSwarmRoomStopChance) {
               await callAxyOps(baseUrl, token, "quite_swarm.room_stop");
               quiteSwarmRoomStatus = "idle";
-              quiteSwarmRoomHostUserId = "";
               quiteSwarmVisible = false;
               runtimeCore.markSent("swarm", { conversationId: "quite-swarm-room" });
               console.log(`[${now()}] quite-swarm room stopped`);

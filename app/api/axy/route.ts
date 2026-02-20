@@ -126,16 +126,6 @@ type AxyDomain =
   | "ai"
   | "cosmos";
 
-type AxyChannel =
-  | "shared"
-  | "dm"
-  | "hush"
-  | "build"
-  | "game-chat"
-  | "night-protocol-day"
-  | "my-home-note"
-  | "unknown";
-
 type ChannelPolicy = {
   maxSentences: number;
   maxChars: number;
