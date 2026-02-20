@@ -9,6 +9,7 @@ import { markMyHomeVisited } from "@/lib/myHomeAttention";
 type Note = {
   id: string;
   content: string;
+  created_at: string;
 };
 
 type TouchUser = {

@@ -938,6 +938,7 @@ export default function Main() {
         user_id: item.user_id,
         username: item.username,
         content: item.content,
+        created_at: item.created_at,
       }));
   }, [nightProtocolState]);
   const nightProtocolCanSend = useMemo(() => {
