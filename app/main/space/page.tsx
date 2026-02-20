@@ -263,12 +263,8 @@ export default function MainSpacePage() {
   }, [fetchAuthedJson, router]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
-    if (saved === "1") {
-      setAmbientSoundOn(true);
-    } else {
-      setAmbientSoundOn(false);
-    }
+    // Non-main pages default to ambient OFF on every entry.
+    setAmbientSoundOn(false);
     setAmbientPrefReady(true);
   }, []);
 
@@ -283,7 +279,7 @@ export default function MainSpacePage() {
   useEffect(() => {
     const audio = ambientAudioRef.current;
     if (!audio || !ambientPrefReady) return;
-    audio.volume = 0.24;
+    audio.volume = 0.7;
     audio.loop = true;
     if (ambientSoundOn) {
       void audio.play().catch(() => {

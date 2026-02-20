@@ -996,7 +996,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       renderGame();
       syncHud();
 
-      if (state.mode === "multi" && isHostSeat && state.phase === "playing") {
+      if (state.mode === "multi" && isHostSeat) {
         const nowMs = Date.now();
         if (nowMs - lastSnapshotSentAtRef.current >= 66) {
           lastSnapshotSentAtRef.current = nowMs;

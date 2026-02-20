@@ -1310,6 +1310,59 @@ useEffect(() => {
     };
   }, [isMobileLayout, notesBootstrapping]);
 
+  useEffect(() => {
+    if (isMobileLayout) return;
+    if (holoFlightPhase === "idle") return;
+
+    const lockY = window.scrollY;
+    const lockX = window.scrollX;
+    const restoreScroll = () => {
+      if (window.scrollX !== lockX || window.scrollY !== lockY) {
+        window.scrollTo(lockX, lockY);
+      }
+    };
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      event.preventDefault();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const code = event.code;
+      const key = event.key;
+      const isScrollKey =
+        code === "Space" ||
+        code === "PageUp" ||
+        code === "PageDown" ||
+        code === "ArrowUp" ||
+        code === "ArrowDown" ||
+        code === "Home" ||
+        code === "End" ||
+        key === " " ||
+        key === "PageUp" ||
+        key === "PageDown" ||
+        key === "ArrowUp" ||
+        key === "ArrowDown" ||
+        key === "Home" ||
+        key === "End";
+      if (isScrollKey) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", restoreScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", restoreScroll);
+    };
+  }, [holoFlightPhase, isMobileLayout]);
+
   function renderTouchPanel() {
     const holoPhaseClassName =
       holoFlightPhase === "idle"

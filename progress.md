@@ -128,3 +128,27 @@ Validation:
 - Two-page headless check artifact: `output/web-game/starfall-netcheck-v1/result.json`
   - In unauth/public route context, `start-multi` remained disabled (presence did not pair in this environment), so end-to-end multiplayer behavior could not be fully asserted in headless public test.
   - Code paths for presence/seat/sync-start/snapshot/input are implemented and compiled.
+- Crash/desync fix update (current turn):
+  - Added anti-cascade edge handling in enemy formation movement:
+    - after any edge hit, formation is corrected back inside bounds before applying drop step.
+    - prevents repeated per-frame drops under lag spikes (the "aliens suddenly all drop to bottom" failure mode).
+  - Reduced multiplayer input spam:
+    - local input broadcast now sends only on actual state change (left/right/fire diff), not every repeated key event.
+  - Added snapshot ordering guard on guests:
+    - ignores stale/older `starfall_snapshot` packets using `sentAt` monotonic check.
+  - Fixed host snapshot phase sync bug:
+    - host now keeps sending snapshots in multi mode regardless of phase (not only `playing`).
+    - this prevents one client showing `game-over` while the other remains frozen in `playing`.
+
+Validation (current turn):
+- `npx eslint app/main/play/starfall-protocol/StarfallProtocolGame.tsx` passes.
+- `npm run build` passes.
+- Playwright skill single-client loop rerun:
+  - `output/web-game/starfall-single-fix-v2/shot-0.png`
+  - `output/web-game/starfall-single-fix-v2/shot-1.png`
+  - `output/web-game/starfall-single-fix-v2/state-0.json`
+  - `output/web-game/starfall-single-fix-v2/state-1.json`
+- Multi-client Playwright stress validation is partially blocked by intermittent Next dev runtime bundler error in this environment:
+  - screenshot artifacts captured under `output/web-game/starfall-multi-debug/*.png` show:
+    - "Could not find the module \"[project]/node_modules/next/dist/client/components/builtin/global-error.js#default\" in the React Client Manifest."
+  - Because of this unrelated dev-runtime issue, end-to-end two-page Playwright assertions are flaky/incomplete.

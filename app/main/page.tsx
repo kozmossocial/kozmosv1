@@ -1041,12 +1041,12 @@ export default function Main() {
   const chatWheelRightColor = `rgba(236,242,255,${0.34 + chatWheelRightProminence * 0.66})`;
   const chatWheelFarRightColor = `rgba(236,242,255,${0.15 + chatWheelFarRightProminence * 0.3})`;
   const chatWheelBackColor = "rgba(236,242,255,0.18)";
-  const chatWheelFarLeftTextShadow = `0 0 ${2 + chatWheelFarLeftProminence * 6}px rgba(200,220,255,${0.08 + chatWheelFarLeftProminence * 0.12})`;
-  const chatWheelLeftTextShadow = `0 0 ${3 + chatWheelLeftProminence * 10}px rgba(235,240,255,${0.2 + chatWheelLeftProminence * 0.34}), 0 0 ${8 + chatWheelLeftProminence * 18}px rgba(190,218,255,${0.14 + chatWheelLeftProminence * 0.26})`;
-  const chatWheelCenterTextShadow = `0 0 ${3 + chatWheelCenterProminence * 10}px rgba(235,240,255,${0.2 + chatWheelCenterProminence * 0.34}), 0 0 ${8 + chatWheelCenterProminence * 18}px rgba(190,218,255,${0.14 + chatWheelCenterProminence * 0.26})`;
-  const chatWheelRightTextShadow = `0 0 ${3 + chatWheelRightProminence * 10}px rgba(235,240,255,${0.2 + chatWheelRightProminence * 0.34}), 0 0 ${8 + chatWheelRightProminence * 18}px rgba(190,218,255,${0.14 + chatWheelRightProminence * 0.26})`;
-  const chatWheelFarRightTextShadow = `0 0 ${2 + chatWheelFarRightProminence * 6}px rgba(200,220,255,${0.08 + chatWheelFarRightProminence * 0.12})`;
-  const chatWheelBackTextShadow = "0 0 6px rgba(190,218,255,0.16)";
+  const chatWheelFarLeftTextShadow = "none";
+  const chatWheelLeftTextShadow = "none";
+  const chatWheelCenterTextShadow = "none";
+  const chatWheelRightTextShadow = "none";
+  const chatWheelFarRightTextShadow = "none";
+  const chatWheelBackTextShadow = "none";
   const chatWheelTransition = chatWheelIsDragging
     ? "none"
     : "transform 240ms cubic-bezier(0.2, 0.78, 0.24, 1), opacity 180ms ease, filter 180ms ease, color 160ms ease, text-shadow 160ms ease, font-weight 160ms ease";
@@ -1175,12 +1175,8 @@ export default function Main() {
   }, [userId]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
-    if (saved === "1") {
-      setAmbientSoundOn(true);
-    } else {
-      setAmbientSoundOn(false);
-    }
+    // Main defaults to ambient ON on every entry.
+    setAmbientSoundOn(true);
     setAmbientPrefReady(true);
   }, []);
 
@@ -1195,7 +1191,7 @@ export default function Main() {
   useEffect(() => {
     const audio = ambientAudioRef.current;
     if (!audio || !ambientPrefReady) return;
-    audio.volume = 0.26;
+    audio.volume = 0.7;
     audio.loop = true;
     if (ambientSoundOn) {
       void audio.play().catch(() => {

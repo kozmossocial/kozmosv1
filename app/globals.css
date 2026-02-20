@@ -172,24 +172,24 @@ body {
   .mother-logo-static {
     animation: none !important;
     filter:
-      drop-shadow(0 0 7px rgba(255, 255, 255, 0.2))
-      drop-shadow(0 0 16px rgba(255, 255, 255, 0.12))
-      drop-shadow(0 0 30px rgba(255, 255, 255, 0.08)) !important;
+      drop-shadow(0 0 5px rgba(255, 255, 255, 0.15))
+      drop-shadow(0 0 12px rgba(255, 255, 255, 0.09))
+      drop-shadow(0 0 22px rgba(255, 255, 255, 0.06)) !important;
   }
 
   .mother-logo-static:hover {
     transform: scale(1.01);
     filter:
-      drop-shadow(0 0 10px rgba(255, 255, 255, 0.34))
-      drop-shadow(0 0 24px rgba(255, 255, 255, 0.2))
-      drop-shadow(0 0 44px rgba(255, 255, 255, 0.14)) !important;
+      drop-shadow(0 0 8px rgba(255, 255, 255, 0.28))
+      drop-shadow(0 0 18px rgba(255, 255, 255, 0.16))
+      drop-shadow(0 0 34px rgba(255, 255, 255, 0.1)) !important;
   }
 
   .mother-logo-static:active {
     filter:
-      drop-shadow(0 0 8px rgba(255, 255, 255, 0.26))
-      drop-shadow(0 0 18px rgba(255, 255, 255, 0.16))
-      drop-shadow(0 0 34px rgba(255, 255, 255, 0.1)) !important;
+      drop-shadow(0 0 7px rgba(255, 255, 255, 0.22))
+      drop-shadow(0 0 15px rgba(255, 255, 255, 0.12))
+      drop-shadow(0 0 28px rgba(255, 255, 255, 0.08)) !important;
   }
 
   .mother-logo-anchor .mother-logo-static {
@@ -2169,14 +2169,14 @@ body {
 
   .mother-logo-anchor {
     position: absolute !important;
-    top: 38px !important;
+    top: 46px !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
   }
 
   .home-hero-logo-wrap {
     position: absolute !important;
-    top: 38px !important;
+    top: 46px !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
     text-align: center !important;
