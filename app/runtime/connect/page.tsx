@@ -92,11 +92,11 @@ function RuntimeConnectClient() {
         }}
       >
         <Image
-          src="/kozmos-logomother1.png"
+          src="/kozmos-logomother.png"
           alt="Kozmos"
           width={82}
           height={62}
-          className="kozmos-logo kozmos-logo-ambient"
+          className="kozmos-logo mother-logo-static"
           style={{ height: "auto", cursor: "pointer" }}
         />
       </Link>
@@ -274,11 +274,11 @@ export default function RuntimeConnectPage() {
             }}
           >
             <Image
-              src="/kozmos-logomother1.png"
+              src="/kozmos-logomother.png"
               alt="Kozmos"
               width={82}
               height={62}
-              className="kozmos-logo kozmos-logo-ambient"
+              className="kozmos-logo mother-logo-static"
               style={{ height: "auto", cursor: "pointer" }}
             />
           </Link>
@@ -303,3 +303,5 @@ export default function RuntimeConnectPage() {
     </Suspense>
   );
 }
+
+

@@ -476,11 +476,11 @@ export default function AccountPage() {
         onClick={() => router.push("/")}
       >
         <Image
-          src="/kozmos-logomother1.png"
+          src="/kozmos-logomother.png"
           alt="Kozmos"
           width={131}
           height={98}
-          className="kozmos-logo kozmos-logo-ambient"
+          className="kozmos-logo mother-logo-static"
           style={{
             width: 80,
             height: "auto",
@@ -922,4 +922,6 @@ const cropButton: React.CSSProperties = {
   fontSize: 12,
   cursor: "pointer",
 };
+
+
 

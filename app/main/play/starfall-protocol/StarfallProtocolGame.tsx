@@ -103,6 +103,7 @@ type NetInput = {
 type RoomPeer = {
   id: string;
   joinedAt: number;
+  lastSeenAt: number;
 };
 
 declare global {
@@ -384,6 +385,9 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
   const localInputRef = useRef<NetInput>({ left: false, right: false, fire: false });
   const [clientId] = useState(() => `sf-${Math.random().toString(36).slice(2, 10)}`);
   const lastSnapshotSentAtRef = useRef(0);
+  const selfJoinedAtRef = useRef(0);
+  const isHostSeatRef = useRef(false);
+  const multiReadyRef = useRef(false);
 
   const [hud, setHud] = useState<HudState>(() => toHud(gameRef.current));
   const [highScore, setHighScore] = useState(0);
@@ -391,6 +395,22 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [roomPeers, setRoomPeers] = useState<RoomPeer[]>([]);
   const [netMessage, setNetMessage] = useState("");
+
+  const upsertPeer = useCallback((id: string, joinedAt: number, lastSeenAt = Date.now()) => {
+    setRoomPeers((prev) => {
+      const existing = prev.find((peer) => peer.id === id);
+      const without = prev.filter((peer) => peer.id !== id);
+      const next = [
+        ...without,
+        {
+          id,
+          joinedAt: existing ? existing.joinedAt : joinedAt,
+          lastSeenAt,
+        },
+      ];
+      return next;
+    });
+  }, []);
 
   const controlsText = useMemo(() => {
     if (hud.mode === "single") {
@@ -416,6 +436,11 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
   const isHostSeat = localSeat === "p1";
   const multiReady = activeRoomPeers.length >= 2;
   const canControlMultiMatch = hud.mode !== "multi" || isHostSeat;
+
+  useEffect(() => {
+    isHostSeatRef.current = isHostSeat;
+    multiReadyRef.current = multiReady;
+  }, [isHostSeat, multiReady]);
 
   const syncHud = useCallback((force = false) => {
     const now = performance.now();
@@ -1130,6 +1155,9 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
   }, []);
 
   useEffect(() => {
+    if (selfJoinedAtRef.current <= 0) {
+      selfJoinedAtRef.current = Date.now();
+    }
     const room = supabase.channel("starfall-protocol-room", {
       config: {
         presence: {
@@ -1145,9 +1173,22 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       for (const [id, metas] of Object.entries(state)) {
         const first = Array.isArray(metas) && metas.length > 0 ? metas[0] : null;
         const joinedAtRaw = first && typeof first.joinedAt === "number" ? first.joinedAt : Date.now();
-        peers.push({ id, joinedAt: joinedAtRaw });
+        peers.push({ id, joinedAt: joinedAtRaw, lastSeenAt: Date.now() });
+      }
+      if (!peers.some((peer) => peer.id === clientId)) {
+        peers.push({ id: clientId, joinedAt: selfJoinedAtRef.current, lastSeenAt: Date.now() });
       }
       setRoomPeers(peers);
+    });
+
+    room.on("broadcast", { event: "starfall_peer_ping" }, ({ payload }) => {
+      const data = payload as { id?: string; joinedAt?: number } | null;
+      if (!data || !data.id) return;
+      const joinedAt =
+        typeof data.joinedAt === "number" && Number.isFinite(data.joinedAt)
+          ? data.joinedAt
+          : Date.now();
+      upsertPeer(data.id, joinedAt);
     });
 
     room.on("broadcast", { event: "starfall_input" }, ({ payload }) => {
@@ -1161,7 +1202,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     });
 
     room.on("broadcast", { event: "starfall_snapshot" }, ({ payload }) => {
-      if (isHostSeat) return;
+      if (isHostSeatRef.current) return;
       const data = payload as { by?: string; state?: GameState } | null;
       if (!data || !data.state) return;
       gameRef.current = data.state;
@@ -1174,7 +1215,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     });
 
     room.on("broadcast", { event: "starfall_start_request" }, () => {
-      if (!isHostSeat || !multiReady) return;
+      if (!isHostSeatRef.current || !multiReadyRef.current) return;
       startGame("multi");
       setNetMessage("match started");
       void room.send({
@@ -1186,20 +1227,39 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
 
     room.subscribe(async (status) => {
       if (status !== "SUBSCRIBED") return;
+      upsertPeer(clientId, selfJoinedAtRef.current);
       await room.track({
         id: clientId,
         joinedAt: Date.now(),
       });
     });
 
+    const pulse = window.setInterval(() => {
+      const channel = channelRef.current;
+      if (!channel) return;
+      upsertPeer(clientId, selfJoinedAtRef.current);
+      setRoomPeers((prev) =>
+        prev.filter((peer) => Date.now() - peer.lastSeenAt <= 3200)
+      );
+      void channel.send({
+        type: "broadcast",
+        event: "starfall_peer_ping",
+        payload: {
+          id: clientId,
+          joinedAt: selfJoinedAtRef.current,
+          sentAt: Date.now(),
+        },
+      });
+    }, 900);
+
     return () => {
       channelRef.current = null;
+      window.clearInterval(pulse);
       supabase.removeChannel(room);
     };
-  }, [clientId, isHostSeat, multiReady, startGame, syncHud]);
+  }, [clientId, startGame, syncHud, upsertPeer]);
 
   useEffect(() => {
-    if (hud.mode !== "multi") return;
     if (!multiReady) {
       setNetMessage("waiting for second player");
       return;
@@ -1209,7 +1269,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       return;
     }
     setNetMessage(`connected as ${localSeat}`);
-  }, [hud.mode, localSeat, multiReady]);
+  }, [localSeat, multiReady]);
 
   useEffect(() => {
     window.render_game_to_text = renderGameToText;
@@ -1261,11 +1321,9 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
         high score: {scoreText(highScore)} | p1 lives: {hud.p1Lives}
         {hud.mode === "multi" ? ` | p2 lives: ${hud.p2Lives}` : ""}
       </div>
-      {hud.mode === "multi" ? (
-        <div style={{ fontSize: 11, opacity: 0.72, marginBottom: 10 }}>
-          room: {activeRoomPeers.length}/2 | {netMessage}
-        </div>
-      ) : null}
+      <div style={{ fontSize: 11, opacity: 0.72, marginBottom: 10 }}>
+        room: {activeRoomPeers.length}/2 | {netMessage || "multi needs 2 players"}
+      </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         <button id="start-btn" type="button" onClick={() => startGame("single")} style={primaryButton}>
@@ -1275,11 +1333,10 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
           id="start-multi-btn"
           type="button"
           onClick={startOnlineMulti}
-          disabled={!multiReady || !localSeat}
           style={{
             ...primaryButton,
-            opacity: !multiReady || !localSeat ? 0.55 : 1,
-            cursor: !multiReady || !localSeat ? "not-allowed" : "pointer",
+            opacity: 1,
+            cursor: "pointer",
           }}
         >
           start multi

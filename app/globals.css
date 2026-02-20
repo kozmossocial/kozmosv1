@@ -72,6 +72,96 @@ body {
   filter: drop-shadow(0 0 12px rgba(0, 255, 170, 0.35));
 }
 
+@keyframes motherLogoGlow {
+  0% {
+    filter:
+      drop-shadow(0 0 9px rgba(255, 255, 255, 0.3))
+      drop-shadow(0 0 22px rgba(255, 255, 255, 0.2))
+      drop-shadow(0 0 42px rgba(255, 255, 255, 0.13));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 15px rgba(255, 255, 255, 0.5))
+      drop-shadow(0 0 36px rgba(255, 255, 255, 0.32))
+      drop-shadow(0 0 68px rgba(255, 255, 255, 0.22));
+  }
+  100% {
+    filter:
+      drop-shadow(0 0 9px rgba(255, 255, 255, 0.3))
+      drop-shadow(0 0 22px rgba(255, 255, 255, 0.2))
+      drop-shadow(0 0 42px rgba(255, 255, 255, 0.13));
+  }
+}
+
+/* Mother logo variant: shape-based glow (no box frame) */
+.mother-logo-static {
+  animation: motherLogoGlow 4.5s ease-in-out infinite !important;
+  box-shadow: none !important;
+  transition:
+    filter 0.25s ease,
+    opacity 0.25s ease,
+    transform 0.12s ease !important;
+}
+
+.mother-logo-static:hover {
+  transform: scale(1.02);
+  filter:
+    drop-shadow(0 0 20px rgba(255, 255, 255, 0.62))
+    drop-shadow(0 0 46px rgba(255, 255, 255, 0.4))
+    drop-shadow(0 0 82px rgba(255, 255, 255, 0.3)) !important;
+  box-shadow: none !important;
+}
+
+.mother-logo-static:active {
+  filter:
+    drop-shadow(0 0 14px rgba(255, 255, 255, 0.46))
+    drop-shadow(0 0 30px rgba(255, 255, 255, 0.3))
+    drop-shadow(0 0 58px rgba(255, 255, 255, 0.2)) !important;
+  box-shadow: none !important;
+}
+
+@keyframes motherLogoGlowMobile {
+  0% {
+    filter:
+      drop-shadow(0 0 6px rgba(255, 255, 255, 0.2))
+      drop-shadow(0 0 14px rgba(255, 255, 255, 0.12))
+      drop-shadow(0 0 28px rgba(255, 255, 255, 0.08));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 9px rgba(255, 255, 255, 0.3))
+      drop-shadow(0 0 20px rgba(255, 255, 255, 0.18))
+      drop-shadow(0 0 38px rgba(255, 255, 255, 0.12));
+  }
+  100% {
+    filter:
+      drop-shadow(0 0 6px rgba(255, 255, 255, 0.2))
+      drop-shadow(0 0 14px rgba(255, 255, 255, 0.12))
+      drop-shadow(0 0 28px rgba(255, 255, 255, 0.08));
+  }
+}
+
+@media (max-width: 900px) {
+  .mother-logo-static {
+    animation: motherLogoGlowMobile 4.6s ease-in-out infinite !important;
+  }
+
+  .mother-logo-static:hover {
+    transform: scale(1.01);
+    filter:
+      drop-shadow(0 0 10px rgba(255, 255, 255, 0.34))
+      drop-shadow(0 0 24px rgba(255, 255, 255, 0.2))
+      drop-shadow(0 0 44px rgba(255, 255, 255, 0.14)) !important;
+  }
+
+  .mother-logo-static:active {
+    filter:
+      drop-shadow(0 0 8px rgba(255, 255, 255, 0.26))
+      drop-shadow(0 0 18px rgba(255, 255, 255, 0.16))
+      drop-shadow(0 0 34px rgba(255, 255, 255, 0.1)) !important;
+  }
+}
+
 /* =========================
    MANIFESTO LINKS
    ========================= */

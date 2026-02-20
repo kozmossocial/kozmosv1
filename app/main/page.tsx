@@ -3793,29 +3793,20 @@ export default function Main() {
   }}
 >
   <Image
-    src="/kozmos-logomother1.png"
+    src="/kozmos-logomother.png"
     alt="Kozmos"
     width={131}
     height={98}
-    className="kozmos-logo kozmos-logo-ambient"
+    className="kozmos-logo mother-logo-static"
     style={{
       maxWidth: 80, // ana sayfadakiyle uyumlu
       height: "auto",
       opacity: 0.9,
       cursor: "pointer",
       transition:
-        "opacity 0.25s ease, transform 0.08s ease, box-shadow 0.25s ease",
+        "opacity 0.25s ease, transform 0.08s ease",
     }}
     onClick={() => window.location.href = "https://kozmos.social"}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.opacity = "1";
-      e.currentTarget.style.boxShadow =
-        "0 0 18px rgba(107,255,142,0.45)";
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.opacity = "0.9";
-      e.currentTarget.style.boxShadow = "none";
-    }}
     onMouseDown={(e) => {
       e.currentTarget.style.transform = "scale(0.97)";
     }}
@@ -6847,6 +6838,8 @@ const rightPanelStackStyle: React.CSSProperties = {
   width: "100%",
   marginRight: 16,
 };
+
+
 
 
 

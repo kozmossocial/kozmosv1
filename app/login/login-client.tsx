@@ -186,11 +186,11 @@ export default function LoginClient() {
         onClick={() => router.push("/")}
       >
         <Image
-          src="/kozmos-logomother1.png"
+          src="/kozmos-logomother.png"
           alt="Kozmos"
           width={131}
           height={98}
-          className="kozmos-logo kozmos-logo-ambient"
+          className="kozmos-logo mother-logo-static"
           style={{ height: "auto" }}
         />
       </div>
@@ -340,4 +340,6 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
   letterSpacing: "0.15em",
 };
+
+
 

@@ -1774,27 +1774,18 @@ useEffect(() => {
   onClick={() => router.push("/")}
 >
   <Image
-    src="/kozmos-logomother1.png"
+    src="/kozmos-logomother.png"
     alt="Kozmos"
     width={131}
     height={98}
-    className="kozmos-logo kozmos-logo-ambient"
+    className="kozmos-logo mother-logo-static"
     style={{
       width: 80,
       height: "auto",
       opacity: 0.85,
       borderRadius: 6,
       transition:
-        "opacity 0.25s ease, box-shadow 0.25s ease, transform 0.08s ease",
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.opacity = "1";
-      e.currentTarget.style.boxShadow =
-        "0 0 18px rgba(0,255,170,0.45)";
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.opacity = "0.85";
-      e.currentTarget.style.boxShadow = "none";
+        "opacity 0.25s ease, transform 0.08s ease",
     }}
     onMouseDown={(e) => {
       e.currentTarget.style.transform = "scale(0.97)";
@@ -2642,5 +2633,7 @@ const personalAxyActionsStyle: React.CSSProperties = {
   fontSize: 10,
   opacity: 0.65,
 };
+
+
 
 

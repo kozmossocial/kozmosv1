@@ -1089,11 +1089,11 @@ export default function Home() {
           >
             <a href="https://kozmos.social" target="_self" aria-label="Kozmos">
               <Image
-                src="/kozmos-logomother1.png"
+                src="/kozmos-logomother.png"
                 alt="Kozmos"
                 width={131}
                 height={98}
-                className="kozmos-logo kozmos-logo-ambient home-hero-logo-image"
+                className="kozmos-logo home-hero-logo-image mother-logo-static"
                 style={{ cursor: "pointer", height: "auto" }}
               />
             </a>
@@ -1354,3 +1354,5 @@ export default function Home() {
     </main>
   );
 }
+
+
