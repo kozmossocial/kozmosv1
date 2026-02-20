@@ -2027,11 +2027,20 @@ body {
     overflow-x: hidden;
   }
 
-  .my-home-shell::before {
+  .my-home-shell::before,
+  .main-page-shell::before {
     animation: none !important;
-    filter: blur(12px) !important;
-    opacity: 0.1 !important;
+    filter: blur(8px) !important;
+    opacity: 0.08 !important;
     background-size: 120% 120% !important;
+    mix-blend-mode: normal !important;
+  }
+
+  .my-home-shell .lumi-ship-mobile-hover,
+  .my-home-shell .ufo-holo-mobile-hover {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto !important;
   }
 
   /* Mobile-safe beam profile: keep effect, reduce GPU load */

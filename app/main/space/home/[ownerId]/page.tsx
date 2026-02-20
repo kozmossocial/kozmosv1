@@ -106,9 +106,11 @@ export default function SpaceHomePage() {
   const [mobileControls, setMobileControls] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [enteringSpace, setEnteringSpace] = useState<{ id: string; title: string } | null>(null);
+  const [mobileBuildNotice, setMobileBuildNotice] = useState<string | null>(null);
 
   const keysRef = useRef<Record<string, boolean>>({});
   const enterTimerRef = useRef<number | null>(null);
+  const noticeTimerRef = useRef<number | null>(null);
 
   const setMoveKey = useCallback((key: "w" | "a" | "s" | "d", pressed: boolean) => {
     keysRef.current[key] = pressed;
@@ -285,11 +287,25 @@ export default function SpaceHomePage() {
         window.clearTimeout(enterTimerRef.current);
         enterTimerRef.current = null;
       }
+      if (noticeTimerRef.current) {
+        window.clearTimeout(noticeTimerRef.current);
+        noticeTimerRef.current = null;
+      }
     };
   }, []);
 
   const beginEnterSpace = useCallback(
     (space: HomeSpaceRender) => {
+      if (mobileControls) {
+        setMobileBuildNotice("not suitable for mobile usage");
+        if (noticeTimerRef.current) {
+          window.clearTimeout(noticeTimerRef.current);
+        }
+        noticeTimerRef.current = window.setTimeout(() => {
+          setMobileBuildNotice(null);
+        }, 1800);
+        return;
+      }
       if (enteringSpace) return;
       if (enterTimerRef.current) {
         window.clearTimeout(enterTimerRef.current);
@@ -299,7 +315,7 @@ export default function SpaceHomePage() {
         router.push(`/build?spaceId=${encodeURIComponent(space.id)}`);
       }, ENTER_TRANSITION_MS);
     },
-    [enteringSpace, router]
+    [enteringSpace, mobileControls, router]
   );
 
   async function handleLogout() {
@@ -380,6 +396,22 @@ export default function SpaceHomePage() {
       </section>
 
       {errorText ? <div style={{ marginTop: 8, fontSize: 12, color: "#ff9d9d" }}>{errorText}</div> : null}
+      {mobileBuildNotice ? (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 12,
+            color: "#ffd8a8",
+            border: "1px solid rgba(255,190,110,0.4)",
+            borderRadius: 8,
+            padding: "8px 10px",
+            background: "rgba(35,20,6,0.62)",
+            width: "fit-content",
+          }}
+        >
+          {mobileBuildNotice}
+        </div>
+      ) : null}
 
       <section
         style={{

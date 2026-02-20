@@ -2580,8 +2580,7 @@ const touchHoloShipImageStyle: React.CSSProperties = {
 
 const touchHoloShipImageMobileStyle: React.CSSProperties = {
   ...touchHoloShipImageStyle,
-  filter:
-    "drop-shadow(8px 0 6px rgba(132,212,255,0.14)) drop-shadow(-8px 0 6px rgba(154,216,255,0.12))",
+  filter: "none",
   opacity: 0.76,
 };
 
