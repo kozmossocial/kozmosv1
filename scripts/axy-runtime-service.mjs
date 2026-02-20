@@ -93,6 +93,58 @@ function normalizeBuildPath(input) {
 const MISSION_ROOT_PATH = "axy/published";
 const MISSION_HISTORY_PATH = `${MISSION_ROOT_PATH}/_history.json`;
 const MISSION_LATEST_PATH = `${MISSION_ROOT_PATH}/_latest.md`;
+const MISSION_BUILD_CLASSES = [
+  "utility",
+  "app",
+  "game",
+  "visualization",
+  "dashboard",
+  "simulation",
+  "social-primitive",
+  "3d-room-tool",
+  "integration",
+  "template",
+  "experiment",
+];
+
+function normalizeMissionBuildClass(input, fallback = "utility") {
+  const normalized = String(input || "").trim().toLowerCase();
+  return MISSION_BUILD_CLASSES.includes(normalized) ? normalized : fallback;
+}
+
+function pickMissionBuildClass(planTitle, previousClass) {
+  const title = normalizeForSimilarity(planTitle);
+  const keywordClassPairs = [
+    ["dashboard", "dashboard"],
+    ["timeline", "visualization"],
+    ["chart", "visualization"],
+    ["map", "visualization"],
+    ["simulator", "simulation"],
+    ["simulate", "simulation"],
+    ["game", "game"],
+    ["play", "game"],
+    ["3d", "3d-room-tool"],
+    ["room", "3d-room-tool"],
+    ["api", "integration"],
+    ["proxy", "integration"],
+    ["template", "template"],
+    ["starter", "social-primitive"],
+    ["chat", "social-primitive"],
+    ["feed", "app"],
+    ["console", "utility"],
+    ["tool", "utility"],
+  ];
+  let preferred = "utility";
+  for (const [keyword, cls] of keywordClassPairs) {
+    if (title.includes(keyword)) {
+      preferred = cls;
+      break;
+    }
+  }
+  const prev = normalizeMissionBuildClass(previousClass, "");
+  if (preferred && preferred !== prev) return preferred;
+  return MISSION_BUILD_CLASSES.find((cls) => cls !== prev) || "utility";
+}
 
 function slugify(input) {
   const slug = String(input || "")
@@ -137,6 +189,7 @@ function parseMissionHistory(content) {
         key: normalizeIdeaKey(row?.key || row?.title || ""),
         path: String(row?.path || "").trim(),
         created_at: String(row?.created_at || "").trim(),
+        build_class: normalizeMissionBuildClass(row?.build_class || row?.class || "utility"),
       }))
       .filter((row) => row.title && row.key && row.path);
   } catch {
@@ -162,6 +215,7 @@ function harvestMissionHistoryFromFiles(files) {
       key,
       path: pathValue.slice(0, -"README.md".length).replace(/\/+$/, ""),
       created_at: String(file?.updated_at || ""),
+      build_class: "utility",
     });
   }
   return harvested;
@@ -254,6 +308,10 @@ async function runSessionBuildMission({
     if (!historyByKey.has(row.key)) historyByKey.set(row.key, row);
   });
   const usedHistory = Array.from(historyByKey.values()).slice(0, missionHistoryLimit);
+  const previousMissionClass = normalizeMissionBuildClass(
+    usedHistory[0]?.build_class || "utility",
+    ""
+  );
   const usedIdeaKeys = new Set(
     usedHistory.map((row) => normalizeIdeaKey(row.key || row.title || "")).filter(Boolean)
   );
@@ -369,6 +427,7 @@ async function runSessionBuildMission({
     plan = {
       title: bestIdea.title,
       key: bestIdea.key,
+      buildClass: pickMissionBuildClass(bestIdea.title, previousMissionClass),
       problem: bestIdea.problem,
       goal: bestIdea.goal,
       scope: bestIdea.scope.slice(0, 8),
@@ -439,6 +498,7 @@ async function runSessionBuildMission({
       plan = {
         title: pickedFallback.title,
         key: normalizeIdeaKey(pickedFallback.title),
+        buildClass: pickMissionBuildClass(pickedFallback.title, previousMissionClass),
         problem: pickedFallback.problem,
         goal: pickedFallback.goal,
         scope: pickedFallback.scope,
@@ -469,6 +529,7 @@ async function runSessionBuildMission({
       plan = {
         title: emergencyTitle,
         key: emergencyKey,
+        buildClass: pickMissionBuildClass(emergencyTitle, previousMissionClass),
         problem:
           "Mission planner exhausted reusable candidates under strict uniqueness constraints.",
         goal:
@@ -488,6 +549,7 @@ async function runSessionBuildMission({
 
   await pushBuildNote("plan", [
     `title: ${plan.title}`,
+    `class: ${plan.buildClass}`,
     `problem: ${plan.problem}`,
     `goal: ${plan.goal}`,
     `scope: ${plan.scope.join(" | ")}`,
@@ -997,6 +1059,7 @@ async function runSessionBuildMission({
     {
       title: plan.title,
       key: plan.key,
+      build_class: normalizeMissionBuildClass(plan.buildClass || "utility"),
       path: basePath,
       created_at: new Date().toISOString(),
     },
@@ -1014,6 +1077,7 @@ async function runSessionBuildMission({
     "# Latest Axy Published Build",
     "",
     `Title: ${plan.title}`,
+    `Class: ${normalizeMissionBuildClass(plan.buildClass || "utility")}`,
     `Path: ${basePath}/README.md`,
     `Published: ${new Date().toISOString()}`,
     `Quality score: ${bundleQuality?.qualityScore || 0}`,

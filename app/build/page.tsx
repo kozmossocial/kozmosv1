@@ -9,6 +9,7 @@ type BuildSpace = {
   owner_id: string;
   owner_username?: string;
   title: string;
+  build_class?: string;
   is_public: boolean;
   can_edit?: boolean;
   language_pref: string;
@@ -48,6 +49,46 @@ const LANGUAGE_OPTIONS = [
   "sql",
   "py",
 ];
+
+const BUILD_CLASS_OPTIONS = [
+  "utility",
+  "app",
+  "game",
+  "visualization",
+  "dashboard",
+  "simulation",
+  "social-primitive",
+  "3d-room-tool",
+  "integration",
+  "template",
+  "experiment",
+] as const;
+
+function normalizeBuildClass(value: unknown) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return BUILD_CLASS_OPTIONS.includes(normalized as (typeof BUILD_CLASS_OPTIONS)[number])
+    ? normalized
+    : "utility";
+}
+
+function classTone(buildClass: string, selected: boolean) {
+  const tones: Record<string, { border: string; bg: string }> = {
+    utility: { border: "rgba(107,255,142,0.42)", bg: "rgba(107,255,142,0.18)" },
+    app: { border: "rgba(121,193,255,0.5)", bg: "rgba(121,193,255,0.17)" },
+    game: { border: "rgba(255,177,82,0.5)", bg: "rgba(255,177,82,0.18)" },
+    visualization: { border: "rgba(158,255,210,0.5)", bg: "rgba(158,255,210,0.18)" },
+    dashboard: { border: "rgba(255,213,121,0.5)", bg: "rgba(255,213,121,0.17)" },
+    simulation: { border: "rgba(255,149,149,0.5)", bg: "rgba(255,149,149,0.16)" },
+    "social-primitive": { border: "rgba(203,173,255,0.5)", bg: "rgba(203,173,255,0.16)" },
+    "3d-room-tool": { border: "rgba(132,255,255,0.5)", bg: "rgba(132,255,255,0.16)" },
+    integration: { border: "rgba(145,255,202,0.5)", bg: "rgba(145,255,202,0.16)" },
+    template: { border: "rgba(210,210,210,0.45)", bg: "rgba(210,210,210,0.14)" },
+    experiment: { border: "rgba(255,168,220,0.5)", bg: "rgba(255,168,220,0.17)" },
+  };
+  const tone = tones[buildClass] || tones.utility;
+  if (!selected) return tone;
+  return { border: tone.border, bg: tone.bg };
+}
 
 type AxyTurn = {
   id: string;
@@ -404,6 +445,7 @@ export default function BuildPage() {
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
 
   const [newSpaceTitle, setNewSpaceTitle] = useState("");
+  const [newSpaceClass, setNewSpaceClass] = useState<string>("utility");
   const [newFilePath, setNewFilePath] = useState("");
   const [editorLanguage, setEditorLanguage] = useState("text");
   const [editorContent, setEditorContent] = useState("");
@@ -757,13 +799,14 @@ export default function BuildPage() {
 
   async function createSubspace() {
     const title = newSpaceTitle.trim() || `subspace ${spaces.length + 1}`;
+    const buildClass = normalizeBuildClass(newSpaceClass);
     setCreatingSpace(true);
     setErrorText(null);
     setInfoText(null);
     try {
       const { res, data } = await fetchAuthedJson("/api/build/spaces", {
         method: "POST",
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, buildClass }),
       });
       if (!res.ok || !data?.space?.id) {
         setErrorText(data?.error || "could not create subspace");
@@ -771,6 +814,7 @@ export default function BuildPage() {
       }
 
       setNewSpaceTitle("");
+      setNewSpaceClass("utility");
       await loadSpaces(data.space.id as string);
       setInfoText("subspace created");
     } finally {
@@ -1373,6 +1417,25 @@ export default function BuildPage() {
                     fontSize: 12,
                   }}
                 />
+                <select
+                  value={newSpaceClass}
+                  onChange={(e) => setNewSpaceClass(normalizeBuildClass(e.target.value))}
+                  style={{
+                    width: 148,
+                    border: "1px solid rgba(125,255,160,0.24)",
+                    background: "rgba(10,28,16,0.56)",
+                    color: "#eaeaea",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    fontSize: 12,
+                  }}
+                >
+                  {BUILD_CLASS_OPTIONS.map((cls) => (
+                    <option key={cls} value={cls}>
+                      {cls}
+                    </option>
+                  ))}
+                </select>
                 <button
                   onClick={createSubspace}
                   disabled={creatingSpace}
@@ -1449,22 +1512,26 @@ export default function BuildPage() {
                     <button
                       key={space.id}
                       onClick={() => setSelectedSpaceId(space.id)}
-                      style={{
-                        textAlign: "left",
-                        border: "1px solid rgba(255,255,255,0.15)",
-                        borderRadius: 8,
-                        background:
-                          selectedSpaceId === space.id
-                            ? "rgba(107,255,142,0.2)"
-                            : "rgba(10,28,16,0.5)",
-                        color: "#eaeaea",
-                        padding: "8px 10px",
-                        cursor: "pointer",
-                        fontSize: 12,
-                      }}
+                      style={(() => {
+                        const normalizedClass = normalizeBuildClass(space.build_class);
+                        const tone = classTone(normalizedClass, selectedSpaceId === space.id);
+                        return {
+                          textAlign: "left" as const,
+                          border: `1px solid ${tone.border}`,
+                          borderRadius: 8,
+                          background: tone.bg,
+                          color: "#eaeaea",
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          fontSize: 12,
+                        };
+                      })()}
                     >
-                      {space.title}
-                      <span style={{ marginLeft: 8, opacity: 0.48, fontSize: 10 }}>
+                      <div>{space.title}</div>
+                      <div style={{ marginTop: 2, opacity: 0.74, fontSize: 10 }}>
+                        ({normalizeBuildClass(space.build_class)})
+                      </div>
+                      <span style={{ marginLeft: 0, opacity: 0.48, fontSize: 10 }}>
                         {space.owner_id === userId
                           ? space.is_public
                             ? "mine/public"

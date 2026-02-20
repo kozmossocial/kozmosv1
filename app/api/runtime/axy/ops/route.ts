@@ -178,6 +178,7 @@ type BuildSpaceRow = {
   id: string;
   owner_id: string;
   title: string;
+  build_class: string;
   is_public: boolean;
   language_pref: string;
   description: string;
@@ -1040,6 +1041,25 @@ const KOZMOS_PLAY_CATALOG = [
   },
 ] as const;
 
+const BUILD_CLASS_SET = new Set([
+  "utility",
+  "app",
+  "game",
+  "visualization",
+  "dashboard",
+  "simulation",
+  "social-primitive",
+  "3d-room-tool",
+  "integration",
+  "template",
+  "experiment",
+]);
+
+function asBuildClass(value: unknown, fallback = "utility") {
+  const normalized = asTrimmedString(value).toLowerCase();
+  return BUILD_CLASS_SET.has(normalized) ? normalized : fallback;
+}
+
 type BuildSpaceAccessCheck = {
   space: { id: string; owner_id: string; is_public: boolean } | null;
   canRead: boolean;
@@ -1118,7 +1138,7 @@ async function resolveProfileIdByUsername(username: string) {
 
 async function listBuildSpaces(userId: string) {
   const select =
-    "id, owner_id, title, is_public, language_pref, description, updated_at";
+    "id, owner_id, title, build_class, is_public, language_pref, description, updated_at";
 
   const { data: own, error: ownErr } = await supabaseAdmin
     .from("user_build_spaces")
@@ -1195,21 +1215,24 @@ async function createBuildSpace(
   userId: string,
   titleInput: string,
   languagePrefInput: string,
-  descriptionInput: string
+  descriptionInput: string,
+  buildClassInput = "utility"
 ) {
   const title = titleInput || "subspace";
   const languagePref = languagePrefInput || "auto";
   const description = descriptionInput;
+  const buildClass = asBuildClass(buildClassInput);
 
   const { data, error } = await supabaseAdmin
     .from("user_build_spaces")
     .insert({
       owner_id: userId,
       title,
+      build_class: buildClass,
       language_pref: languagePref,
       description,
     })
-    .select("id, owner_id, title, is_public, language_pref, description, updated_at")
+    .select("id, owner_id, title, build_class, is_public, language_pref, description, updated_at")
     .single();
 
   if (error || !data) throw new Error("build space create failed");
@@ -1224,6 +1247,7 @@ async function updateBuildSpace(
     languagePref?: string;
     description?: string;
     isPublic?: boolean;
+    buildClass?: string;
   }
 ) {
   if (!spaceId) throw new Error("space id required");
@@ -1232,6 +1256,7 @@ async function updateBuildSpace(
   const patch: Record<string, unknown> = {};
   if (typeof updates.title === "string") patch.title = updates.title || "subspace";
   if (typeof updates.languagePref === "string") patch.language_pref = updates.languagePref || "auto";
+  if (typeof updates.buildClass === "string") patch.build_class = asBuildClass(updates.buildClass);
   if (typeof updates.description === "string") patch.description = updates.description;
   if (typeof updates.isPublic === "boolean") patch.is_public = updates.isPublic;
   if (Object.keys(patch).length === 0) throw new Error("no updates provided");
@@ -1240,7 +1265,7 @@ async function updateBuildSpace(
     .from("user_build_spaces")
     .update(patch)
     .eq("id", spaceId)
-    .select("id, owner_id, title, is_public, language_pref, description, updated_at")
+    .select("id, owner_id, title, build_class, is_public, language_pref, description, updated_at")
     .single();
 
   if (error || !data) throw new Error("build space update failed");
@@ -3705,10 +3730,17 @@ export async function POST(req: Request) {
       const languagePref = asTrimmedString(
         (payload as { languagePref?: unknown })?.languagePref
       );
+      const buildClass = asBuildClass((payload as { buildClass?: unknown })?.buildClass);
       const description = typeof (payload as { description?: unknown })?.description === "string"
         ? ((payload as { description: string }).description || "").slice(0, 4000)
         : "";
-      const space = await createBuildSpace(actor.userId, title, languagePref, description);
+      const space = await createBuildSpace(
+        actor.userId,
+        title,
+        languagePref,
+        description,
+        buildClass
+      );
       return respond(200, { ok: true, action, data: space });
     }
 
@@ -3726,6 +3758,10 @@ export async function POST(req: Request) {
         description:
           typeof (payload as { description?: unknown })?.description === "string"
             ? String((payload as { description: string }).description).slice(0, 4000)
+            : undefined,
+        buildClass:
+          typeof (payload as { buildClass?: unknown })?.buildClass === "string"
+            ? asBuildClass((payload as { buildClass: string }).buildClass)
             : undefined,
         isPublic:
           typeof (payload as { isPublic?: unknown })?.isPublic === "boolean"

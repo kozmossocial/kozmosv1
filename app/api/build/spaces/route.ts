@@ -9,6 +9,7 @@ type SpaceRow = {
   id: string;
   owner_id: string;
   title: string;
+  build_class: string;
   is_public: boolean;
   language_pref: string;
   description: string;
@@ -54,9 +55,28 @@ function normalizeSpaces(rows: SpaceRow[]) {
   );
 }
 
+const BUILD_CLASS_SET = new Set([
+  "utility",
+  "app",
+  "game",
+  "visualization",
+  "dashboard",
+  "simulation",
+  "social-primitive",
+  "3d-room-tool",
+  "integration",
+  "template",
+  "experiment",
+]);
+
+function asBuildClass(value: unknown) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return BUILD_CLASS_SET.has(normalized) ? normalized : "utility";
+}
+
 async function listAccessibleSpaces(userId: string) {
   const select =
-    "id, owner_id, title, is_public, language_pref, description, updated_at";
+    "id, owner_id, title, build_class, is_public, language_pref, description, updated_at";
 
   const { data: own, error: ownErr } = await supabaseAdmin
     .from("user_build_spaces")
@@ -170,6 +190,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const rawTitle = typeof body?.title === "string" ? body.title.trim() : "";
     const title = rawTitle || "subspace";
+    const buildClass = asBuildClass(body?.buildClass);
     const languagePref =
       typeof body?.languagePref === "string" && body.languagePref.trim()
         ? body.languagePref.trim()
@@ -182,11 +203,12 @@ export async function POST(req: Request) {
       .insert({
         owner_id: user.id,
         title,
+        build_class: buildClass,
         language_pref: languagePref,
         description,
       })
       .select(
-        "id, owner_id, title, is_public, language_pref, description, updated_at"
+        "id, owner_id, title, build_class, is_public, language_pref, description, updated_at"
       )
       .single();
 
@@ -227,6 +249,7 @@ export async function PATCH(req: Request) {
 
     const updates: Record<string, unknown> = {};
     if (typeof body?.title === "string") updates.title = body.title.trim() || "subspace";
+    if (typeof body?.buildClass === "string") updates.build_class = asBuildClass(body.buildClass);
     if (typeof body?.description === "string") updates.description = body.description;
     if (typeof body?.languagePref === "string") {
       updates.language_pref = body.languagePref.trim() || "auto";
@@ -242,7 +265,7 @@ export async function PATCH(req: Request) {
       .update(updates)
       .eq("id", spaceId)
       .select(
-        "id, owner_id, title, is_public, language_pref, description, updated_at"
+        "id, owner_id, title, build_class, is_public, language_pref, description, updated_at"
       )
       .single();
 
