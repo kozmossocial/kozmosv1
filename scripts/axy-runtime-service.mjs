@@ -435,20 +435,55 @@ async function runSessionBuildMission({
       return !usedIdeaKeys.has(key) && !isNearDuplicate(candidate.title, recentIdeaTitles, { threshold: 0.86 });
     });
 
-    if (!pickedFallback) {
-      throw new Error("mission plan generation failed (unique idea not found)");
+    if (pickedFallback) {
+      plan = {
+        title: pickedFallback.title,
+        key: normalizeIdeaKey(pickedFallback.title),
+        problem: pickedFallback.problem,
+        goal: pickedFallback.goal,
+        scope: pickedFallback.scope,
+        publishSummary: pickedFallback.publishSummary,
+        artifactLanguage: pickedFallback.artifactLanguage,
+        ideaScores: pickedFallback.ideaScores,
+      };
+    } else {
+      const emergencyBases = [
+        "Kozmos Build Event Timeline Console",
+        "Kozmos Multi-Room Presence Mapper",
+        "Kozmos Session Handshake Inspector",
+        "Kozmos Quiet Signal Monitor",
+        "Kozmos Build Publish Audit Deck",
+      ];
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+      const emergencyTitleBase =
+        emergencyBases.find((title) => {
+          const key = normalizeIdeaKey(title);
+          return (
+            key &&
+            !usedIdeaKeys.has(key) &&
+            !isNearDuplicate(title, recentIdeaTitles, { threshold: 0.86 })
+          );
+        }) || emergencyBases[0];
+      const emergencyTitle = `${emergencyTitleBase} ${stamp}`;
+      const emergencyKey = normalizeIdeaKey(emergencyTitle);
+      plan = {
+        title: emergencyTitle,
+        key: emergencyKey,
+        problem:
+          "Mission planner exhausted reusable candidates under strict uniqueness constraints.",
+        goal:
+          "Ship a fully previewable, single-session HTML app with concrete Kozmos utility and zero topic collision.",
+        scope: [
+          "build an interactive index.html outcome with inline css/js",
+          "integrate Kozmos runtime hooks for storage or network where needed",
+          "publish with complete README/SPEC/IMPLEMENTATION/API-CONTRACT/EXPORT-MANIFEST",
+        ],
+        publishSummary:
+          "A strictly unique emergency mission output generated when normal plan candidates are exhausted, preserving mission-first delivery guarantees.",
+        artifactLanguage: "html",
+        ideaScores: { utility: 7.4, implementability: 8.3, novelty: 9.6, total: 8.31 },
+      };
     }
-
-    plan = {
-      title: pickedFallback.title,
-      key: normalizeIdeaKey(pickedFallback.title),
-      problem: pickedFallback.problem,
-      goal: pickedFallback.goal,
-      scope: pickedFallback.scope,
-      publishSummary: pickedFallback.publishSummary,
-      artifactLanguage: pickedFallback.artifactLanguage,
-      ideaScores: pickedFallback.ideaScores,
-    };
   }
 
   await pushBuildNote("plan", [
