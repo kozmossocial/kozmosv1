@@ -692,20 +692,19 @@ export default function BuildPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const nav = window.navigator as Navigator & {
+      userAgentData?: { mobile?: boolean };
+    };
+    const ua = String(nav.userAgent || "").toLowerCase();
+    const uaMobileOrTablet =
+      /android|iphone|ipod|ipad|mobile|tablet|silk|kindle|playbook/.test(ua);
+    const uaDataMobile = nav.userAgentData?.mobile === true;
+    const iPadDesktopMode =
+      nav.platform === "MacIntel" && typeof nav.maxTouchPoints === "number"
+        ? nav.maxTouchPoints > 1
+        : false;
 
-    const media = window.matchMedia("(min-width: 1024px)");
-    const update = () => setIsDesktop(media.matches);
-    update();
-
-    const add = media.addEventListener?.bind(media);
-    const remove = media.removeEventListener?.bind(media);
-    if (add && remove) {
-      add("change", update);
-      return () => remove("change", update);
-    }
-
-    media.addListener(update);
-    return () => media.removeListener(update);
+    setIsDesktop(!(uaMobileOrTablet || uaDataMobile || iPadDesktopMode));
   }, []);
 
   useEffect(() => {

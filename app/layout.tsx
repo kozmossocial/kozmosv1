@@ -5,16 +5,16 @@ import "./globals.css";
 import AuthSyncGuard from "./auth-sync-guard";
 
 const SOCIAL_PREVIEW_IMAGE =
-  "https://www.kozmos.social/kozmos-logo2.png?v=20260220-2";
+  "https://kozmos.social/kozmos-logo2.png";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.kozmos.social"),
+  metadataBase: new URL("https://kozmos.social"),
   title: "KOZMOS.",
   description: "A shared social space for presence, not performance.",
   openGraph: {
     title: "KOZMOS.",
     description: "A shared social space for presence, not performance.",
-    url: "https://www.kozmos.social",
+    url: "https://kozmos.social",
     siteName: "KOZMOS.",
     type: "website",
     images: [
@@ -31,6 +31,11 @@ export const metadata: Metadata = {
     title: "KOZMOS.",
     description: "A shared social space for presence, not performance.",
     images: [SOCIAL_PREVIEW_IMAGE],
+  },
+  other: {
+    "og:image:secure_url": SOCIAL_PREVIEW_IMAGE,
+    "og:image:type": "image/png",
+    "twitter:image": SOCIAL_PREVIEW_IMAGE,
   },
 };
 
