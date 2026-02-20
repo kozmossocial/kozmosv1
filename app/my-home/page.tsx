@@ -836,12 +836,8 @@ useEffect(() => {
   }, [isMobileLayout, notesBootstrapping]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
-    if (saved === "1") {
-      setAmbientSoundOn(true);
-    } else {
-      setAmbientSoundOn(false);
-    }
+    // Non-main pages default to ambient OFF on every entry.
+    setAmbientSoundOn(false);
     setAmbientPrefReady(true);
   }, []);
 

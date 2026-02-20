@@ -1,0 +1,10 @@
+[
+  {
+    "type": "console.error",
+    "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  },
+  {
+    "type": "pageerror",
+    "text": "Error: Could not find the module \"[project]/node_modules/next/dist/client/components/builtin/global-error.js#default\" in the React Client Manifest. This is probably a bug in the React Server Components bundler."
+  }
+]

@@ -152,3 +152,31 @@ Validation (current turn):
   - screenshot artifacts captured under `output/web-game/starfall-multi-debug/*.png` show:
     - "Could not find the module \"[project]/node_modules/next/dist/client/components/builtin/global-error.js#default\" in the React Client Manifest."
   - Because of this unrelated dev-runtime issue, end-to-end two-page Playwright assertions are flaky/incomplete.
+- Smoothness tuning update (latest turn):
+  - Added guest-side extrapolation between host snapshots in multi mode to reduce visible stutter/jumpiness while keeping host authority.
+  - Lowered embedded canvas DPR cap for better frame stability:
+    - embedded: 1.5
+    - embedded fullscreen: 1.35
+  - Relaxed HUD React update cadence from ~90ms to ~120ms to reduce UI re-render load.
+
+Validation (latest turn):
+- `npx eslint app/main/play/starfall-protocol/StarfallProtocolGame.tsx` passes.
+- `npm run build` passes.
+- Direct Playwright sanity capture confirms page + start flow + playing state:
+  - `output/web-game/starfall-smooth-v1/shot.png`
+  - `output/web-game/starfall-smooth-v1/shot-playing.png`
+  - `output/web-game/starfall-smooth-v1/state.json`
+- Note: `web_game_playwright_client.js` run can still intermittently hit existing Next dev/Turbopack runtime manifest error in this environment (500 + global-error module issue).
+- Additional smoothness patch (latest):
+  - Added simulation sub-steps per frame to reduce jitter during frame drops:
+    - constants: `SIM_SUBSTEP = 1/120`, `MAX_SIM_STEPS = 4`
+    - `stepAndRender` now slices each frame dt into small steps before render.
+  - This reduces single-frame motion jumps (especially visible in multiplayer + heavy UI load).
+
+Validation (latest):
+- `npx eslint app/main/play/starfall-protocol/StarfallProtocolGame.tsx` passes.
+- `npm run build` passes.
+- Direct Playwright sanity run:
+  - `output/web-game/starfall-smooth-v2/shot.png`
+  - `output/web-game/starfall-smooth-v2/state.json`
+  - state shows `phase: playing` and active movement after input burst.

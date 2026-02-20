@@ -133,6 +133,8 @@ const ENEMY_GAP_Y = 12;
 const ENEMY_DROP_DISTANCE = 22;
 const ENEMY_START_Y = 86;
 const EDGE_PADDING = 22;
+const SIM_SUBSTEP = 1 / 120;
+const MAX_SIM_STEPS = 4;
 const BARRIER_CELL = 8;
 const BARRIER_MASK = [
   "00111100",
@@ -1059,11 +1061,17 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     (dt: number) => {
       const state = gameRef.current;
       const clampedDt = Math.min(0.05, Math.max(0, dt));
-      if (state.mode === "multi" && !isHostSeat) {
-        extrapolateGuestView(clampedDt);
-      } else {
-        stepGame(clampedDt);
+      const steps = Math.max(1, Math.min(MAX_SIM_STEPS, Math.ceil(clampedDt / SIM_SUBSTEP)));
+      const stepDt = clampedDt / steps;
+
+      for (let i = 0; i < steps; i += 1) {
+        if (state.mode === "multi" && !isHostSeat) {
+          extrapolateGuestView(stepDt);
+        } else {
+          stepGame(stepDt);
+        }
       }
+
       renderGame();
       syncHud();
 

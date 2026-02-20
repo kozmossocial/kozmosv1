@@ -1175,8 +1175,8 @@ export default function Main() {
   }, [userId]);
 
   useEffect(() => {
-    // Main defaults to ambient ON on every entry.
-    setAmbientSoundOn(true);
+    // Non-landing pages default to ambient OFF on every entry.
+    setAmbientSoundOn(false);
     setAmbientPrefReady(true);
   }, []);
 
