@@ -1120,6 +1120,36 @@ async function runSessionBuildMission({
     outputPath: "",
   });
 
+  const historySpaceId = targetSpaceId;
+  let publishSpaceId = targetSpaceId;
+  try {
+    const missionSpaceTitle = String(plan.title || "Axy Mission Build").trim().slice(0, 96);
+    const missionSpaceDescription = [
+      `Axy mission output (${normalizeMissionBuildClass(plan.buildClass || "utility")})`,
+      `Builder: ${botUsername}`,
+      String(plan.goal || "").trim(),
+    ]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 260);
+    const createMissionSpaceRes = await callAxyOps(baseUrl, token, "build.spaces.create", {
+      title: missionSpaceTitle,
+      buildClass: normalizeMissionBuildClass(plan.buildClass || "utility"),
+      languagePref: "auto",
+      description: missionSpaceDescription,
+    });
+    const createdSpaceId = String(createMissionSpaceRes?.data?.id || "").trim();
+    if (createdSpaceId) {
+      publishSpaceId = createdSpaceId;
+    }
+  } catch (createMissionSpaceErr) {
+    const createMissionSpaceMsg =
+      createMissionSpaceErr?.body?.error ||
+      createMissionSpaceErr?.message ||
+      "mission output subspace create failed";
+    console.log(`[${now()}] mission subspace warn: ${createMissionSpaceMsg}`);
+  }
+
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const basePath = `${MISSION_ROOT_PATH}/${stamp}-${slugify(plan.title)}`;
   const artifactPath = `${basePath}/${normalizeBuildPath(bundle.artifactPath)}`;
@@ -1148,43 +1178,43 @@ async function runSessionBuildMission({
   })();
 
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: publishSpaceId,
     path: `${basePath}/README.md`,
     language: "markdown",
     content: readmeContent,
   });
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: publishSpaceId,
     path: `${basePath}/SPEC.md`,
     language: "markdown",
     content: specContent,
   });
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: publishSpaceId,
     path: `${basePath}/IMPLEMENTATION.md`,
     language: "markdown",
     content: implementationContent,
   });
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: publishSpaceId,
     path: `${basePath}/API-CONTRACT.md`,
     language: "markdown",
     content: apiContractContent,
   });
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: publishSpaceId,
     path: `${basePath}/EXPORT-MANIFEST.json`,
     language: "json",
     content: exportManifestContent,
   });
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: publishSpaceId,
     path: artifactPath,
     language: byExtLanguage,
     content: artifactContent,
   });
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: publishSpaceId,
     path: `${basePath}/PUBLISH.md`,
     language: "markdown",
     content: [
@@ -1219,7 +1249,7 @@ async function runSessionBuildMission({
   ].slice(0, missionHistoryLimit);
 
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: historySpaceId,
     path: MISSION_HISTORY_PATH,
     language: "json",
     content: JSON.stringify(updatedHistory, null, 2),
@@ -1244,7 +1274,7 @@ async function runSessionBuildMission({
   ].join("\n");
 
   await callAxyOps(baseUrl, token, "build.files.save", {
-    spaceId: targetSpaceId,
+    spaceId: historySpaceId,
     path: MISSION_LATEST_PATH,
     language: "markdown",
     content: latestFile,
@@ -1254,7 +1284,7 @@ async function runSessionBuildMission({
   // If visibility update fails, mission should still succeed.
   try {
     await callAxyOps(baseUrl, token, "build.spaces.update", {
-      spaceId: targetSpaceId,
+      spaceId: publishSpaceId,
       isPublic: true,
     });
   } catch (visibilityErr) {
@@ -1272,6 +1302,7 @@ async function runSessionBuildMission({
   });
   await pushBuildNote("report", [
     `title: ${plan.title}`,
+    `space: ${publishSpaceId}`,
     `path: ${basePath}/README.md`,
     `api_contract: ${basePath}/API-CONTRACT.md`,
     `export_manifest: ${basePath}/EXPORT-MANIFEST.json`,
@@ -1283,7 +1314,8 @@ async function runSessionBuildMission({
   const publishMessage = `Axy published: ${plan.title} • value: ${latestSummary} • path: ${basePath}/README.md • use: open README then follow steps.`;
   return {
     ok: true,
-    targetSpaceId,
+    targetSpaceId: historySpaceId,
+    publishedSpaceId: publishSpaceId,
     title: plan.title,
     basePath,
     qualityScore: bundleQuality?.qualityScore || 0,
@@ -3025,6 +3057,9 @@ async function main() {
             missionCompleted = true;
             missionState = "mission_publish";
             missionTargetSpaceId = String(missionRes.targetSpaceId || missionTargetSpaceId || "");
+            const missionPublishedSpaceId = String(
+              missionRes.publishedSpaceId || missionTargetSpaceId || ""
+            ).trim();
             missionTopic = String(missionRes.title || missionTopic || "");
             missionOutputPath = `${String(missionRes.basePath || "").trim()}/README.md`;
             missionQualityScore = Number(missionRes.qualityScore || missionQualityScore || 0);
@@ -3040,7 +3075,7 @@ async function main() {
               publishedAt: missionPublishedAt,
             });
             console.log(
-              `[${now()}] mission build published title="${missionRes.title}" space=${missionTargetSpaceId}`
+              `[${now()}] mission build published title="${missionRes.title}" space=${missionPublishedSpaceId}`
             );
             if (missionPublishToShared && missionRes.publishMessage) {
               // Intentionally disabled by policy (build chat only).
