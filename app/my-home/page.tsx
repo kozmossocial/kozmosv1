@@ -97,6 +97,7 @@ export default function MyHome() {
     {}
   );
   const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [isNarrowDesktopLayout, setIsNarrowDesktopLayout] = useState(false);
   const directMessagesViewportRef = useRef<HTMLDivElement | null>(null);
   const lastDirectScrollKeyRef = useRef<string>("");
   const directChatsInitializedRef = useRef(false);
@@ -758,6 +759,7 @@ useEffect(() => {
       const narrowViewport = window.innerWidth <= 1080;
       const coarsePointer = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
       setIsMobileLayout(narrowViewport && coarsePointer);
+      setIsNarrowDesktopLayout(!coarsePointer && window.innerWidth <= 1320);
     };
     sync();
     window.addEventListener("resize", sync);
@@ -1382,8 +1384,18 @@ useEffect(() => {
       holoFlightPhase === "idle"
         ? {
             ...touchHoloShipStyle,
-            left: holoDockLeft,
-            top: holoDockTop,
+                ...(isNarrowDesktopLayout
+                  ? {
+                  position: "fixed",
+                  left: "calc(50% - 230px)",
+                  top: 68,
+                  transform: "none",
+                  zIndex: 3,
+                }
+              : {
+                  left: holoDockLeft,
+                  top: holoDockTop,
+                }),
             width: holoShipWidth,
             opacity: touchHoloShipStyle.opacity,
           }
@@ -1802,6 +1814,7 @@ useEffect(() => {
   const selectedDirectChat = selectedDirectChatId
     ? activeChats.find((chat) => chat.chat_id === selectedDirectChatId) || null
     : null;
+  const shouldStackSidePanels = isMobileLayout || isNarrowDesktopLayout;
 
   return (
     <main className="my-home-shell" style={pageStyle}>
@@ -1951,8 +1964,8 @@ useEffect(() => {
         </span>
       </div>
 
-      {!isMobileLayout ? <div style={touchDockStyle}>{renderTouchPanel()}</div> : null}
-      {!isMobileLayout ? <div style={directChatDockStyle}>{renderDirectChatPanel()}</div> : null}
+      {!shouldStackSidePanels ? <div style={touchDockStyle}>{renderTouchPanel()}</div> : null}
+      {!shouldStackSidePanels ? <div style={directChatDockStyle}>{renderDirectChatPanel()}</div> : null}
 
       {/* CONTENT */}
       <div style={contentStyle}>
@@ -2138,7 +2151,7 @@ useEffect(() => {
           </div>
         </div>
 
-        {isMobileLayout ? (
+        {shouldStackSidePanels ? (
           <div style={touchMobileWrapStyle}>
             {renderTouchPanel()}
             <div style={touchMobileSecondaryWrapStyle}>{renderDirectChatPanel()}</div>

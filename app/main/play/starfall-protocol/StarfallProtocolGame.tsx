@@ -450,7 +450,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
 
   const syncHud = useCallback((force = false) => {
     const now = performance.now();
-    if (!force && now - hudTsRef.current < 90) return;
+    if (!force && now - hudTsRef.current < 120) return;
     hudTsRef.current = now;
     setHud(toHud(gameRef.current));
   }, []);
@@ -476,7 +476,8 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       : Math.min(root.clientWidth - 18, 920);
     const cssWidth = Math.max(280, maxWidth);
     const cssHeight = Math.round((cssWidth / WORLD_WIDTH) * WORLD_HEIGHT);
-    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    const dprCap = embedded ? (isFullscreen ? 1.35 : 1.5) : 2;
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, dprCap));
 
     canvas.style.width = `${cssWidth}px`;
     canvas.style.height = `${cssHeight}px`;
@@ -874,6 +875,74 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     [damageBarrier, isHostSeat, localSeat, spawnEnemyBullet, spawnPlayerBullet, storeHighScore]
   );
 
+  const extrapolateGuestView = useCallback(
+    (dt: number) => {
+      const state = gameRef.current;
+      if (state.mode !== "multi" || state.phase !== "playing") return;
+
+      state.elapsed += dt;
+
+      for (const player of state.players) {
+        if (!player.alive) continue;
+        const input =
+          localSeat === player.id ? localInputRef.current : remoteInputRef.current[player.id];
+        const axis = Number(input.right) - Number(input.left);
+        if (axis === 0) continue;
+        player.x = clamp(
+          player.x + axis * PLAYER_SPEED * dt,
+          EDGE_PADDING,
+          WORLD_WIDTH - EDGE_PADDING - player.width
+        );
+      }
+
+      const aliveEnemies = state.enemies.filter((enemy) => enemy.alive);
+      const aliveRatio = aliveEnemies.length / Math.max(1, state.enemies.length);
+      const enemySpeed = 42 + state.round * 8 + (1 - aliveRatio) * 220;
+
+      let hitEdge = false;
+      for (const enemy of aliveEnemies) {
+        enemy.x += state.enemyDirection * enemySpeed * dt;
+        if (enemy.x <= EDGE_PADDING || enemy.x + enemy.width >= WORLD_WIDTH - EDGE_PADDING) {
+          hitEdge = true;
+        }
+      }
+      if (hitEdge) {
+        state.enemyDirection = state.enemyDirection === 1 ? -1 : 1;
+        let minX = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        for (const enemy of aliveEnemies) {
+          minX = Math.min(minX, enemy.x);
+          maxX = Math.max(maxX, enemy.x + enemy.width);
+        }
+        let correctionX = 0;
+        if (minX < EDGE_PADDING) {
+          correctionX = EDGE_PADDING - minX;
+        } else if (maxX > WORLD_WIDTH - EDGE_PADDING) {
+          correctionX = WORLD_WIDTH - EDGE_PADDING - maxX;
+        }
+        for (const enemy of aliveEnemies) {
+          enemy.x += correctionX;
+          enemy.y += ENEMY_DROP_DISTANCE;
+        }
+      }
+
+      if (state.mysteryShip.active) {
+        state.mysteryShip.x += state.mysteryShip.vx * dt;
+      }
+
+      for (const bullet of state.bullets) {
+        if (!bullet.alive) continue;
+        bullet.x += bullet.vx * dt;
+        bullet.y += bullet.vy * dt;
+        if (bullet.y < -12 || bullet.y > WORLD_HEIGHT + 12) {
+          bullet.alive = false;
+        }
+      }
+      state.bullets = state.bullets.filter((bullet) => bullet.alive);
+    },
+    [localSeat]
+  );
+
   const renderGame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -990,7 +1059,9 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     (dt: number) => {
       const state = gameRef.current;
       const clampedDt = Math.min(0.05, Math.max(0, dt));
-      if (!(state.mode === "multi" && !isHostSeat)) {
+      if (state.mode === "multi" && !isHostSeat) {
+        extrapolateGuestView(clampedDt);
+      } else {
         stepGame(clampedDt);
       }
       renderGame();
@@ -1015,7 +1086,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
         }
       }
     },
-    [clientId, isHostSeat, renderGame, stepGame, syncHud]
+    [clientId, extrapolateGuestView, isHostSeat, renderGame, stepGame, syncHud]
   );
 
   const renderGameToText = useCallback(() => {
