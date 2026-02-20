@@ -722,6 +722,7 @@ export default function Main() {
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
   const [authEpoch, setAuthEpoch] = useState(0);
+  const chatBootstrappedOnceRef = useRef(false);
 
   const resolveActiveUser = useCallback(async () => {
     try {
@@ -1366,7 +1367,9 @@ export default function Main() {
     let cancelled = false;
 
     async function load() {
-      setChatBootstrapReady(false);
+      if (!chatBootstrappedOnceRef.current) {
+        setChatBootstrapReady(false);
+      }
       const bootstrapStartedAt = Date.now();
       const user = await resolveActiveUser();
 
@@ -1415,6 +1418,7 @@ export default function Main() {
         window.setTimeout(() => {
           if (!cancelled) {
             setChatBootstrapReady(true);
+            chatBootstrappedOnceRef.current = true;
           }
         }, remaining);
       }
@@ -1435,7 +1439,7 @@ export default function Main() {
         router.replace("/login?redirect=/main");
         return;
       }
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      if (event === "SIGNED_IN") {
         setAuthEpoch((prev) => prev + 1);
       }
     });
@@ -2907,18 +2911,43 @@ export default function Main() {
   }
 
   async function sendBuildMessage() {
-    if (!buildInput.trim() || !userId) return;
+    const content = buildInput.trim();
+    if (!content || !userId) return;
 
     setBuildLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("build_chat_messages")
+        .insert({
+          user_id: userId,
+          username: currentUsername,
+          content,
+        })
+        .select("id, user_id, username, content")
+        .single();
 
-    await supabase.from("build_chat_messages").insert({
-      user_id: userId,
-      username: currentUsername,
-      content: buildInput,
-    });
+      if (error) {
+        // Keep input as-is so user can retry.
+        console.error("build chat send failed", error);
+        const { data: fallbackRows } = await supabase
+          .from("build_chat_messages")
+          .select("id, user_id, username, content")
+          .order("created_at", { ascending: true });
+        if (fallbackRows) {
+          setBuildMessages(fallbackRows);
+        }
+        return;
+      }
 
-    setBuildInput("");
-    setBuildLoading(false);
+      if (data) {
+        setBuildMessages((prev) =>
+          prev.some((msg) => msg.id === data.id) ? prev : [...prev, data]
+        );
+      }
+      setBuildInput("");
+    } finally {
+      setBuildLoading(false);
+    }
   }
 
   async function requestKeepInTouch(targetUsername: string) {
