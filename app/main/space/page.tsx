@@ -80,10 +80,36 @@ type WorldRoomRender = {
   updatedAt: string | null;
 };
 
+type WorldHomeRow = {
+  ownerId: string;
+  username: string;
+  x: number;
+  z: number;
+  totalBuilds: number;
+  publicBuilds: number;
+  isSelf: boolean;
+  updatedAt?: string | null;
+};
+
+type WorldHomeRender = {
+  ownerId: string;
+  username: string;
+  x: number;
+  z: number;
+  totalBuilds: number;
+  publicBuilds: number;
+  isSelf: boolean;
+  updatedAt: string | null;
+};
+
 const WORLD_LIMIT = 14;
 const ROOM_NEAR_DISTANCE = 5.2;
 const ROOM_ENTER_DISTANCE = 2.3;
 const ROOM_POLL_MS = 2000;
+const HOME_NEAR_DISTANCE = 6.4;
+const HOME_ENTER_DISTANCE = 2.6;
+const HOME_POLL_MS = 2400;
+const SHOW_WORLD_ROOMS = false;
 const ENTER_TRANSITION_MS = 260;
 const SECONDARY_AMBIENT_SRC = "/ambient-main.mp3";
 const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
@@ -219,10 +245,12 @@ export default function MainSpacePage() {
   const [remoteOrbs, setRemoteOrbs] = useState<OrbRender[]>([]);
   const [runtimeOrbs, setRuntimeOrbs] = useState<OrbRender[]>([]);
   const [worldRooms, setWorldRooms] = useState<WorldRoomRender[]>([]);
+  const [worldHomes, setWorldHomes] = useState<WorldHomeRender[]>([]);
   const [pulseTick, setPulseTick] = useState(0);
-  const [enteringRoom, setEnteringRoom] = useState<{
+  const [enteringPortal, setEnteringPortal] = useState<{
     id: string;
     title: string;
+    kind: "room" | "home";
   } | null>(null);
 
   const [savingColor, setSavingColor] = useState(false);
@@ -545,6 +573,10 @@ export default function MainSpacePage() {
   }, [orbColor, selfPos.x, selfPos.z, userId, username]);
 
   useEffect(() => {
+    if (!SHOW_WORLD_ROOMS) {
+      setWorldRooms([]);
+      return;
+    }
     if (!userId) return;
     let cancelled = false;
 
@@ -654,6 +686,60 @@ export default function MainSpacePage() {
   }, [fetchAuthedJson, userId]);
 
   useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const loadWorldHomes = async () => {
+      const { res, data } = await fetchAuthedJson("/api/world/homes");
+      if (!res.ok || cancelled) return;
+      const rows: WorldHomeRow[] = Array.isArray(data?.homes) ? data.homes : [];
+      const parsed = rows
+        .map((row) => {
+          const ownerId = String(row?.ownerId || "").trim();
+          const username = String(row?.username || "user").trim().slice(0, 32);
+          const x = typeof row?.x === "number" ? row.x : NaN;
+          const z = typeof row?.z === "number" ? row.z : NaN;
+          if (!ownerId || !username || !Number.isFinite(x) || !Number.isFinite(z)) {
+            return null;
+          }
+          return {
+            ownerId,
+            username,
+            x: clamp(x, -WORLD_LIMIT, WORLD_LIMIT),
+            z: clamp(z, -WORLD_LIMIT, WORLD_LIMIT),
+            totalBuilds:
+              typeof row?.totalBuilds === "number" && Number.isFinite(row.totalBuilds)
+                ? Math.max(0, Math.floor(row.totalBuilds))
+                : 0,
+            publicBuilds:
+              typeof row?.publicBuilds === "number" && Number.isFinite(row.publicBuilds)
+                ? Math.max(0, Math.floor(row.publicBuilds))
+                : 0,
+            isSelf: row?.isSelf === true || ownerId === userId,
+            updatedAt:
+              typeof row?.updatedAt === "string" && row.updatedAt.trim()
+                ? row.updatedAt
+                : null,
+          } as WorldHomeRender;
+        })
+        .filter((row): row is WorldHomeRender => Boolean(row))
+        .sort((a, b) => a.z - b.z);
+      setWorldHomes(parsed);
+    };
+
+    void loadWorldHomes();
+    const timer = window.setInterval(() => {
+      void loadWorldHomes();
+    }, HOME_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      setWorldHomes([]);
+    };
+  }, [fetchAuthedJson, userId]);
+
+  useEffect(() => {
     return () => {
       if (enterTimerRef.current) {
         window.clearTimeout(enterTimerRef.current);
@@ -664,16 +750,34 @@ export default function MainSpacePage() {
 
   const beginEnterRoom = useCallback(
     (room: WorldRoomRender) => {
-      if (enteringRoom) return;
+      if (enteringPortal) return;
       if (enterTimerRef.current) {
         window.clearTimeout(enterTimerRef.current);
       }
-      setEnteringRoom({ id: room.id, title: room.title });
+      setEnteringPortal({ id: room.id, title: room.title, kind: "room" });
       enterTimerRef.current = window.setTimeout(() => {
         router.push(`/build?spaceId=${encodeURIComponent(room.id)}`);
       }, ENTER_TRANSITION_MS);
     },
-    [enteringRoom, router]
+    [enteringPortal, router]
+  );
+
+  const beginEnterHome = useCallback(
+    (home: WorldHomeRender) => {
+      if (enteringPortal) return;
+      if (enterTimerRef.current) {
+        window.clearTimeout(enterTimerRef.current);
+      }
+      setEnteringPortal({
+        id: home.ownerId,
+        title: `${home.username} home`,
+        kind: "home",
+      });
+      enterTimerRef.current = window.setTimeout(() => {
+        router.push(`/main/space/home/${encodeURIComponent(home.ownerId)}`);
+      }, ENTER_TRANSITION_MS);
+    },
+    [enteringPortal, router]
   );
 
   const allOrbs = useMemo(() => {
@@ -881,7 +985,164 @@ export default function MainSpacePage() {
           }}
         />
 
-        {worldRooms.map((room) => {
+        {worldHomes.map((home) => {
+          const { xPercent, yPercent, size, depth } = projectOrb(home.x, home.z);
+          const phase = seedPhase(`home:${home.ownerId}`);
+          const bob = Math.sin(pulseTick / 1700 + phase) * 1.2;
+          const distance = Math.hypot(selfPos.x - home.x, selfPos.z - home.z);
+          const near = distance <= HOME_NEAR_DISTANCE;
+          const canEnter = distance <= HOME_ENTER_DISTANCE;
+          const labelOpacity = near
+            ? clamp(1.08 - distance / HOME_NEAR_DISTANCE, 0.24, 1)
+            : 0;
+          const zIndex = 760 - Math.floor(depth * 320) + (home.isSelf ? 36 : 0);
+          const shellSize = 34 - depth * 9;
+          const roofGlow = home.isSelf ? "#c5ffd7" : "#ffe8a1";
+          const subtitle = `${home.totalBuilds} build${home.totalBuilds === 1 ? "" : "s"}`;
+          return (
+            <div key={`home:${home.ownerId}`}>
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${xPercent}%`,
+                  top: `${yPercent + size * 0.58}%`,
+                  width: size * 1.9,
+                  height: size * 0.5,
+                  transform: "translate(-50%, -50%)",
+                  borderRadius: "999px",
+                  background: `radial-gradient(circle, ${hexToRgba(roofGlow, 0.22)}, rgba(0,0,0,0))`,
+                  filter: "blur(6px)",
+                  opacity: 0.65 - depth * 0.25,
+                  zIndex,
+                  transition: "left 120ms linear, top 120ms linear, opacity 140ms ease",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => beginEnterHome(home)}
+                style={{
+                  position: "absolute",
+                  left: `${xPercent}%`,
+                  top: `calc(${yPercent}% + ${bob}px)`,
+                  width: shellSize * 1.16,
+                  height: shellSize * 1.08,
+                  transform: "translate(-50%, -50%)",
+                  borderRadius: 10,
+                  border: `1px solid ${hexToRgba(roofGlow, near ? 0.88 : 0.64)}`,
+                  background:
+                    "linear-gradient(180deg, rgba(18,24,34,0.96) 0%, rgba(10,15,22,0.96) 72%)",
+                  boxShadow: `0 0 ${Math.round(shellSize)}px ${hexToRgba(
+                    roofGlow,
+                    near ? 0.36 : 0.24
+                  )}`,
+                  cursor: "pointer",
+                  zIndex: zIndex + 12,
+                  transition:
+                    "left 120ms linear, top 120ms linear, box-shadow 160ms ease, transform 140ms ease",
+                  outline: "none",
+                }}
+                title={`${home.username} home - enter`}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: -8,
+                    width: shellSize * 0.92,
+                    height: shellSize * 0.44,
+                    transform: "translate(-50%, 0)",
+                    clipPath: "polygon(50% 0%, 100% 100%, 0% 100%)",
+                    background: `linear-gradient(180deg, ${hexToRgba(
+                      roofGlow,
+                      near ? 0.88 : 0.72
+                    )}, ${hexToRgba("#0f1520", 0.9)})`,
+                    border: `1px solid ${hexToRgba(roofGlow, 0.44)}`,
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    bottom: 4,
+                    width: shellSize * 0.24,
+                    height: shellSize * 0.33,
+                    transform: "translateX(-50%)",
+                    borderRadius: 4,
+                    background: hexToRgba(roofGlow, 0.56),
+                    boxShadow: `0 0 10px ${hexToRgba(roofGlow, 0.44)}`,
+                  }}
+                />
+              </button>
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${xPercent}%`,
+                  top: `calc(${yPercent}% - ${size * 1.24}px)`,
+                  transform: "translate(-50%, -100%)",
+                  fontSize: 11,
+                  lineHeight: 1.2,
+                  opacity: labelOpacity,
+                  textShadow: "0 0 10px rgba(0,0,0,0.6)",
+                  whiteSpace: "nowrap",
+                  zIndex: zIndex + 18,
+                  pointerEvents: "none",
+                  transition: "opacity 180ms ease, left 120ms linear, top 120ms linear",
+                }}
+              >
+                {home.username} home
+              </div>
+              {near ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${xPercent}%`,
+                    top: `calc(${yPercent}% - ${size * 0.87}px)`,
+                    transform: "translate(-50%, -100%)",
+                    fontSize: 10,
+                    lineHeight: 1.2,
+                    opacity: clamp(labelOpacity * 0.86, 0.2, 0.84),
+                    whiteSpace: "nowrap",
+                    textShadow: "0 0 10px rgba(0,0,0,0.6)",
+                    zIndex: zIndex + 18,
+                    pointerEvents: "none",
+                    transition: "opacity 180ms ease, left 120ms linear, top 120ms linear",
+                  }}
+                >
+                  {subtitle}
+                </div>
+              ) : null}
+              {canEnter ? (
+                <button
+                  type="button"
+                  onClick={() => beginEnterHome(home)}
+                  style={{
+                    position: "absolute",
+                    left: `${xPercent}%`,
+                    top: `calc(${yPercent}% + ${size * 0.94}px)`,
+                    transform: "translate(-50%, 0)",
+                    border: `1px solid ${hexToRgba(roofGlow, 0.62)}`,
+                    borderRadius: 999,
+                    background: "rgba(7,10,14,0.84)",
+                    color: "#dff6ff",
+                    padding: "4px 10px",
+                    fontSize: 10,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    zIndex: zIndex + 20,
+                    boxShadow: `0 0 12px ${hexToRgba(roofGlow, 0.28)}`,
+                    transition: "left 120ms linear, top 120ms linear, opacity 140ms ease",
+                  }}
+                >
+                  enter home
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+
+        {SHOW_WORLD_ROOMS
+          ? worldRooms.map((room) => {
           const { xPercent, yPercent, size, depth } = projectOrb(room.x, room.z);
           const auraColor = roomClassColor(room.buildClass || "utility");
           const phase = seedPhase(`room:${room.id}`);
@@ -1026,7 +1287,8 @@ export default function MainSpacePage() {
               ) : null}
             </div>
           );
-        })}
+          })
+          : null}
 
         {allOrbs.map((orb) => {
           const { xPercent, yPercent, size, depth } = projectOrb(orb.x, orb.z);
@@ -1108,7 +1370,7 @@ export default function MainSpacePage() {
           x: {selfPos.x.toFixed(1)} / z: {selfPos.z.toFixed(1)}
         </div>
         <div style={{ position: "absolute", right: 12, bottom: 12, fontSize: 11, opacity: 0.7 }}>
-          present: {allOrbs.length} / rooms: {worldRooms.length}
+          present: {allOrbs.length} / homes: {worldHomes.length}
         </div>
 
         {mobileControls ? (
@@ -1216,7 +1478,7 @@ export default function MainSpacePage() {
           </div>
         ) : null}
       </section>
-      {enteringRoom ? (
+      {enteringPortal ? (
         <div
           style={{
             position: "fixed",
@@ -1240,7 +1502,8 @@ export default function MainSpacePage() {
               background: "rgba(4,9,17,0.64)",
             }}
           >
-            Entering {enteringRoom.title}...
+            {enteringPortal.kind === "home" ? "Entering home" : "Entering room"}:{" "}
+            {enteringPortal.title}...
           </div>
         </div>
       ) : null}

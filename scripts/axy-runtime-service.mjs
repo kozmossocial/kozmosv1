@@ -122,7 +122,7 @@ function normalizeMissionBuildClass(input, fallback = "utility") {
   return MISSION_BUILD_CLASSES.includes(canonical) ? canonical : fallback;
 }
 
-function pickMissionBuildClass(planTitle, previousClass) {
+function pickMissionBuildClass(planTitle, recentClasses = []) {
   const title = normalizeForSimilarity(planTitle);
   const keywordClassPairs = [
     ["dashboard", "dashboard"],
@@ -151,9 +151,50 @@ function pickMissionBuildClass(planTitle, previousClass) {
       break;
     }
   }
-  const prev = normalizeMissionBuildClass(previousClass, "");
-  if (preferred && preferred !== prev) return preferred;
-  return MISSION_BUILD_CLASSES.find((cls) => cls !== prev) || "utility";
+  const recentListRaw = Array.isArray(recentClasses) ? recentClasses : [recentClasses];
+  const recentList = recentListRaw
+    .map((value) => normalizeMissionBuildClass(value, ""))
+    .filter(Boolean);
+  const blockedImmediate = new Set(recentList.slice(0, 2));
+
+  let pool = MISSION_BUILD_CLASSES.filter((cls) => !blockedImmediate.has(cls));
+  if (pool.length === 0) {
+    pool = [...MISSION_BUILD_CLASSES];
+  }
+
+  if (preferred && pool.includes(preferred)) {
+    return preferred;
+  }
+
+  if (preferred && !pool.includes(preferred)) {
+    const relatedClassMap = {
+      utility: ["integration", "template"],
+      "web-app": ["dashboard", "social"],
+      game: ["simulation", "three-d"],
+      "data-viz": ["dashboard", "utility"],
+      dashboard: ["data-viz", "web-app"],
+      simulation: ["game", "three-d"],
+      social: ["web-app", "integration"],
+      "three-d": ["simulation", "game"],
+      integration: ["utility", "web-app"],
+      template: ["utility", "integration"],
+      experimental: ["simulation", "web-app"],
+    };
+    const related = relatedClassMap[preferred] || [];
+    const relatedPick = related.find((cls) => pool.includes(cls));
+    if (relatedPick) {
+      return relatedPick;
+    }
+  }
+
+  const usageWeight = new Map();
+  recentList.slice(0, 8).forEach((cls, index) => {
+    usageWeight.set(cls, (usageWeight.get(cls) || 0) + (8 - index));
+  });
+  const smallestWeight = Math.min(...pool.map((cls) => usageWeight.get(cls) || 0));
+  const leastUsed = pool.filter((cls) => (usageWeight.get(cls) || 0) === smallestWeight);
+  const randomPool = leastUsed.length > 0 ? leastUsed : pool;
+  return randomPool[Math.floor(Math.random() * randomPool.length)] || "utility";
 }
 
 function slugify(input) {
@@ -165,8 +206,18 @@ function slugify(input) {
   return slug || `build-${Date.now()}`;
 }
 
+function stripDateLikeTokens(input) {
+  return String(input || "")
+    .replace(/\b20\d{2}[-_/]?\d{2}[-_/]?\d{2}(?:[T ]?\d{2}:?\d{2})?\b/g, " ")
+    .replace(/\b\d{12,14}\b/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .replace(/[:\-]\s*$/g, "")
+    .trim();
+}
+
 function formatMissionTitle(titleInput, goalInput) {
-  const title = String(titleInput || "").trim().replace(/\s+/g, " ");
+  const title = stripDateLikeTokens(titleInput).replace(/\s+/g, " ");
   const goal = String(goalInput || "").trim().replace(/\s+/g, " ");
   if (!title) return "Kozmos Build";
   if (/:| - /.test(title) || title.length >= 34) {
@@ -352,6 +403,7 @@ async function runSessionBuildMission({
   missionNotesToBuildChat,
   missionNoteSentKeys,
   missionContext,
+  previousMissionBuildClass,
   onState,
 }) {
   const setState = typeof onState === "function" ? onState : async () => {};
@@ -425,10 +477,13 @@ async function runSessionBuildMission({
     if (!historyByKey.has(row.key)) historyByKey.set(row.key, row);
   });
   const usedHistory = Array.from(historyByKey.values()).slice(0, missionHistoryLimit);
-  const previousMissionClass = normalizeMissionBuildClass(
-    usedHistory[0]?.build_class || "utility",
-    ""
-  );
+  const recentMissionClasses = usedHistory
+    .map((row) => normalizeMissionBuildClass(row?.build_class || row?.class || "", ""))
+    .filter(Boolean);
+  const effectiveRecentMissionClasses = [
+    normalizeMissionBuildClass(previousMissionBuildClass || "", ""),
+    ...recentMissionClasses,
+  ].filter(Boolean);
   const usedIdeaKeys = new Set(
     usedHistory.map((row) => normalizeIdeaKey(row.key || row.title || "")).filter(Boolean)
   );
@@ -575,7 +630,7 @@ async function runSessionBuildMission({
     plan = {
       title: clearTitle,
       key: normalizeIdeaKey(clearTitle),
-      buildClass: pickMissionBuildClass(bestIdea.title, previousMissionClass),
+      buildClass: pickMissionBuildClass(bestIdea.title, effectiveRecentMissionClasses),
       problem: bestIdea.problem,
       goal: bestIdea.goal,
       scope: bestIdea.scope.slice(0, 8),
@@ -647,7 +702,7 @@ async function runSessionBuildMission({
       plan = {
         title: fallbackTitle,
         key: normalizeIdeaKey(fallbackTitle),
-        buildClass: pickMissionBuildClass(pickedFallback.title, previousMissionClass),
+        buildClass: pickMissionBuildClass(pickedFallback.title, effectiveRecentMissionClasses),
         problem: pickedFallback.problem,
         goal: pickedFallback.goal,
         scope: pickedFallback.scope,
@@ -663,7 +718,6 @@ async function runSessionBuildMission({
         "Kozmos Quiet Signal Monitor",
         "Kozmos Build Publish Audit Deck",
       ];
-      const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
       const emergencyTitleBase =
         emergencyBases.find((title) => {
           const key = normalizeIdeaKey(title);
@@ -674,14 +728,14 @@ async function runSessionBuildMission({
           );
         }) || emergencyBases[0];
       const emergencyTitle = formatMissionTitle(
-        `${emergencyTitleBase} ${stamp}`,
+        emergencyTitleBase,
         "interactive publish-readiness and runtime quality probe"
       );
       const emergencyKey = normalizeIdeaKey(emergencyTitle);
       plan = {
         title: emergencyTitle,
         key: emergencyKey,
-        buildClass: pickMissionBuildClass(emergencyTitle, previousMissionClass),
+        buildClass: pickMissionBuildClass(emergencyTitle, effectiveRecentMissionClasses),
         problem:
           "Mission planner exhausted reusable candidates under strict uniqueness constraints.",
         goal:
@@ -1317,6 +1371,7 @@ async function runSessionBuildMission({
     targetSpaceId: historySpaceId,
     publishedSpaceId: publishSpaceId,
     title: plan.title,
+    buildClass: normalizeMissionBuildClass(plan.buildClass || "utility"),
     basePath,
     qualityScore: bundleQuality?.qualityScore || 0,
     usageSteps,
@@ -2430,6 +2485,7 @@ async function main() {
   let missionTopic = "";
   let missionOutputPath = "";
   let missionQualityScore = 0;
+  let missionLastBuildClass = "";
   let missionPublishedAt = "";
   let missionRestored = false;
   let missionTargetSpaceId = String(buildSpaceId || "").trim();
@@ -3047,6 +3103,7 @@ async function main() {
                 buildSpaces: snapshot?.data?.build_spaces || [],
                 buildChat: snapshot?.data?.build_chat || [],
               },
+              previousMissionBuildClass: missionLastBuildClass,
               onState: async (status, patch = {}) => {
                 await persistMissionState(status, patch);
               },
@@ -3060,6 +3117,9 @@ async function main() {
             const missionPublishedSpaceId = String(
               missionRes.publishedSpaceId || missionTargetSpaceId || ""
             ).trim();
+            missionLastBuildClass = normalizeMissionBuildClass(
+              missionRes.buildClass || missionLastBuildClass || "utility"
+            );
             missionTopic = String(missionRes.title || missionTopic || "");
             missionOutputPath = `${String(missionRes.basePath || "").trim()}/README.md`;
             missionQualityScore = Number(missionRes.qualityScore || missionQualityScore || 0);
@@ -3549,7 +3609,7 @@ async function main() {
                 .map((space) => String(space.id));
 
               if (editableSpaces.length === 0) {
-                const title = `Axy Lab ${new Date().toISOString().slice(0, 10)}`;
+                const title = "Axy Lab Sandbox";
                 const createRes = await callAxyOps(baseUrl, token, "build.spaces.create", {
                   title,
                   languagePref: "auto",
