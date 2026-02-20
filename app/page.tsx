@@ -142,7 +142,6 @@ export default function Home() {
   const screen3Ref = useRef<HTMLDivElement | null>(null);
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
   const ambientAutoplayBlockedRef = useRef(false);
-  const ambientBootToggleDoneRef = useRef(false);
 
   const [principle, setPrinciple] = useState<string | null>(null);
   const [principleDissolving, setPrincipleDissolving] = useState(false);
@@ -169,7 +168,7 @@ export default function Home() {
   const [runtimeConnectClosed, setRuntimeConnectClosed] = useState(false);
   const [ambientSoft, setAmbientSoft] = useState(false);
   const [matrixMotionActive, setMatrixMotionActive] = useState(false);
-  const [ambientSoundOn, setAmbientSoundOn] = useState(true);
+  const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
   const [lowPerfMotion, setLowPerfMotion] = useState(false);
 
@@ -458,27 +457,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Landing defaults to unmute on load.
-    setAmbientSoundOn(true);
+    // Landing boots muted; auth state decides default after load.
+    setAmbientSoundOn(false);
     setAmbientPrefReady(true);
   }, []);
 
   useEffect(() => {
-    if (!ambientPrefReady) return;
-    if (ambientBootToggleDoneRef.current) return;
-    ambientBootToggleDoneRef.current = true;
-    // One-time auto toggle cycle: mute -> unmute.
-    const muteTimer = window.setTimeout(() => {
-      setAmbientSoundOn(false);
-    }, 90);
-    const unmuteTimer = window.setTimeout(() => {
-      setAmbientSoundOn(true);
-    }, 230);
-    return () => {
-      window.clearTimeout(muteTimer);
-      window.clearTimeout(unmuteTimer);
-    };
-  }, [ambientPrefReady]);
+    if (!ambientPrefReady || !authReady) return;
+    // Logged-in users land unmuted; visitors stay muted.
+    setAmbientSoundOn(Boolean(user));
+  }, [ambientPrefReady, authReady, user]);
 
   useEffect(() => {
     if (!ambientPrefReady) return;
