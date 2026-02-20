@@ -142,6 +142,7 @@ export default function Home() {
   const screen3Ref = useRef<HTMLDivElement | null>(null);
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
   const ambientAutoplayBlockedRef = useRef(false);
+  const ambientBootToggleDoneRef = useRef(false);
 
   const [principle, setPrinciple] = useState<string | null>(null);
   const [principleDissolving, setPrincipleDissolving] = useState(false);
@@ -457,10 +458,22 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Landing page always starts unmuted by default.
-    setAmbientSoundOn(true);
+    // Landing boot sequence: one-time auto mute -> unmute toggle.
+    setAmbientSoundOn(false);
     setAmbientPrefReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!ambientPrefReady) return;
+    if (ambientBootToggleDoneRef.current) return;
+    ambientBootToggleDoneRef.current = true;
+    const timer = window.setTimeout(() => {
+      setAmbientSoundOn(true);
+    }, 140);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [ambientPrefReady]);
 
   useEffect(() => {
     if (!ambientPrefReady) return;
