@@ -95,42 +95,51 @@ const MISSION_HISTORY_PATH = `${MISSION_ROOT_PATH}/_history.json`;
 const MISSION_LATEST_PATH = `${MISSION_ROOT_PATH}/_latest.md`;
 const MISSION_BUILD_CLASSES = [
   "utility",
-  "app",
+  "web-app",
   "game",
-  "visualization",
+  "data-viz",
   "dashboard",
   "simulation",
-  "social-primitive",
-  "3d-room-tool",
+  "social",
+  "three-d",
   "integration",
   "template",
-  "experiment",
+  "experimental",
 ];
+
+const MISSION_BUILD_CLASS_ALIASES = {
+  app: "web-app",
+  visualization: "data-viz",
+  "social-primitive": "social",
+  "3d-room-tool": "three-d",
+  experiment: "experimental",
+};
 
 function normalizeMissionBuildClass(input, fallback = "utility") {
   const normalized = String(input || "").trim().toLowerCase();
-  return MISSION_BUILD_CLASSES.includes(normalized) ? normalized : fallback;
+  const canonical = MISSION_BUILD_CLASS_ALIASES[normalized] || normalized;
+  return MISSION_BUILD_CLASSES.includes(canonical) ? canonical : fallback;
 }
 
 function pickMissionBuildClass(planTitle, previousClass) {
   const title = normalizeForSimilarity(planTitle);
   const keywordClassPairs = [
     ["dashboard", "dashboard"],
-    ["timeline", "visualization"],
-    ["chart", "visualization"],
-    ["map", "visualization"],
+    ["timeline", "data-viz"],
+    ["chart", "data-viz"],
+    ["map", "data-viz"],
     ["simulator", "simulation"],
     ["simulate", "simulation"],
     ["game", "game"],
     ["play", "game"],
-    ["3d", "3d-room-tool"],
-    ["room", "3d-room-tool"],
+    ["3d", "three-d"],
+    ["room", "three-d"],
     ["api", "integration"],
     ["proxy", "integration"],
     ["template", "template"],
-    ["starter", "social-primitive"],
-    ["chat", "social-primitive"],
-    ["feed", "app"],
+    ["starter", "social"],
+    ["chat", "social"],
+    ["feed", "web-app"],
     ["console", "utility"],
     ["tool", "utility"],
   ];

@@ -42,6 +42,7 @@ type WorldRoomRow = {
   id: string;
   title: string;
   subtitle?: string | null;
+  buildClass?: string;
   x: number;
   z: number;
   aura?: RoomAura | string;
@@ -62,6 +63,7 @@ type WorldRoomRender = {
   id: string;
   title: string;
   subtitle: string | null;
+  buildClass: string;
   x: number;
   z: number;
   aura: RoomAura;
@@ -127,6 +129,68 @@ function roomAuraColor(aura: RoomAura) {
   if (aura === "heavy") return "#7ea2ff";
   if (aura === "fast") return "#9dffbe";
   return "#7df9ff";
+}
+
+const ROOM_CLASS_SET = new Set([
+  "utility",
+  "web-app",
+  "game",
+  "data-viz",
+  "dashboard",
+  "simulation",
+  "social",
+  "three-d",
+  "integration",
+  "template",
+  "experimental",
+]);
+
+const ROOM_CLASS_ALIAS: Record<string, string> = {
+  app: "web-app",
+  visualization: "data-viz",
+  "social-primitive": "social",
+  "3d-room-tool": "three-d",
+  experiment: "experimental",
+};
+
+function normalizeRoomBuildClass(value: unknown) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  const canonical = ROOM_CLASS_ALIAS[normalized] || normalized;
+  return ROOM_CLASS_SET.has(canonical) ? canonical : "utility";
+}
+
+function roomClassLabel(value: string) {
+  const map: Record<string, string> = {
+    utility: "Utility",
+    "web-app": "Web App",
+    game: "Game",
+    "data-viz": "Data Viz",
+    dashboard: "Dashboard",
+    simulation: "Simulation",
+    social: "Social",
+    "three-d": "3D Space",
+    integration: "Integration",
+    template: "Template",
+    experimental: "Experimental",
+  };
+  return map[value] || "Utility";
+}
+
+function roomClassColor(value: string) {
+  const map: Record<string, string> = {
+    utility: "#7df9ff",
+    "web-app": "#79c1ff",
+    game: "#ffb152",
+    "data-viz": "#9efdd2",
+    dashboard: "#ffd57a",
+    simulation: "#ff9696",
+    social: "#cbadff",
+    "three-d": "#84ffff",
+    integration: "#91ffca",
+    template: "#d2d2d2",
+    experimental: "#ffa8dc",
+  };
+  return map[value] || "#7df9ff";
 }
 
 function projectOrb(x: number, z: number) {
@@ -535,10 +599,12 @@ export default function MainSpacePage() {
             typeof row?.subtitle === "string" && row.subtitle.trim()
               ? row.subtitle.trim().slice(0, 48)
               : null;
+          const buildClass = normalizeRoomBuildClass(row?.buildClass);
           return {
             id,
             title,
             subtitle,
+            buildClass,
             x: clamp(x, -WORLD_LIMIT, WORLD_LIMIT),
             z: clamp(z, -WORLD_LIMIT, WORLD_LIMIT),
             aura: normalizeRoomAura(row?.aura),
@@ -817,7 +883,7 @@ export default function MainSpacePage() {
 
         {worldRooms.map((room) => {
           const { xPercent, yPercent, size, depth } = projectOrb(room.x, room.z);
-          const auraColor = roomAuraColor(room.aura);
+          const auraColor = roomClassColor(room.buildClass || "utility");
           const phase = seedPhase(`room:${room.id}`);
           const bob = Math.sin(pulseTick / 1800 + phase) * 1.7;
           const shadowY = yPercent + size * 0.52;
@@ -908,9 +974,9 @@ export default function MainSpacePage() {
                   transition: "opacity 180ms ease, left 120ms linear, top 120ms linear",
                 }}
               >
-                {room.title}
+                {room.title} ({roomClassLabel(room.buildClass)})
               </div>
-              {near && room.subtitle ? (
+              {near ? (
                 <div
                   style={{
                     position: "absolute",
@@ -926,7 +992,7 @@ export default function MainSpacePage() {
                     transition: "opacity 180ms ease, left 120ms linear, top 120ms linear",
                   }}
                 >
-                  {room.subtitle}
+                  by {room.ownerUsername}
                 </div>
               ) : null}
 

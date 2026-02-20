@@ -1043,21 +1043,30 @@ const KOZMOS_PLAY_CATALOG = [
 
 const BUILD_CLASS_SET = new Set([
   "utility",
-  "app",
+  "web-app",
   "game",
-  "visualization",
+  "data-viz",
   "dashboard",
   "simulation",
-  "social-primitive",
-  "3d-room-tool",
+  "social",
+  "three-d",
   "integration",
   "template",
-  "experiment",
+  "experimental",
 ]);
+
+const BUILD_CLASS_ALIAS: Record<string, string> = {
+  app: "web-app",
+  visualization: "data-viz",
+  "social-primitive": "social",
+  "3d-room-tool": "three-d",
+  experiment: "experimental",
+};
 
 function asBuildClass(value: unknown, fallback = "utility") {
   const normalized = asTrimmedString(value).toLowerCase();
-  return BUILD_CLASS_SET.has(normalized) ? normalized : fallback;
+  const canonical = BUILD_CLASS_ALIAS[normalized] || normalized;
+  return BUILD_CLASS_SET.has(canonical) ? canonical : fallback;
 }
 
 type BuildSpaceAccessCheck = {

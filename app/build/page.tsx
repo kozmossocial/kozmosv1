@@ -51,39 +51,55 @@ const LANGUAGE_OPTIONS = [
 ];
 
 const BUILD_CLASS_OPTIONS = [
-  "utility",
-  "app",
-  "game",
-  "visualization",
-  "dashboard",
-  "simulation",
-  "social-primitive",
-  "3d-room-tool",
-  "integration",
-  "template",
-  "experiment",
+  { value: "utility", label: "Utility" },
+  { value: "web-app", label: "Web App" },
+  { value: "game", label: "Game" },
+  { value: "data-viz", label: "Data Viz" },
+  { value: "dashboard", label: "Dashboard" },
+  { value: "simulation", label: "Simulation" },
+  { value: "social", label: "Social" },
+  { value: "three-d", label: "3D Space" },
+  { value: "integration", label: "Integration" },
+  { value: "template", label: "Template" },
+  { value: "experimental", label: "Experimental" },
 ] as const;
+
+const BUILD_CLASS_ALIAS: Record<string, string> = {
+  app: "web-app",
+  visualization: "data-viz",
+  "social-primitive": "social",
+  "3d-room-tool": "three-d",
+  experiment: "experimental",
+};
+
+const BUILD_CLASS_VALUES: Set<string> = new Set(
+  BUILD_CLASS_OPTIONS.map((option) => option.value)
+);
 
 function normalizeBuildClass(value: unknown) {
   const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
-  return BUILD_CLASS_OPTIONS.includes(normalized as (typeof BUILD_CLASS_OPTIONS)[number])
-    ? normalized
-    : "utility";
+  const canonical = BUILD_CLASS_ALIAS[normalized] || normalized;
+  return BUILD_CLASS_VALUES.has(canonical) ? canonical : "utility";
+}
+
+function formatBuildClassLabel(value: unknown) {
+  const normalized = normalizeBuildClass(value);
+  return BUILD_CLASS_OPTIONS.find((option) => option.value === normalized)?.label || "Utility";
 }
 
 function classTone(buildClass: string, selected: boolean) {
   const tones: Record<string, { border: string; bg: string }> = {
     utility: { border: "rgba(107,255,142,0.42)", bg: "rgba(107,255,142,0.18)" },
-    app: { border: "rgba(121,193,255,0.5)", bg: "rgba(121,193,255,0.17)" },
+    "web-app": { border: "rgba(121,193,255,0.5)", bg: "rgba(121,193,255,0.17)" },
     game: { border: "rgba(255,177,82,0.5)", bg: "rgba(255,177,82,0.18)" },
-    visualization: { border: "rgba(158,255,210,0.5)", bg: "rgba(158,255,210,0.18)" },
+    "data-viz": { border: "rgba(158,255,210,0.5)", bg: "rgba(158,255,210,0.18)" },
     dashboard: { border: "rgba(255,213,121,0.5)", bg: "rgba(255,213,121,0.17)" },
     simulation: { border: "rgba(255,149,149,0.5)", bg: "rgba(255,149,149,0.16)" },
-    "social-primitive": { border: "rgba(203,173,255,0.5)", bg: "rgba(203,173,255,0.16)" },
-    "3d-room-tool": { border: "rgba(132,255,255,0.5)", bg: "rgba(132,255,255,0.16)" },
+    social: { border: "rgba(203,173,255,0.5)", bg: "rgba(203,173,255,0.16)" },
+    "three-d": { border: "rgba(132,255,255,0.5)", bg: "rgba(132,255,255,0.16)" },
     integration: { border: "rgba(145,255,202,0.5)", bg: "rgba(145,255,202,0.16)" },
     template: { border: "rgba(210,210,210,0.45)", bg: "rgba(210,210,210,0.14)" },
-    experiment: { border: "rgba(255,168,220,0.5)", bg: "rgba(255,168,220,0.17)" },
+    experimental: { border: "rgba(255,168,220,0.5)", bg: "rgba(255,168,220,0.17)" },
   };
   const tone = tones[buildClass] || tones.utility;
   if (!selected) return tone;
@@ -1402,13 +1418,22 @@ export default function BuildPage() {
               <div style={{ fontSize: 12, opacity: 0.74, letterSpacing: "0.1em" }}>
                 subspaces
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0,1fr) 120px auto",
+                  gap: 8,
+                  marginTop: 8,
+                  alignItems: "center",
+                }}
+              >
                 <input
                   value={newSpaceTitle}
                   onChange={(e) => setNewSpaceTitle(e.target.value)}
                   placeholder="new subspace title"
                   style={{
-                    flex: 1,
+                    width: "100%",
+                    minWidth: 0,
                     border: "1px solid rgba(125,255,160,0.24)",
                     background: "rgba(10,28,16,0.56)",
                     color: "#eaeaea",
@@ -1421,7 +1446,8 @@ export default function BuildPage() {
                   value={newSpaceClass}
                   onChange={(e) => setNewSpaceClass(normalizeBuildClass(e.target.value))}
                   style={{
-                    width: 148,
+                    width: "100%",
+                    minWidth: 0,
                     border: "1px solid rgba(125,255,160,0.24)",
                     background: "rgba(10,28,16,0.56)",
                     color: "#eaeaea",
@@ -1431,8 +1457,8 @@ export default function BuildPage() {
                   }}
                 >
                   {BUILD_CLASS_OPTIONS.map((cls) => (
-                    <option key={cls} value={cls}>
-                      {cls}
+                    <option key={cls.value} value={cls.value}>
+                      {cls.label}
                     </option>
                   ))}
                 </select>
@@ -1445,6 +1471,7 @@ export default function BuildPage() {
                     background: "rgba(107,255,142,0.14)",
                     color: "#b8ffd1",
                     padding: "8px 10px",
+                    whiteSpace: "nowrap",
                     cursor: creatingSpace ? "default" : "pointer",
                     fontSize: 12,
                   }}
@@ -1529,7 +1556,7 @@ export default function BuildPage() {
                     >
                       <div>{space.title}</div>
                       <div style={{ marginTop: 2, opacity: 0.74, fontSize: 10 }}>
-                        ({normalizeBuildClass(space.build_class)})
+                        ({formatBuildClassLabel(space.build_class)})
                       </div>
                       <span style={{ marginLeft: 0, opacity: 0.48, fontSize: 10 }}>
                         {space.owner_id === userId

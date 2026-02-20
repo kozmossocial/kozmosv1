@@ -29,6 +29,7 @@ type SpaceRow = {
   owner_id: string;
   is_public: boolean;
   title: string;
+  build_class: string;
   description: string;
   updated_at: string;
 };
@@ -259,7 +260,7 @@ export async function GET(req: Request) {
 
     const { data: spaces, error: spacesErr } = await supabaseAdmin
       .from("user_build_spaces")
-      .select("id, owner_id, is_public, title, description, updated_at")
+      .select("id, owner_id, is_public, title, build_class, description, updated_at")
       .or(`is_public.eq.true,owner_id.eq.${user.id}`)
       .order("updated_at", { ascending: false })
       .limit(300);
@@ -339,8 +340,9 @@ export async function GET(req: Request) {
         const spawn = manifest.spawn || defaultSpawn(space.id);
         return {
           id: space.id,
-          title: manifest.title,
+          title: normalizeText(space.title, 40) || manifest.title,
           subtitle: manifest.subtitle,
+          buildClass: String(space.build_class || "utility").trim().toLowerCase(),
           x: spawn.x,
           z: spawn.z,
           aura: manifest.aura,
