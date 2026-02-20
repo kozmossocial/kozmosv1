@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
-  authenticateBuildRuntimeUser,
   clampLimit,
-  getBuildRuntimeSpaceAccess,
+  getBuildRuntimeRequestContext,
   getStarterMode,
   mapBuildRuntimeError,
   passStarterRateLimit,
   sanitizeJsonValue,
 } from "@/app/api/build/runtime/_shared";
+import {
+  extractStarterToken,
+  resolveStarterActor,
+} from "@/app/api/build/runtime/starter/_auth";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -46,9 +49,6 @@ function parseThreadId(value: unknown) {
 
 export async function GET(req: Request) {
   try {
-    const user = await authenticateBuildRuntimeUser(req);
-    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const url = new URL(req.url);
     const spaceId = String(url.searchParams.get("spaceId") || "").trim();
     const threadId = parseThreadId(url.searchParams.get("threadId"));
@@ -59,22 +59,25 @@ export async function GET(req: Request) {
     if (!spaceId || !threadId) {
       return NextResponse.json({ error: "spaceId and threadId required" }, { status: 400 });
     }
-    if (!passStarterRateLimit(user.id, spaceId, "starter.dm.messages.read", 220)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, user.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.dm.messages.read", 220)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
+    }
 
-    const participantRes = await isThreadParticipant(spaceId, threadId, user.id);
-    const isOwner = access.space.owner_id === user.id;
+    const starterActorRes = await resolveStarterActor(spaceId, extractStarterToken(req));
+    const starterActor = starterActorRes.actor || null;
+    const participantRes = starterActor
+      ? await isThreadParticipant(spaceId, threadId, starterActor.user.id)
+      : { error: null, participant: null };
+    const isOwner = Boolean(ctx.user?.id && ctx.access.space.owner_id === ctx.user.id);
     if (participantRes.error) {
       return NextResponse.json(mapBuildRuntimeError(participantRes.error, "thread check failed"), {
         status: 500,
@@ -108,8 +111,9 @@ export async function GET(req: Request) {
 
     const senderIds = Array.from(new Set(rows.map((row) => row.sender_id)));
     const profilesRes = await supabaseAdmin
-      .from("profileskozmos")
+      .from("user_build_starter_users")
       .select("id, username")
+      .eq("space_id", spaceId)
       .in("id", senderIds);
     if (profilesRes.error) {
       return NextResponse.json({ error: "messages profile load failed" }, { status: 500 });
@@ -138,9 +142,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const user = await authenticateBuildRuntimeUser(req);
-    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const body = await req.json().catch(() => ({}));
     const spaceId = typeof body?.spaceId === "string" ? body.spaceId.trim() : "";
     const threadId = parseThreadId(body?.threadId);
@@ -153,19 +154,24 @@ export async function POST(req: Request) {
     if (messageBody.length > 4000) {
       return NextResponse.json({ error: "message body too long" }, { status: 400 });
     }
-    if (!passStarterRateLimit(user.id, spaceId, "starter.dm.messages.write", 180)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, user.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.dm.messages.write", 180)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
+    }
+
+    const starterActorRes = await resolveStarterActor(spaceId, extractStarterToken(req, body?.starterToken));
+    if (starterActorRes.error || !starterActorRes.actor) {
+      return NextResponse.json({ error: "starter auth required" }, { status: 401 });
+    }
+    const starterUser = starterActorRes.actor.user;
 
     const modeRes = await getStarterMode(spaceId);
     if (modeRes.error) {
@@ -177,7 +183,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "starter mode disabled" }, { status: 409 });
     }
 
-    const participantRes = await isThreadParticipant(spaceId, threadId, user.id);
+    const participantRes = await isThreadParticipant(spaceId, threadId, starterUser.id);
     if (participantRes.error) {
       return NextResponse.json(mapBuildRuntimeError(participantRes.error, "thread check failed"), {
         status: 500,
@@ -195,7 +201,7 @@ export async function POST(req: Request) {
       .insert({
         space_id: spaceId,
         thread_id: threadId,
-        sender_id: user.id,
+        sender_id: starterUser.id,
         body: messageBody,
         metadata,
       })
@@ -227,7 +233,7 @@ export async function POST(req: Request) {
         id: data.id,
         threadId: data.thread_id,
         senderId: data.sender_id,
-        senderUsername: user.user_metadata?.username || "user",
+        senderUsername: starterUser.username || "user",
         body: data.body,
         metadata: data.metadata || {},
         createdAt: data.created_at,

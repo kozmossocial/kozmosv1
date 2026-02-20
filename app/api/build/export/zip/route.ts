@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { exportStarterData } from "@/app/api/build/export/_starterData";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -244,6 +245,11 @@ export async function GET(req: Request) {
       path: row.path || "",
       content: typeof row.content === "string" ? row.content : "",
     }));
+    const starterData = await exportStarterData(spaceId);
+    files.push({
+      path: ".kozmos/starter-data.json",
+      content: JSON.stringify(starterData, null, 2),
+    });
 
     const zipBytes = buildZip(files);
     const baseName = sanitizeFileName(access.space.title || "subspace");

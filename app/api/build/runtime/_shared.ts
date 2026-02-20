@@ -47,6 +47,10 @@ export async function authenticateBuildRuntimeUser(req: Request) {
   return user ?? null;
 }
 
+export async function authenticateBuildRuntimeUserOptional(req: Request) {
+  return authenticateBuildRuntimeUser(req);
+}
+
 export function mapBuildRuntimeError(
   error: { code?: string; message?: string } | null,
   fallback: string
@@ -84,6 +88,49 @@ export async function getBuildRuntimeSpaceAccess(
   const canRead = space.is_public || hasSharedAccess;
   const canEdit = Boolean(accessRow?.can_edit);
   return { space, canRead, canEdit, error: null };
+}
+
+export async function getBuildRuntimePublicSpace(spaceId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("user_build_spaces")
+    .select("id, owner_id, is_public, title")
+    .eq("id", spaceId)
+    .maybeSingle();
+  if (error) return { space: null, error };
+  return { space: data || null, error: null };
+}
+
+export async function getBuildRuntimeRequestContext(req: Request, spaceId: string) {
+  const user = await authenticateBuildRuntimeUserOptional(req);
+  if (user?.id) {
+    const access = await getBuildRuntimeSpaceAccess(spaceId, user.id);
+    return {
+      user,
+      access,
+      rateIdentity: user.id,
+    };
+  }
+  const spaceRes = await getBuildRuntimePublicSpace(spaceId);
+  const access: BuildRuntimeSpaceAccess = {
+    space: spaceRes.space,
+    canRead: Boolean(spaceRes.space?.is_public),
+    canEdit: false,
+    error: spaceRes.error,
+  };
+  return {
+    user: null,
+    access,
+    rateIdentity: getAnonymousRateIdentity(req),
+  };
+}
+
+export function getAnonymousRateIdentity(req: Request) {
+  const forwarded = req.headers.get("x-forwarded-for") || req.headers.get("X-Forwarded-For");
+  const ip = String(forwarded || "")
+    .split(",")[0]
+    .trim()
+    .slice(0, 80);
+  return ip ? `anon:${ip}` : "anon:unknown";
 }
 
 export async function getStarterMode(spaceId: string) {

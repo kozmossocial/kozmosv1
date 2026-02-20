@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
-  authenticateBuildRuntimeUser,
-  getBuildRuntimeSpaceAccess,
+  getBuildRuntimeRequestContext,
   getStarterMode,
   mapBuildRuntimeError,
   passStarterRateLimit,
@@ -82,26 +81,22 @@ async function enforceFriendQuotas(spaceId: string) {
 
 export async function GET(req: Request) {
   try {
-    const platformUser = await authenticateBuildRuntimeUser(req);
-    if (!platformUser) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const url = new URL(req.url);
     const spaceId = String(url.searchParams.get("spaceId") || "").trim();
     if (!spaceId) {
       return NextResponse.json({ error: "spaceId required" }, { status: 400 });
     }
-    if (!passStarterRateLimit(platformUser.id, spaceId, "starter.friends.read", 220)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, platformUser.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.friends.read", 220)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
     }
 
     const modeRes = await getStarterMode(spaceId);
@@ -205,27 +200,23 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const platformUser = await authenticateBuildRuntimeUser(req);
-    if (!platformUser) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const body = await req.json().catch(() => ({}));
     const spaceId = typeof body?.spaceId === "string" ? body.spaceId.trim() : "";
     const toUsernameRaw = typeof body?.toUsername === "string" ? body.toUsername : "";
     if (!spaceId || !toUsernameRaw) {
       return NextResponse.json({ error: "spaceId and toUsername required" }, { status: 400 });
     }
-    if (!passStarterRateLimit(platformUser.id, spaceId, "starter.friends.write", 120)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, platformUser.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.friends.write", 120)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
     }
 
     const modeRes = await getStarterMode(spaceId);
@@ -356,9 +347,6 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
-    const platformUser = await authenticateBuildRuntimeUser(req);
-    if (!platformUser) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const body = await req.json().catch(() => ({}));
     const spaceId = typeof body?.spaceId === "string" ? body.spaceId.trim() : "";
     const requestId = Number(body?.requestId || 0);
@@ -369,18 +357,17 @@ export async function PATCH(req: Request) {
     if (!["accept", "decline", "block"].includes(action)) {
       return NextResponse.json({ error: "action must be accept|decline|block" }, { status: 400 });
     }
-    if (!passStarterRateLimit(platformUser.id, spaceId, "starter.friends.write", 120)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, platformUser.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.friends.write", 120)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
     }
 
     const actorRes = await resolveStarterActor(spaceId, extractStarterToken(req, body?.starterToken));
@@ -439,27 +426,23 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const platformUser = await authenticateBuildRuntimeUser(req);
-    if (!platformUser) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const body = await req.json().catch(() => ({}));
     const spaceId = typeof body?.spaceId === "string" ? body.spaceId.trim() : "";
     const friendUserId = typeof body?.friendUserId === "string" ? body.friendUserId.trim() : "";
     if (!spaceId || !friendUserId) {
       return NextResponse.json({ error: "spaceId and friendUserId required" }, { status: 400 });
     }
-    if (!passStarterRateLimit(platformUser.id, spaceId, "starter.friends.write", 120)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, platformUser.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.friends.write", 120)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
     }
 
     const actorRes = await resolveStarterActor(spaceId, extractStarterToken(req, body?.starterToken));

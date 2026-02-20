@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
-  authenticateBuildRuntimeUser,
   clampLimit,
-  getBuildRuntimeSpaceAccess,
+  getBuildRuntimeRequestContext,
   getStarterMode,
   mapBuildRuntimeError,
   passStarterRateLimit,
   sanitizeJsonValue,
 } from "@/app/api/build/runtime/_shared";
+import {
+  extractStarterToken,
+  resolveStarterActor,
+} from "@/app/api/build/runtime/starter/_auth";
 
 type CommentRow = {
   id: number;
@@ -25,11 +28,21 @@ type ProfileRow = {
   username: string;
 };
 
+async function loadStarterUsernames(spaceId: string, userIds: string[]) {
+  const ids = Array.from(new Set(userIds.filter(Boolean)));
+  if (ids.length === 0) return new Map<string, string>();
+  const { data } = await supabaseAdmin
+    .from("user_build_starter_users")
+    .select("id, username")
+    .eq("space_id", spaceId)
+    .in("id", ids);
+  const out = new Map<string, string>();
+  ((data || []) as ProfileRow[]).forEach((row) => out.set(row.id, String(row.username || "user")));
+  return out;
+}
+
 export async function GET(req: Request) {
   try {
-    const user = await authenticateBuildRuntimeUser(req);
-    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const url = new URL(req.url);
     const spaceId = String(url.searchParams.get("spaceId") || "").trim();
     const postId = Number(url.searchParams.get("postId") || "0");
@@ -38,18 +51,17 @@ export async function GET(req: Request) {
     if (!spaceId || !Number.isFinite(postId) || postId <= 0) {
       return NextResponse.json({ error: "spaceId and postId required" }, { status: 400 });
     }
-    if (!passStarterRateLimit(user.id, spaceId, "starter.comments.read", 180)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, user.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.comments.read", 180)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
     }
 
     const { data, error } = await supabaseAdmin
@@ -71,18 +83,7 @@ export async function GET(req: Request) {
     }
 
     const authorIds = Array.from(new Set(rows.map((row) => row.author_id)));
-    const profilesRes = await supabaseAdmin
-      .from("profileskozmos")
-      .select("id, username")
-      .in("id", authorIds);
-    if (profilesRes.error) {
-      return NextResponse.json({ error: "comments enrich failed" }, { status: 500 });
-    }
-
-    const profileMap = new Map<string, string>();
-    ((profilesRes.data || []) as ProfileRow[]).forEach((row) => {
-      profileMap.set(row.id, String(row.username || "user"));
-    });
+    const profileMap = await loadStarterUsernames(spaceId, authorIds);
 
     return NextResponse.json({
       comments: rows.map((row) => ({
@@ -103,9 +104,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const user = await authenticateBuildRuntimeUser(req);
-    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const body = await req.json().catch(() => ({}));
     const spaceId = typeof body?.spaceId === "string" ? body.spaceId.trim() : "";
     const postId = Number(body?.postId || 0);
@@ -121,19 +119,25 @@ export async function POST(req: Request) {
     if (commentBody.length > 3000) {
       return NextResponse.json({ error: "comment body too long" }, { status: 400 });
     }
-    if (!passStarterRateLimit(user.id, spaceId, "starter.comments.write", 120)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, user.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.comments.write", 120)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
+    }
+
+    const starterToken = extractStarterToken(req, body?.starterToken);
+    const starterActorRes = await resolveStarterActor(spaceId, starterToken);
+    if (starterActorRes.error || !starterActorRes.actor) {
+      return NextResponse.json({ error: "starter auth required" }, { status: 401 });
+    }
+    const starterUser = starterActorRes.actor.user;
 
     const modeRes = await getStarterMode(spaceId);
     if (modeRes.error) {
@@ -150,7 +154,7 @@ export async function POST(req: Request) {
       .insert({
         space_id: spaceId,
         post_id: postId,
-        author_id: user.id,
+        author_id: starterUser.id,
         body: commentBody,
         meta,
       })
@@ -176,7 +180,7 @@ export async function POST(req: Request) {
         id: data.id,
         postId: data.post_id,
         authorId: data.author_id,
-        authorUsername: user.user_metadata?.username || "user",
+        authorUsername: starterUser.username || "user",
         body: data.body,
         meta: data.meta || {},
         createdAt: data.created_at,

@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
-  authenticateBuildRuntimeUser,
-  getBuildRuntimeSpaceAccess,
+  getBuildRuntimeRequestContext,
   getStarterMode,
   mapBuildRuntimeError,
   passStarterRateLimit,
 } from "@/app/api/build/runtime/_shared";
+import {
+  extractStarterToken,
+  resolveStarterActor,
+} from "@/app/api/build/runtime/starter/_auth";
 
 type LikeState = {
   likeCount: number;
@@ -59,29 +62,27 @@ function parseSpaceAndPost(
 
 export async function GET(req: Request) {
   try {
-    const user = await authenticateBuildRuntimeUser(req);
-    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const url = new URL(req.url);
     const { spaceId, postId } = parseSpaceAndPost(url.searchParams);
     if (!spaceId || !Number.isFinite(postId) || postId <= 0) {
       return NextResponse.json({ error: "spaceId and postId required" }, { status: 400 });
     }
-    if (!passStarterRateLimit(user.id, spaceId, "starter.likes.read", 180)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, user.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.likes.read", 180)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
+    }
 
-    const stateRes = await fetchLikeState(spaceId, postId, user.id);
+    const starterActorRes = await resolveStarterActor(spaceId, extractStarterToken(req));
+    const starterUserId = starterActorRes.actor?.user?.id || "";
+    const stateRes = await fetchLikeState(spaceId, postId, starterUserId);
     if (stateRes.error) {
       return NextResponse.json(mapBuildRuntimeError(stateRes.error, "likes load failed"), {
         status: 500,
@@ -95,27 +96,29 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const user = await authenticateBuildRuntimeUser(req);
-    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const body = await req.json().catch(() => ({}));
     const { spaceId, postId } = parseSpaceAndPost(body as { spaceId?: unknown; postId?: unknown });
     if (!spaceId || !Number.isFinite(postId) || postId <= 0) {
       return NextResponse.json({ error: "spaceId and postId required" }, { status: 400 });
     }
-    if (!passStarterRateLimit(user.id, spaceId, "starter.likes.write", 180)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, user.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.likes.write", 180)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
+    }
+
+    const starterActorRes = await resolveStarterActor(spaceId, extractStarterToken(req, body?.starterToken));
+    if (starterActorRes.error || !starterActorRes.actor) {
+      return NextResponse.json({ error: "starter auth required" }, { status: 401 });
+    }
+    const starterUser = starterActorRes.actor.user;
 
     const modeRes = await getStarterMode(spaceId);
     if (modeRes.error) {
@@ -131,7 +134,7 @@ export async function PUT(req: Request) {
       {
         space_id: spaceId,
         post_id: postId,
-        user_id: user.id,
+        user_id: starterUser.id,
       },
       { onConflict: "space_id,post_id,user_id" }
     );
@@ -146,7 +149,7 @@ export async function PUT(req: Request) {
       return NextResponse.json(mapBuildRuntimeError(error, "like failed"), { status: 500 });
     }
 
-    const stateRes = await fetchLikeState(spaceId, postId, user.id);
+    const stateRes = await fetchLikeState(spaceId, postId, starterUser.id);
     if (stateRes.error) {
       return NextResponse.json(mapBuildRuntimeError(stateRes.error, "likes load failed"), {
         status: 500,
@@ -160,39 +163,41 @@ export async function PUT(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const user = await authenticateBuildRuntimeUser(req);
-    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
     const body = await req.json().catch(() => ({}));
     const { spaceId, postId } = parseSpaceAndPost(body as { spaceId?: unknown; postId?: unknown });
     if (!spaceId || !Number.isFinite(postId) || postId <= 0) {
       return NextResponse.json({ error: "spaceId and postId required" }, { status: 400 });
     }
-    if (!passStarterRateLimit(user.id, spaceId, "starter.likes.write", 180)) {
-      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
-    }
-
-    const access = await getBuildRuntimeSpaceAccess(spaceId, user.id);
-    if (access.error) {
-      return NextResponse.json(mapBuildRuntimeError(access.error, "access check failed"), {
+    const ctx = await getBuildRuntimeRequestContext(req, spaceId);
+    if (ctx.access.error) {
+      return NextResponse.json(mapBuildRuntimeError(ctx.access.error, "access check failed"), {
         status: 500,
       });
     }
-    if (!access.space || !access.canRead) {
+    if (!ctx.access.space || !ctx.access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    if (!passStarterRateLimit(ctx.rateIdentity, spaceId, "starter.likes.write", 180)) {
+      return NextResponse.json({ error: "starter rate limited" }, { status: 429 });
+    }
+
+    const starterActorRes = await resolveStarterActor(spaceId, extractStarterToken(req, body?.starterToken));
+    if (starterActorRes.error || !starterActorRes.actor) {
+      return NextResponse.json({ error: "starter auth required" }, { status: 401 });
+    }
+    const starterUser = starterActorRes.actor.user;
 
     const { error } = await supabaseAdmin
       .from("user_build_backend_likes")
       .delete()
       .eq("space_id", spaceId)
       .eq("post_id", postId)
-      .eq("user_id", user.id);
+      .eq("user_id", starterUser.id);
     if (error) {
       return NextResponse.json(mapBuildRuntimeError(error, "unlike failed"), { status: 500 });
     }
 
-    const stateRes = await fetchLikeState(spaceId, postId, user.id);
+    const stateRes = await fetchLikeState(spaceId, postId, starterUser.id);
     if (stateRes.error) {
       return NextResponse.json(mapBuildRuntimeError(stateRes.error, "likes load failed"), {
         status: 500,
