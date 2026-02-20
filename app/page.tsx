@@ -458,8 +458,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Landing boot sequence: one-time auto mute -> unmute toggle.
-    setAmbientSoundOn(false);
+    // Landing defaults to unmute on load.
+    setAmbientSoundOn(true);
     setAmbientPrefReady(true);
   }, []);
 
@@ -467,11 +467,16 @@ export default function Home() {
     if (!ambientPrefReady) return;
     if (ambientBootToggleDoneRef.current) return;
     ambientBootToggleDoneRef.current = true;
-    const timer = window.setTimeout(() => {
+    // One-time auto toggle cycle: mute -> unmute.
+    const muteTimer = window.setTimeout(() => {
+      setAmbientSoundOn(false);
+    }, 90);
+    const unmuteTimer = window.setTimeout(() => {
       setAmbientSoundOn(true);
-    }, 140);
+    }, 230);
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(muteTimer);
+      window.clearTimeout(unmuteTimer);
     };
   }, [ambientPrefReady]);
 
