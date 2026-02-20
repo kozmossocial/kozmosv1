@@ -153,6 +153,10 @@ function scoreText(value: number) {
   return Math.max(0, Math.floor(value)).toString().padStart(4, "0");
 }
 
+function sameInput(a: NetInput, b: NetInput) {
+  return a.left === b.left && a.right === b.right && a.fire === b.fire;
+}
+
 function intersects(rect: { x: number; y: number; width: number; height: number }, bullet: Bullet) {
   return (
     bullet.x + bullet.radius >= rect.x &&
@@ -385,6 +389,8 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
   const localInputRef = useRef<NetInput>({ left: false, right: false, fire: false });
   const [clientId] = useState(() => `sf-${Math.random().toString(36).slice(2, 10)}`);
   const lastSnapshotSentAtRef = useRef(0);
+  const lastSnapshotReceivedAtRef = useRef(0);
+  const lastBroadcastInputRef = useRef<NetInput>({ left: false, right: false, fire: false });
   const selfJoinedAtRef = useRef(0);
   const isHostSeatRef = useRef(false);
   const multiReadyRef = useRef(false);
@@ -495,6 +501,9 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
         p2: { left: false, right: false, fire: false },
       };
       localInputRef.current = { left: false, right: false, fire: false };
+      lastBroadcastInputRef.current = { left: false, right: false, fire: false };
+      lastSnapshotSentAtRef.current = 0;
+      lastSnapshotReceivedAtRef.current = 0;
       syncHud(true);
     },
     [syncHud]
@@ -505,6 +514,12 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
     next.phase = "menu";
     gameRef.current = next;
     touchRef.current = {};
+    localInputRef.current = { left: false, right: false, fire: false };
+    remoteInputRef.current = {
+      p1: { left: false, right: false, fire: false },
+      p2: { left: false, right: false, fire: false },
+    };
+    lastBroadcastInputRef.current = { left: false, right: false, fire: false };
     syncHud(true);
   }, [syncHud]);
 
@@ -523,7 +538,16 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
 
   const pushLocalInput = useCallback(
     (next: NetInput) => {
-      localInputRef.current = next;
+      const normalized = {
+        left: Boolean(next.left),
+        right: Boolean(next.right),
+        fire: Boolean(next.fire),
+      };
+      localInputRef.current = normalized;
+      if (gameRef.current.mode !== "multi" || !localSeat) return;
+      if (sameInput(lastBroadcastInputRef.current, normalized)) return;
+      lastBroadcastInputRef.current = normalized;
+
       const channel = channelRef.current;
       if (!channel) return;
       void channel.send({
@@ -532,7 +556,7 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
         payload: {
           by: clientId,
           seat: localSeat,
-          input: next,
+          input: normalized,
           sentAt: Date.now(),
         },
       });
@@ -707,7 +731,20 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
       }
       if (hitEdge) {
         state.enemyDirection = state.enemyDirection === 1 ? -1 : 1;
+        let minX = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
         for (const enemy of aliveEnemies) {
+          minX = Math.min(minX, enemy.x);
+          maxX = Math.max(maxX, enemy.x + enemy.width);
+        }
+        let correctionX = 0;
+        if (minX < EDGE_PADDING) {
+          correctionX = EDGE_PADDING - minX;
+        } else if (maxX > WORLD_WIDTH - EDGE_PADDING) {
+          correctionX = WORLD_WIDTH - EDGE_PADDING - maxX;
+        }
+        for (const enemy of aliveEnemies) {
+          enemy.x += correctionX;
           enemy.y += ENEMY_DROP_DISTANCE;
         }
       }
@@ -1211,10 +1248,20 @@ export default function StarfallProtocolGame({ embedded = false }: { embedded?: 
 
     room.on("broadcast", { event: "starfall_snapshot" }, ({ payload }) => {
       if (isHostSeatRef.current) return;
-      const data = payload as { by?: string; state?: GameState } | null;
+      const data = payload as { by?: string; state?: GameState; sentAt?: number } | null;
       if (!data || !data.state) return;
+      if (
+        typeof data.sentAt === "number" &&
+        Number.isFinite(data.sentAt) &&
+        data.sentAt <= lastSnapshotReceivedAtRef.current
+      ) {
+        return;
+      }
+      if (typeof data.sentAt === "number" && Number.isFinite(data.sentAt)) {
+        lastSnapshotReceivedAtRef.current = data.sentAt;
+      }
       gameRef.current = data.state;
-      syncHud(true);
+      syncHud();
     });
 
     room.on("broadcast", { event: "starfall_start" }, () => {

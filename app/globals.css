@@ -142,8 +142,39 @@ body {
 }
 
 @media (max-width: 900px) {
+  .main-page-shell .ufo-ambient-faint {
+    animation: none !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    opacity: 0.08 !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+
+  .main-page-shell .ufo-boot-glow-main {
+    animation: none !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    opacity: 0.16 !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+
+  .main-page-shell .hush-panel,
+  .main-page-shell .chat-panel,
+  .main-page-shell .play-panel,
+  .main-page-shell .space-tv-panel,
+  .main-page-shell .space-radio-panel,
+  .main-page-shell .news-paper-panel {
+    backdrop-filter: none !important;
+  }
+
   .mother-logo-static {
-    animation: motherLogoGlowMobile 4.6s ease-in-out infinite !important;
+    animation: none !important;
+    filter:
+      drop-shadow(0 0 7px rgba(255, 255, 255, 0.2))
+      drop-shadow(0 0 16px rgba(255, 255, 255, 0.12))
+      drop-shadow(0 0 30px rgba(255, 255, 255, 0.08)) !important;
   }
 
   .mother-logo-static:hover {
@@ -159,6 +190,13 @@ body {
       drop-shadow(0 0 8px rgba(255, 255, 255, 0.26))
       drop-shadow(0 0 18px rgba(255, 255, 255, 0.16))
       drop-shadow(0 0 34px rgba(255, 255, 255, 0.1)) !important;
+  }
+
+  .mother-logo-anchor .mother-logo-static {
+    width: min(15vw, 60px) !important;
+    max-width: none !important;
+    height: auto !important;
+    margin-top: 0 !important;
   }
 }
 
