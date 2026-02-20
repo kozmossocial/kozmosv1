@@ -137,19 +137,27 @@ function findRoomManifestFile(files: BuildFile[]) {
   return files.find((file) => isRoomManifestPath(file.path));
 }
 
-function injectPreviewRuntimeBridge(doc: string, spaceId: string, accessToken: string) {
+function injectPreviewRuntimeBridge(
+  doc: string,
+  spaceId: string,
+  accessToken: string,
+  apiBase: string
+) {
   const safeSpaceId = JSON.stringify(spaceId);
   const safeToken = JSON.stringify(accessToken);
+  const safeApiBase = JSON.stringify(apiBase.replace(/\/+$/, ""));
   const bridgeScript = [
     "<script>",
     "(function () {",
     `  const __SPACE_ID__ = ${safeSpaceId};`,
     `  const __TOKEN__ = ${safeToken};`,
+    `  const __API_BASE__ = ${safeApiBase};`,
     "  async function req(url, init) {",
     "    const headers = new Headers((init && init.headers) || {});",
     "    headers.set('Authorization', 'Bearer ' + __TOKEN__);",
     "    if (init && init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');",
-    "    const res = await fetch(url, { ...(init || {}), headers });",
+    "    const target = String(url || '').startsWith('http') ? String(url) : (__API_BASE__ + String(url || ''));",
+    "    const res = await fetch(target, { ...(init || {}), headers });",
     "    const data = await res.json().catch(function () { return {}; });",
     "    if (!res.ok) throw new Error((data && data.error) || ('http ' + res.status));",
     "    return data;",
@@ -228,6 +236,7 @@ export default function BuildPage() {
   const [previewAutoRefresh, setPreviewAutoRefresh] = useState(true);
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const [requestedSpaceId, setRequestedSpaceId] = useState<string | null>(null);
+  const [previewApiBase, setPreviewApiBase] = useState("");
 
   const selectedSpace = useMemo(
     () => spaces.find((space) => space.id === selectedSpaceId) ?? null,
@@ -288,8 +297,13 @@ export default function BuildPage() {
 <h3 style="margin:0 0 8px;">No HTML entry found</h3>
 <p style="opacity:.75;">Create <code>index.html</code> and save it to see live outcome here.</p>
 </body></html>`;
-      if (selectedSpaceId && sessionAccessToken) {
-        return injectPreviewRuntimeBridge(doc, selectedSpaceId, sessionAccessToken);
+      if (selectedSpaceId && sessionAccessToken && previewApiBase) {
+        return injectPreviewRuntimeBridge(
+          doc,
+          selectedSpaceId,
+          sessionAccessToken,
+          previewApiBase
+        );
       }
       return doc;
     }
@@ -305,8 +319,13 @@ export default function BuildPage() {
       if (/<\/body>/i.test(doc)) doc = doc.replace(/<\/body>/i, `${scriptTag}</body>`);
       else doc = `${doc}${scriptTag}`;
     }
-    if (selectedSpaceId && sessionAccessToken) {
-      return injectPreviewRuntimeBridge(doc, selectedSpaceId, sessionAccessToken);
+    if (selectedSpaceId && sessionAccessToken && previewApiBase) {
+      return injectPreviewRuntimeBridge(
+        doc,
+        selectedSpaceId,
+        sessionAccessToken,
+        previewApiBase
+      );
     }
     return doc;
   }, [
@@ -317,6 +336,7 @@ export default function BuildPage() {
     selectedFilePath,
     selectedSpaceId,
     sessionAccessToken,
+    previewApiBase,
   ]);
 
   async function fetchAuthedJson(url: string, init?: RequestInit) {
@@ -472,6 +492,7 @@ export default function BuildPage() {
     const raw = new URLSearchParams(window.location.search).get("spaceId");
     const normalized = typeof raw === "string" ? raw.trim() : "";
     setRequestedSpaceId(normalized || null);
+    setPreviewApiBase(window.location.origin);
   }, []);
 
   useEffect(() => {
@@ -919,10 +940,11 @@ export default function BuildPage() {
   }
 
   function openPreviewInNewTab() {
-    const blob = new Blob([previewDoc], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank", "noopener,noreferrer");
-    window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    const tab = window.open("about:blank", "_blank");
+    if (!tab) return;
+    tab.document.open();
+    tab.document.write(previewDoc);
+    tab.document.close();
   }
 
   if (bootLoading) {
@@ -1537,7 +1559,7 @@ export default function BuildPage() {
                 <iframe
                   key={`${selectedSpaceId || "none"}:${previewReloadKey}`}
                   title="build outcome"
-                  sandbox="allow-scripts"
+                  sandbox="allow-scripts allow-same-origin"
                   srcDoc={previewDoc}
                   style={{
                     width: "100%",
