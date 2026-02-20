@@ -2049,9 +2049,16 @@ useEffect(() => {
           style={textareaStyle}
         />
 
-        <div style={saveStyle} onClick={saveNote}>
+        <button
+          type="button"
+          style={saveStyle}
+          onClick={() => {
+            void saveNote();
+          }}
+          disabled={loading}
+        >
           {loading ? "saving..." : "save"}
-        </div>
+        </button>
 
         {/* NOTES */}
         <div style={notesShellStyle}>
@@ -2389,6 +2396,12 @@ const saveStyle: React.CSSProperties = {
   letterSpacing: "0.12em",
   opacity: 0.6,
   cursor: "pointer",
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  color: "inherit",
+  width: "fit-content",
+  display: "inline-block",
 };
 
 const noteStyle: React.CSSProperties = {

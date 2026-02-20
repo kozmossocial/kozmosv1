@@ -721,6 +721,11 @@ export default function Main() {
   const [runtimePresencePrimed, setRuntimePresencePrimed] = useState(false);
   const [showPresenceEmptyState, setShowPresenceEmptyState] = useState(false);
   const [presentUsersDisplay, setPresentUsersDisplay] = useState<string[]>([]);
+  const [presentUsersSearchOpen, setPresentUsersSearchOpen] = useState(false);
+  const [presentUsersSearch, setPresentUsersSearch] = useState("");
+  const [presentUsersListMaxHeight, setPresentUsersListMaxHeight] = useState<
+    number | null
+  >(null);
   const [presenceVisualReady, setPresenceVisualReady] = useState(false);
   const [presentUserGlow, setPresentUserGlow] = useState<string | null>(null);
   const [presentUserOpen, setPresentUserOpen] = useState<string | null>(null);
@@ -878,6 +883,7 @@ export default function Main() {
   const sharedMessagesRef = useRef<HTMLDivElement | null>(null);
   const sharedStickToBottomRef = useRef(true);
   const presentUsersPanelRef = useRef<HTMLDivElement | null>(null);
+  const presentUsersListRef = useRef<HTMLDivElement | null>(null);
   const vsMoveKeysRef = useRef<{
     up: boolean;
     down: boolean;
@@ -904,6 +910,13 @@ export default function Main() {
       a.localeCompare(b, "en", { sensitivity: "base" })
     );
   }, [realtimePresentUsers, runtimePresentUsers]);
+  const normalizedPresentUsersSearch = presentUsersSearch.trim().toLowerCase();
+  const filteredPresentUsersDisplay = useMemo(() => {
+    if (!normalizedPresentUsersSearch) return presentUsersDisplay;
+    return presentUsersDisplay.filter((name) =>
+      name.toLowerCase().includes(normalizedPresentUsersSearch)
+    );
+  }, [normalizedPresentUsersSearch, presentUsersDisplay]);
   const presenceReady = realtimePresencePrimed && runtimePresencePrimed;
   const gameChatEnabled = Boolean(
     playOpen && activePlay && CHAT_REQUIRED_PLAYS.has(activePlay)
@@ -1276,6 +1289,49 @@ export default function Main() {
       setTouchPromptUser(null);
     }
   }, [presentUserOpen, presentUsers]);
+
+  useEffect(() => {
+    if (!presentUserOpen) return;
+    if (!filteredPresentUsersDisplay.includes(presentUserOpen)) {
+      setPresentUserOpen(null);
+      setTouchPromptUser(null);
+    }
+  }, [filteredPresentUsersDisplay, presentUserOpen]);
+
+  useEffect(() => {
+    if (filteredPresentUsersDisplay.length <= 33) {
+      setPresentUsersListMaxHeight(null);
+      return;
+    }
+
+    const raf = window.requestAnimationFrame(() => {
+      const listEl = presentUsersListRef.current;
+      if (!listEl) {
+        setPresentUsersListMaxHeight(null);
+        return;
+      }
+
+      const items = listEl.querySelectorAll<HTMLElement>(
+        "[data-present-user-item='1']"
+      );
+      const maxVisibleItem = items[32];
+      if (!maxVisibleItem) {
+        setPresentUsersListMaxHeight(null);
+        return;
+      }
+
+      const nextHeight = Math.ceil(
+        maxVisibleItem.offsetTop + maxVisibleItem.offsetHeight
+      );
+      setPresentUsersListMaxHeight((prev) =>
+        prev === nextHeight ? prev : nextHeight
+      );
+    });
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
+  }, [filteredPresentUsersDisplay]);
 
   useEffect(() => {
     if (!presentUserOpen) return;
@@ -5184,13 +5240,21 @@ export default function Main() {
           }}
         />
 
-        <div
+        <button
+          type="button"
+          disabled={isChatComposerDisabled}
           style={{
             marginTop: 12,
             fontSize: 12,
             letterSpacing: "0.12em",
-            opacity: 0.6,
+            opacity: isChatComposerDisabled ? 0.4 : 0.6,
             cursor: isChatComposerDisabled ? "default" : "pointer",
+            background: "transparent",
+            border: "none",
+            padding: 0,
+            color: "inherit",
+            width: "fit-content",
+            display: "inline-block",
           }}
           onClick={() => {
             if (chatMode === "open") {
@@ -5217,7 +5281,7 @@ export default function Main() {
               : buildLoading
                 ? "sending..."
                 : "send"}
-        </div>
+        </button>
 
         <div
           style={{
@@ -5227,16 +5291,53 @@ export default function Main() {
             alignItems: "center",
           }}
         >
-          <div
-            style={{
-              fontSize: 13,
-              letterSpacing: "0.12em",
-              opacity: 0.55,
-              textAlign: "center",
-            }}
-          >
-            present users
-          </div>
+          {presentUsersSearchOpen ? (
+            <input
+              value={presentUsersSearch}
+              onChange={(event) => setPresentUsersSearch(event.target.value)}
+              placeholder="search username..."
+              autoFocus
+              onBlur={() => {
+                setPresentUsersSearch("");
+                setPresentUsersSearchOpen(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setPresentUsersSearch("");
+                  setPresentUsersSearchOpen(false);
+                }
+              }}
+              className="kozmos-text-input"
+              style={{
+                width: "min(220px, 64%)",
+                fontSize: 13,
+                letterSpacing: "0.12em",
+                opacity: 0.62,
+                textAlign: "center",
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                padding: 0,
+                color: "#eaeaea",
+                cursor: "text",
+                userSelect: "text",
+                WebkitUserSelect: "text",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                fontSize: 13,
+                letterSpacing: "0.12em",
+                opacity: 0.55,
+                textAlign: "center",
+                cursor: "pointer",
+              }}
+              onClick={() => setPresentUsersSearchOpen(true)}
+            >
+              present users
+            </div>
+          )}
           <div
             style={{
               width: "min(180px, 54%)",
@@ -5253,10 +5354,11 @@ export default function Main() {
             style={{
               marginTop: 10,
               minHeight: 42,
-              borderRadius: 10,
+              borderRadius: 9999,
+              clipPath: "ellipse(50% 50% at 50% 50%)",
               border: "1px solid rgba(255,255,255,0.14)",
               background: "rgba(255,255,255,0.03)",
-              padding: "8px 10px",
+              padding: "7px 18px",
               display: "flex",
               flexWrap: "wrap",
               gap: 8,
@@ -5265,216 +5367,242 @@ export default function Main() {
           >
             {!presenceReady || !presenceVisualReady ? (
               <span style={{ fontSize: 11, opacity: 0.24 }}>syncing...</span>
-            ) : presentUsersDisplay.length === 0 ? (
+            ) : filteredPresentUsersDisplay.length === 0 ? (
               <span style={{ fontSize: 11, opacity: showPresenceEmptyState ? 0.4 : 0.24 }}>
-                {showPresenceEmptyState ? "nobody visible" : "syncing..."}
+                {normalizedPresentUsersSearch
+                  ? "no username match"
+                  : showPresenceEmptyState
+                    ? "nobody visible"
+                    : "syncing..."}
               </span>
             ) : (
-              presentUsersDisplay.map((name) => {
-                const normalizedName = name.trim().toLowerCase();
-                const isSelf = normalizedName === currentUsername.toLowerCase();
-                const avatarUrl =
-                  presentUserAvatars[normalizedName] ??
-                  (isSelf ? selfAvatarUrl : null);
-                const isOpen = presentUserOpen === name;
-                const isHoveringAvatar = presentUserHover === name;
-                const showTouchPrompt = touchPromptUser === name && !isSelf;
-                const alreadyInTouch = inTouchByName[normalizedName] === true;
-                return (
-                  <div
-                    key={`present-${name}`}
-                    style={{ position: "relative" }}
-                    onMouseLeave={() => setPresentUserHover(null)}
-                  >
-                    <span
-                      className="present-user-chip"
-                      onClick={() => {
-                        setPresentUserGlow(name);
-                        setPresentUserOpen((prev) => (prev === name ? null : name));
-                        setTimeout(() => {
-                          setPresentUserGlow((prev) => (prev === name ? null : prev));
-                        }, 220);
-                      }}
-                      style={{
-                        fontSize: 11,
-                        opacity: 0.72,
-                        border: "1px solid rgba(255,255,255,0.14)",
-                        borderRadius: 999,
-                        padding: "2px 8px",
-                        cursor: "pointer",
-                        userSelect: "none",
-                        textShadow:
-                          presentUserGlow === name
-                            ? "0 0 6px rgba(255,255,255,0.95), 0 0 14px rgba(255,255,255,0.45)"
-                            : "none",
-                      }}
+              <div
+                ref={presentUsersListRef}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  alignItems: "center",
+                  maxHeight:
+                    filteredPresentUsersDisplay.length > 33 &&
+                    presentUsersListMaxHeight
+                      ? `${presentUsersListMaxHeight}px`
+                      : undefined,
+                  overflowY:
+                    filteredPresentUsersDisplay.length > 33 ? "auto" : "visible",
+                  overflowX: "hidden",
+                  paddingRight: filteredPresentUsersDisplay.length > 33 ? 4 : 0,
+                  scrollbarWidth:
+                    filteredPresentUsersDisplay.length > 33 ? "thin" : "auto",
+                }}
+              >
+                {filteredPresentUsersDisplay.map((name) => {
+                  const normalizedName = name.trim().toLowerCase();
+                  const isSelf = normalizedName === currentUsername.toLowerCase();
+                  const avatarUrl =
+                    presentUserAvatars[normalizedName] ??
+                    (isSelf ? selfAvatarUrl : null);
+                  const isOpen = presentUserOpen === name;
+                  const isHoveringAvatar = presentUserHover === name;
+                  const showTouchPrompt = touchPromptUser === name && !isSelf;
+                  const alreadyInTouch = inTouchByName[normalizedName] === true;
+                  return (
+                    <div
+                      key={`present-${name}`}
+                      style={{ position: "relative" }}
+                      data-present-user-item="1"
+                      onMouseLeave={() => setPresentUserHover(null)}
                     >
-                      {name}
-                    </span>
-
-                    {isOpen ? (
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: "50%",
-                          bottom: "calc(100% + 8px)",
-                          transform: "translateX(-50%)",
-                          width: 78,
-                          height: 78,
-                          borderRadius: "50%",
-                          border: "1px solid rgba(255,255,255,0.28)",
-                          background: "rgba(11,11,11,0.95)",
-                          overflow: "hidden",
-                          boxShadow:
-                            "0 0 12px rgba(255,255,255,0.28), 0 0 24px rgba(255,255,255,0.14)",
-                          zIndex: 24,
-                          display: "grid",
-                          placeItems: "center",
-                        }}
-                        onMouseEnter={() => setPresentUserHover(name)}
-                        onMouseLeave={() => setPresentUserHover(null)}
+                      <span
+                        className="present-user-chip"
                         onClick={() => {
-                          if (!isSelf) {
-                            setTouchPromptUser(name);
-                          }
+                          setPresentUserGlow(name);
+                          setPresentUserOpen((prev) => (prev === name ? null : name));
+                          setTimeout(() => {
+                            setPresentUserGlow((prev) => (prev === name ? null : prev));
+                          }, 220);
+                        }}
+                        style={{
+                          fontSize: 11,
+                          opacity: 0.72,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          borderRadius: 999,
+                          padding: "2px 8px",
+                          cursor: "pointer",
+                          userSelect: "none",
+                          textShadow:
+                            presentUserGlow === name
+                              ? "0 0 6px rgba(255,255,255,0.95), 0 0 14px rgba(255,255,255,0.45)"
+                              : "none",
                         }}
                       >
-                        {avatarUrl ? (
-                          <img
-                            src={avatarUrl}
-                            alt={`${name} avatar`}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                              display: "block",
-                            }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 20, opacity: 0.72 }}>
-                            {(name[0] ?? "?").toUpperCase()}
-                          </span>
-                        )}
+                        {name}
+                      </span>
 
-                        {!isSelf ? (
-                          <div
-                            style={{
-                              position: "absolute",
-                              inset: 0,
-                              borderRadius: "50%",
-                              display: "grid",
-                              placeItems: "center",
-                              background: isHoveringAvatar
-                                ? "rgba(0,0,0,0.36)"
-                                : "rgba(0,0,0,0)",
-                              opacity: isHoveringAvatar ? 1 : 0,
-                              transition:
-                                "opacity 0.16s ease, background 0.16s ease",
-                              cursor: "pointer",
-                            }}
-                          >
-                            <span
+                      {isOpen ? (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: "50%",
+                            bottom: "calc(100% + 8px)",
+                            transform: "translateX(-50%)",
+                            width: 78,
+                            height: 78,
+                            borderRadius: "50%",
+                            border: "1px solid rgba(255,255,255,0.28)",
+                            background: "rgba(11,11,11,0.95)",
+                            overflow: "hidden",
+                            boxShadow:
+                              "0 0 12px rgba(255,255,255,0.28), 0 0 24px rgba(255,255,255,0.14)",
+                            zIndex: 24,
+                            display: "grid",
+                            placeItems: "center",
+                          }}
+                          onMouseEnter={() => setPresentUserHover(name)}
+                          onMouseLeave={() => setPresentUserHover(null)}
+                          onClick={() => {
+                            if (!isSelf) {
+                              setTouchPromptUser(name);
+                            }
+                          }}
+                        >
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={`${name} avatar`}
                               style={{
-                                fontSize: 28,
-                                lineHeight: 1,
-                                fontWeight: 500,
-                                opacity: 0.9,
-                                textShadow:
-                                  "0 0 8px rgba(255,255,255,0.45), 0 0 18px rgba(255,255,255,0.28)",
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                display: "block",
+                              }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 20, opacity: 0.72 }}>
+                              {(name[0] ?? "?").toUpperCase()}
+                            </span>
+                          )}
+
+                          {!isSelf ? (
+                            <div
+                              style={{
+                                position: "absolute",
+                                inset: 0,
+                                borderRadius: "50%",
+                                display: "grid",
+                                placeItems: "center",
+                                background: isHoveringAvatar
+                                  ? "rgba(0,0,0,0.36)"
+                                  : "rgba(0,0,0,0)",
+                                opacity: isHoveringAvatar ? 1 : 0,
+                                transition:
+                                  "opacity 0.16s ease, background 0.16s ease",
+                                cursor: "pointer",
                               }}
                             >
-                              +
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {showTouchPrompt ? (
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: "50%",
-                          bottom: "calc(100% + 94px)",
-                          transform: "translateX(-50%)",
-                          minWidth: 210,
-                          maxWidth: 260,
-                          padding: "10px 12px",
-                          borderRadius: 10,
-                          border: "1px solid rgba(255,255,255,0.18)",
-                          background: "rgba(7,7,7,0.94)",
-                          boxShadow:
-                            "0 0 14px rgba(255,255,255,0.12), 0 0 28px rgba(255,255,255,0.08)",
-                          zIndex: 28,
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 11,
-                            opacity: 0.78,
-                            marginBottom: 10,
-                            textAlign: "center",
-                            letterSpacing: "0.04em",
-                          }}
-                        >
-                          {alreadyInTouch
-                            ? `already in touch with ${name}`
-                            : `keep in touch with ${name}?`}
+                              <span
+                                style={{
+                                  fontSize: 28,
+                                  lineHeight: 1,
+                                  fontWeight: 500,
+                                  opacity: 0.9,
+                                  textShadow:
+                                    "0 0 8px rgba(255,255,255,0.45), 0 0 18px rgba(255,255,255,0.28)",
+                                }}
+                              >
+                                +
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
+                      ) : null}
 
+                      {showTouchPrompt ? (
                         <div
                           style={{
-                            display: "flex",
-                            justifyContent: "center",
-                            gap: 10,
+                            position: "absolute",
+                            left: "50%",
+                            bottom: "calc(100% + 94px)",
+                            transform: "translateX(-50%)",
+                            minWidth: 210,
+                            maxWidth: 260,
+                            padding: "10px 12px",
+                            borderRadius: 10,
+                            border: "1px solid rgba(255,255,255,0.18)",
+                            background: "rgba(7,7,7,0.94)",
+                            boxShadow:
+                              "0 0 14px rgba(255,255,255,0.12), 0 0 28px rgba(255,255,255,0.08)",
+                            zIndex: 28,
                           }}
                         >
-                          {!alreadyInTouch ? (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              opacity: 0.78,
+                              marginBottom: 10,
+                              textAlign: "center",
+                              letterSpacing: "0.04em",
+                            }}
+                          >
+                            {alreadyInTouch
+                              ? `already in touch with ${name}`
+                              : `keep in touch with ${name}?`}
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                              gap: 10,
+                            }}
+                          >
+                            {!alreadyInTouch ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void requestKeepInTouch(name);
+                                }}
+                                disabled={touchBusy}
+                                style={{
+                                  border: "1px solid rgba(255,255,255,0.26)",
+                                  borderRadius: 999,
+                                  background: "transparent",
+                                  color: "#eaeaea",
+                                  fontSize: 11,
+                                  letterSpacing: "0.08em",
+                                  padding: "4px 12px",
+                                  cursor: touchBusy ? "default" : "pointer",
+                                  opacity: touchBusy ? 0.5 : 0.84,
+                                }}
+                              >
+                                {touchBusy ? "..." : "yes"}
+                              </button>
+                            ) : null}
                             <button
                               type="button"
-                              onClick={() => {
-                                void requestKeepInTouch(name);
-                              }}
-                              disabled={touchBusy}
+                              onClick={() => setTouchPromptUser(null)}
                               style={{
-                                border: "1px solid rgba(255,255,255,0.26)",
+                                border: "1px solid rgba(255,255,255,0.14)",
                                 borderRadius: 999,
                                 background: "transparent",
                                 color: "#eaeaea",
                                 fontSize: 11,
                                 letterSpacing: "0.08em",
                                 padding: "4px 12px",
-                                cursor: touchBusy ? "default" : "pointer",
-                                opacity: touchBusy ? 0.5 : 0.84,
+                                cursor: "pointer",
+                                opacity: 0.62,
                               }}
                             >
-                              {touchBusy ? "..." : "yes"}
+                              {alreadyInTouch ? "ok" : "no"}
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => setTouchPromptUser(null)}
-                            style={{
-                              border: "1px solid rgba(255,255,255,0.14)",
-                              borderRadius: 999,
-                              background: "transparent",
-                              color: "#eaeaea",
-                              fontSize: 11,
-                              letterSpacing: "0.08em",
-                              padding: "4px 12px",
-                              cursor: "pointer",
-                              opacity: 0.62,
-                            }}
-                          >
-                            {alreadyInTouch ? "ok" : "no"}
-                          </button>
+                          </div>
                         </div>
-                      </div>
-                    ) : null}
-
-                  </div>
-                );
-              })
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
