@@ -141,6 +141,7 @@ export default function Home() {
   const router = useRouter();
   const screen3Ref = useRef<HTMLDivElement | null>(null);
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ambientAutoplayBlockedRef = useRef(false);
 
   const [principle, setPrinciple] = useState<string | null>(null);
   const [principleDissolving, setPrincipleDissolving] = useState(false);
@@ -479,7 +480,8 @@ export default function Home() {
 
     if (ambientSoundOn) {
       void audio.play().catch(() => {
-        // autoplay can be blocked by browser policy; keep preference on
+        ambientAutoplayBlockedRef.current = true;
+        setAmbientSoundOn(false);
       });
     } else {
       audio.pause();
@@ -496,7 +498,8 @@ export default function Home() {
     if (!audio || !ambientPrefReady) return;
     if (ambientSoundOn) {
       void audio.play().catch(() => {
-        // keep preferred state; retry after user interaction
+        ambientAutoplayBlockedRef.current = true;
+        setAmbientSoundOn(false);
       });
       return;
     }
@@ -504,15 +507,22 @@ export default function Home() {
   }, [ambientPrefReady, ambientSoundOn]);
 
   useEffect(() => {
-    if (!ambientPrefReady || !ambientSoundOn) return;
+    if (!ambientPrefReady) return;
 
     const tryResume = () => {
       const audio = ambientAudioRef.current;
       if (!audio) return;
-      if (!audio.paused) return;
-      void audio.play().catch(() => {
-        // still blocked
-      });
+      if (!audio.paused && !ambientAutoplayBlockedRef.current) return;
+      if (!ambientSoundOn && !ambientAutoplayBlockedRef.current) return;
+      void audio
+        .play()
+        .then(() => {
+          ambientAutoplayBlockedRef.current = false;
+          setAmbientSoundOn(true);
+        })
+        .catch(() => {
+          // still blocked
+        });
     };
 
     window.addEventListener("pointerdown", tryResume, { passive: true });
