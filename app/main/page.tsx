@@ -739,20 +739,21 @@ export default function Main() {
   const chatBootstrappedOnceRef = useRef(false);
 
   const resolveActiveUser = useCallback(async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) return user;
-    } catch {
-      // continue with session fallback
-    }
-
+    // Session lookup is local-first and usually instant; try it before network calls.
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (session?.user) return session.user;
+    } catch {
+      // continue with other fallbacks
+    }
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) return user;
     } catch {
       // continue with refresh fallback
     }
@@ -1405,6 +1406,12 @@ export default function Main() {
       }
 
       setUserId(user.id);
+      setUsername(
+        typeof user.user_metadata?.username === "string" &&
+          user.user_metadata.username.trim()
+          ? user.user_metadata.username.trim()
+          : "user"
+      );
 
       try {
         const [profileRes, mainRes, gameRes, buildRes] = await Promise.all([
