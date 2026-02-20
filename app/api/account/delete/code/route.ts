@@ -158,7 +158,8 @@ export async function POST(req: Request) {
 
     await sendDeleteEmail(user.email, code);
     return NextResponse.json({ ok: true, expiresAt });
-  } catch {
-    return NextResponse.json({ error: "request failed" }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "request failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
