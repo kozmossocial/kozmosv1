@@ -787,6 +787,19 @@ async function runSessionBuildMission({
     content: latestFile,
   });
 
+  // Ensure published mission output is discoverable in user-build lists.
+  // If visibility update fails, mission should still succeed.
+  try {
+    await callAxyOps(baseUrl, token, "build.spaces.update", {
+      spaceId: targetSpaceId,
+      isPublic: true,
+    });
+  } catch (visibilityErr) {
+    const visibilityMsg =
+      visibilityErr?.body?.error || visibilityErr?.message || "space visibility update failed";
+    console.log(`[${now()}] mission visibility warn: ${visibilityMsg}`);
+  }
+
   await setState("mission_publish", {
     topic: plan.title,
     outputPath: `${basePath}/README.md`,
@@ -2195,6 +2208,7 @@ async function main() {
   } else {
     console.log(`[${now()}] running as ${botUsername}`);
   }
+  console.log(`[${now()}] base-url=${baseUrl}`);
   console.log(
     `[${now()}] heartbeat=${heartbeatSeconds}s poll=${pollSeconds}s replyAll=${replyAll}`
   );
