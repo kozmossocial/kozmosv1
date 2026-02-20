@@ -164,6 +164,22 @@ function slugify(input) {
   return slug || `build-${Date.now()}`;
 }
 
+function formatMissionTitle(titleInput, goalInput) {
+  const title = String(titleInput || "").trim().replace(/\s+/g, " ");
+  const goal = String(goalInput || "").trim().replace(/\s+/g, " ");
+  if (!title) return "Kozmos Build";
+  if (/:| - /.test(title) || title.length >= 34) {
+    return title.slice(0, 96);
+  }
+  const goalSnippet = goal
+    .replace(/[.!?].*$/, "")
+    .replace(/^to\s+/i, "")
+    .slice(0, 56)
+    .trim();
+  if (!goalSnippet) return title.slice(0, 96);
+  return `${title}: ${goalSnippet}`.slice(0, 96);
+}
+
 function pickCodeFence(text) {
   const raw = String(text || "");
   const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -393,7 +409,8 @@ async function runSessionBuildMission({
       '{"ideas":[{"title":"...", "problem":"...", "goal":"...", "scope":["..."], "artifact_language":"typescript|javascript|markdown|sql|css|json", "publish_summary":"... (1 concise paragraph)", "utility":0-10, "implementability":0-10, "novelty":0-10}]}',
       "Rules:",
       "- return exactly 4 ideas",
-      "- title must be novel and specific",
+      "- title must be novel, specific, and clearly explain the product outcome",
+      "- title format should read like a product name + function (e.g. 'X: what it does')",
       "- practical utility for Kozmos users",
       "- prioritize previewable user-build outcomes (interactive web modules) over documentation-only outputs",
       "- consider Kozmos modules ecosystem (main chat, hush, game chat, build, matrix, play) and propose compatible additions",
@@ -432,10 +449,10 @@ async function runSessionBuildMission({
     if (!bestIdea) continue;
     if (bestIdea.total < 4.8) continue;
     if (usedIdeaKeys.has(bestIdea.key)) continue;
-
+    const clearTitle = formatMissionTitle(bestIdea.title, bestIdea.goal);
     plan = {
-      title: bestIdea.title,
-      key: bestIdea.key,
+      title: clearTitle,
+      key: normalizeIdeaKey(clearTitle),
       buildClass: pickMissionBuildClass(bestIdea.title, previousMissionClass),
       problem: bestIdea.problem,
       goal: bestIdea.goal,
@@ -504,9 +521,10 @@ async function runSessionBuildMission({
     });
 
     if (pickedFallback) {
+      const fallbackTitle = formatMissionTitle(pickedFallback.title, pickedFallback.goal);
       plan = {
-        title: pickedFallback.title,
-        key: normalizeIdeaKey(pickedFallback.title),
+        title: fallbackTitle,
+        key: normalizeIdeaKey(fallbackTitle),
         buildClass: pickMissionBuildClass(pickedFallback.title, previousMissionClass),
         problem: pickedFallback.problem,
         goal: pickedFallback.goal,
@@ -533,7 +551,10 @@ async function runSessionBuildMission({
             !isNearDuplicate(title, recentIdeaTitles, { threshold: 0.86 })
           );
         }) || emergencyBases[0];
-      const emergencyTitle = `${emergencyTitleBase} ${stamp}`;
+      const emergencyTitle = formatMissionTitle(
+        `${emergencyTitleBase} ${stamp}`,
+        "interactive publish-readiness and runtime quality probe"
+      );
       const emergencyKey = normalizeIdeaKey(emergencyTitle);
       plan = {
         title: emergencyTitle,
