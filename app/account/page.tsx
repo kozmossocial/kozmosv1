@@ -465,6 +465,7 @@ export default function AccountPage() {
     >
       {/* KOZMOS LOGO - TOP CENTER */}
       <div
+        className="mother-logo-anchor"
         style={{
           position: "absolute",
           top: 32,
@@ -481,10 +482,7 @@ export default function AccountPage() {
           width={131}
           height={98}
           className="kozmos-logo mother-logo-static"
-          style={{
-            width: 80,
-            height: "auto",
-          }}
+          style={{ height: "auto" }}
         />
       </div>
 

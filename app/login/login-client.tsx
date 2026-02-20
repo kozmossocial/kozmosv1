@@ -175,6 +175,7 @@ export default function LoginClient() {
     >
       {/* KOZMOS LOGO */}
       <div
+        className="mother-logo-anchor"
         style={{
           position: "absolute",
           top: 32,

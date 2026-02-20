@@ -66,6 +66,7 @@ export default function Register() {
     >
       {/* KOZMOS LOGO - STABIL */}
       <div
+        className="mother-logo-anchor"
         style={{
           position: "absolute",
           top: 32,
@@ -82,14 +83,7 @@ export default function Register() {
           width={131}
           height={98}
           className="kozmos-logo mother-logo-static"
-          style={{
-            width: 120,
-            height: "auto",
-            opacity: 0.85,
-            borderRadius: 6,
-            transition:
-              "opacity 0.25s ease, transform 0.08s ease",
-          }}
+          style={{ height: "auto" }}
           onMouseDown={(e) => {
             e.currentTarget.style.transform = "scale(0.97)";
           }}
