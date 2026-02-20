@@ -26,6 +26,12 @@ export default function AccountPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [deleteEmailConfirm, setDeleteEmailConfirm] = useState("");
+  const [deleteVerificationCode, setDeleteVerificationCode] = useState("");
+  const [deleteCodeBusy, setDeleteCodeBusy] = useState(false);
+  const [deleteCodeSent, setDeleteCodeSent] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
@@ -362,6 +368,99 @@ export default function AccountPage() {
     setPasswordBusy(false);
   }
 
+  async function handleDeleteAccount() {
+    const emailValue = String(email || "").trim().toLowerCase();
+    const confirmValue = deleteEmailConfirm.trim().toLowerCase();
+    if (deleteBusy) return;
+    if (!emailValue) {
+      setDeleteMessage("account email unavailable");
+      return;
+    }
+    if (!confirmValue) {
+      setDeleteMessage("type your email to confirm");
+      return;
+    }
+    if (confirmValue !== emailValue) {
+      setDeleteMessage("email confirm mismatch");
+      return;
+    }
+    if (!/^\d{6}$/.test(deleteVerificationCode.trim())) {
+      setDeleteMessage("enter 6-digit verification code");
+      return;
+    }
+
+    const sure = window.confirm(
+      "This will permanently delete your account and data. Continue?"
+    );
+    if (!sure) return;
+
+    setDeleteBusy(true);
+    setDeleteMessage(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setDeleteMessage("session missing, please login again");
+      setDeleteBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/account/delete", {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        emailConfirm: deleteEmailConfirm.trim(),
+        verificationCode: deleteVerificationCode.trim(),
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+
+    if (!res.ok || !body.ok) {
+      setDeleteMessage(body.error || "account delete failed");
+      setDeleteBusy(false);
+      return;
+    }
+
+    await supabase.auth.signOut({ scope: "local" });
+    router.replace("/login");
+  }
+
+  async function handleSendDeleteCode() {
+    if (deleteCodeBusy || deleteBusy) return;
+    setDeleteCodeBusy(true);
+    setDeleteMessage(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setDeleteMessage("session missing, please login again");
+      setDeleteCodeBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/account/delete/code", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+    if (!res.ok || !body.ok) {
+      setDeleteMessage(body.error || "code send failed");
+      setDeleteCodeBusy(false);
+      return;
+    }
+
+    setDeleteCodeSent(true);
+    setDeleteMessage("verification code sent to your email");
+    setDeleteCodeBusy(false);
+  }
+
   async function normalizeAvatarFile(
     file: File,
     crop: {
@@ -617,6 +716,86 @@ export default function AccountPage() {
               }}
             >
               {passwordMessage}
+            </div>
+          ) : null}
+        </div>
+
+        <div
+          style={{
+            marginBottom: 28,
+            borderTop: "1px solid rgba(255,255,255,0.16)",
+            paddingTop: 18,
+          }}
+        >
+          <div style={{ ...label, color: "#ffb3b3", opacity: 0.86 }}>delete account</div>
+          <div style={{ fontSize: 12, opacity: 0.66, marginBottom: 8 }}>
+            confirm by typing your email and verification code
+          </div>
+          <input
+            type="email"
+            value={deleteEmailConfirm}
+            onChange={(event) => setDeleteEmailConfirm(event.target.value)}
+            placeholder={email || "your email"}
+            style={passwordInput}
+            disabled={deleteBusy}
+          />
+          <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={handleSendDeleteCode}
+              disabled={deleteCodeBusy || deleteBusy}
+              style={{
+                ...avatarActionButton,
+                minWidth: 140,
+                opacity: deleteCodeBusy || deleteBusy ? 0.5 : 0.9,
+                cursor: deleteCodeBusy || deleteBusy ? "default" : "pointer",
+              }}
+            >
+              {deleteCodeBusy ? "sending..." : "send code"}
+            </button>
+            {deleteCodeSent ? (
+              <span style={{ fontSize: 12, opacity: 0.66 }}>code sent</span>
+            ) : null}
+          </div>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={deleteVerificationCode}
+            onChange={(event) =>
+              setDeleteVerificationCode(
+                event.target.value.replace(/[^0-9]/g, "").slice(0, 6)
+              )
+            }
+            placeholder="6-digit verification code"
+            style={{ ...passwordInput, marginTop: 10, letterSpacing: "0.24em" }}
+            disabled={deleteBusy}
+          />
+          <button
+            type="button"
+            onClick={handleDeleteAccount}
+            disabled={deleteBusy}
+            style={{
+              ...avatarActionButton,
+              marginTop: 10,
+              minWidth: 170,
+              border: "1px solid rgba(255,120,120,0.46)",
+              color: "#ffd2d2",
+              opacity: deleteBusy ? 0.5 : 0.92,
+              cursor: deleteBusy ? "default" : "pointer",
+            }}
+          >
+            {deleteBusy ? "deleting..." : "delete account"}
+          </button>
+          {deleteMessage ? (
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 12,
+                opacity: 0.74,
+                color: "#ffb3b3",
+              }}
+            >
+              {deleteMessage}
             </div>
           ) : null}
         </div>
