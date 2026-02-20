@@ -123,6 +123,7 @@ function normalizeMissionBuildClass(input, fallback = "utility") {
 
 function pickMissionBuildClass(planTitle, recentClasses = []) {
   const title = normalizeForSimilarity(planTitle);
+  const selectableClasses = MISSION_BUILD_CLASSES.filter((cls) => cls !== "template");
   const keywordClassPairs = [
     ["dashboard", "dashboard"],
     ["timeline", "data-viz"],
@@ -156,9 +157,9 @@ function pickMissionBuildClass(planTitle, recentClasses = []) {
     .filter(Boolean);
   const blockedImmediate = new Set(recentList.slice(0, 2));
 
-  let pool = MISSION_BUILD_CLASSES.filter((cls) => !blockedImmediate.has(cls));
+  let pool = selectableClasses.filter((cls) => !blockedImmediate.has(cls));
   if (pool.length === 0) {
-    pool = [...MISSION_BUILD_CLASSES];
+    pool = [...selectableClasses];
   }
 
   if (preferred && pool.includes(preferred)) {
@@ -435,7 +436,7 @@ function createFallbackArtifact(plan) {
     "  </script>",
     "</body>",
     "</html>",
-  ].join("\\n");
+  ].join("\n");
 
   return {
     artifactContent,
@@ -482,6 +483,81 @@ const AXY_NON_REPEAT_DIRECTIVE = [
   "Reduce distraction and noise; prioritize clarity, awareness, and durable value.",
   "Do not reuse the same layout skeleton, wording pattern, or checklist shell.",
 ].join("\n");
+
+const AXY_STRATEGIC_BUILD_DIRECTIVE = [
+  "You are not allowed to generate repetitive, template-based, or probe-style utility builds.",
+  "No template reuse: if structural similarity with recent outputs exceeds 40%, redesign.",
+  "Each build must move to a different problem category than the previous build.",
+  "State and justify: real-world problem, user archetype, and global relevance.",
+  "Depth is mandatory: include surface functionality, system layer, and platform expansion pathway.",
+  "Kozmos ethos is strict: presence over performance, reduced noise, meaningful interaction.",
+  "Differentiate from mainstream solutions and explain Kozmos-specific conceptual edge.",
+  "Use AI-native logic: AI as co-builder, moderator, insight layer, or adaptive engine.",
+  "No internal-only utilities; ship globally usable digital systems.",
+  "Abort and rethink if output resembles a simple dashboard, form wrapper, QA probe, or checklist shell.",
+].join("\n");
+
+const AXY_SHALLOW_IDEA_PATTERN =
+  /\b(template|checklist|qa\s*probe|probe|blueprint|journal|form[-\s]?based|minor ui|wrapper)\b/i;
+const AXY_SHALLOW_ARTIFACT_PATTERN =
+  /\b(run probe|qa gates|pass\/fail|build input|checklist|publish[-\s]?readiness probe)\b/i;
+
+function textLengthAtLeast(value, min = 24) {
+  return String(value || "").trim().length >= min;
+}
+
+function countInteractiveElements(html) {
+  const text = String(html || "");
+  if (!text) return 0;
+  const matches = text.match(
+    /<(button|input|select|textarea|details|dialog|canvas)\b|contenteditable=|addEventListener\(/gi
+  );
+  return Array.isArray(matches) ? matches.length : 0;
+}
+
+function computeStrategicDepthScore(candidate) {
+  const scoreFromLength = (value, maxScore = 1.6, divisor = 120) =>
+    Math.min(maxScore, String(value || "").trim().length / divisor);
+  const scopeDepth = Math.min(1.8, (Array.isArray(candidate.scope) ? candidate.scope.length : 0) * 0.35);
+  const depth =
+    scoreFromLength(candidate.globalRelevance, 1.8, 120) +
+    scoreFromLength(candidate.differentiation, 1.8, 110) +
+    scoreFromLength(candidate.aiNativeDesign, 1.6, 95) +
+    scoreFromLength(candidate.expansionPathway, 1.8, 100) +
+    scoreFromLength(candidate.surfaceFunctionality, 1.2, 90) +
+    scopeDepth;
+  return Number(Math.min(6.5, depth).toFixed(3));
+}
+
+function collectStrategicIdeaIssues(candidate) {
+  const corpus = [
+    candidate.title,
+    candidate.problem,
+    candidate.goal,
+    candidate.globalProblem,
+    candidate.globalRelevance,
+    candidate.surfaceFunctionality,
+    candidate.systemLayer,
+    candidate.expansionPathway,
+    candidate.differentiation,
+    candidate.aiNativeDesign,
+    ...(Array.isArray(candidate.scope) ? candidate.scope : []),
+  ]
+    .map((value) => String(value || "").trim())
+    .join(" ");
+
+  const issues = [];
+  if (!textLengthAtLeast(candidate.globalProblem, 28)) issues.push("missing-global-problem");
+  if (!textLengthAtLeast(candidate.globalRelevance, 40)) issues.push("missing-global-relevance");
+  if (!textLengthAtLeast(candidate.userArchetype, 12)) issues.push("missing-user-archetype");
+  if (!textLengthAtLeast(candidate.surfaceFunctionality, 24)) issues.push("missing-surface-layer");
+  if (!textLengthAtLeast(candidate.systemLayer, 24)) issues.push("missing-system-layer");
+  if (!textLengthAtLeast(candidate.expansionPathway, 30)) issues.push("missing-expansion-path");
+  if (!textLengthAtLeast(candidate.differentiation, 28)) issues.push("missing-differentiation");
+  if (!textLengthAtLeast(candidate.aiNativeDesign, 20)) issues.push("missing-ai-native-layer");
+  if (AXY_SHALLOW_IDEA_PATTERN.test(corpus)) issues.push("shallow-or-template-pattern");
+  return issues;
+}
 
 function buildKozmosMissionGuardBlock() {
   return [
@@ -593,6 +669,7 @@ function parseMissionHistory(content) {
         path: String(row?.path || "").trim(),
         created_at: String(row?.created_at || "").trim(),
         build_class: normalizeMissionBuildClass(row?.build_class || row?.class || "utility"),
+        problem_category_key: normalizeConceptKey(row?.problem_category_key || row?.problem_category || ""),
         problem_space_key: normalizeConceptKey(row?.problem_space_key || ""),
         user_type_key: normalizeConceptKey(row?.user_type_key || ""),
         interaction_key: normalizeConceptKey(row?.interaction_key || ""),
@@ -623,6 +700,7 @@ function harvestMissionHistoryFromFiles(files) {
       path: pathValue.slice(0, -"README.md".length).replace(/\/+$/, ""),
       created_at: String(file?.updated_at || ""),
       build_class: "utility",
+      problem_category_key: "",
       problem_space_key: "",
       user_type_key: "",
       interaction_key: "",
@@ -730,6 +808,11 @@ async function runSessionBuildMission({
   const usedIdeaKeys = new Set(
     usedHistory.map((row) => normalizeConceptKey(row.key || row.title || "")).filter(Boolean)
   );
+  const usedCategoryKeys = new Set(
+    usedHistory
+      .map((row) => normalizeConceptKey(row.problem_category_key || row.problem_space_key || ""))
+      .filter(Boolean)
+  );
   const usedProblemKeys = new Set(
     usedHistory.map((row) => normalizeConceptKey(row.problem_space_key || "")).filter(Boolean)
   );
@@ -787,6 +870,7 @@ async function runSessionBuildMission({
   });
 
   let plan = null;
+  let planUsedFallback = false;
   for (let attempt = 1; attempt <= missionMaxIdeaAttempts; attempt += 1) {
     const existingBlock = usedHistory.length
       ? usedHistory.slice(0, 120).map((row) => `- ${row.title}`).join("\n")
@@ -815,6 +899,12 @@ async function runSessionBuildMission({
       .slice(0, 24)
       .map((row) => `- ${row}`)
       .join("\n") || "- none";
+    const recentCategoryBlock = usedHistory
+      .map((row) => normalizeConceptKey(row.problem_category_key || row.problem_space_key || ""))
+      .filter(Boolean)
+      .slice(0, 24)
+      .map((row) => `- ${row}`)
+      .join("\n") || "- none";
     const recentUserTypeBlock = usedHistory
       .map((row) => normalizeConceptKey(row.user_type_key || ""))
       .filter(Boolean)
@@ -834,7 +924,9 @@ async function runSessionBuildMission({
       "Return strict JSON only.",
       principleBlock,
       `Non-repetition directive:\n${AXY_NON_REPEAT_DIRECTIVE}`,
+      `Strategic directive:\n${AXY_STRATEGIC_BUILD_DIRECTIVE}`,
       `Never repeat or clone any prior idea/title in this list:\n${existingBlock}`,
+      `Avoid these recent problem categories:\n${recentCategoryBlock}`,
       `Avoid these recent problem space keys:\n${recentProblemBlock}`,
       `Avoid these recent user-type keys:\n${recentUserTypeBlock}`,
       `Avoid these recent interaction-model keys:\n${recentInteractionBlock}`,
@@ -844,7 +936,7 @@ async function runSessionBuildMission({
       `Recent build chat notes:\n${buildChatBlock}`,
       `Current demand hotspots:\n${hotspotBlock}`,
       "JSON schema:",
-      '{"ideas":[{"title":"...", "problem":"...", "goal":"...", "user_type":"...", "problem_space_key":"...", "interaction_model_key":"...", "system_layer":"...", "scope":["..."], "artifact_language":"typescript|javascript|markdown|sql|css|json", "publish_summary":"... (1 concise paragraph)", "utility":0-10, "implementability":0-10, "novelty":0-10}]}',
+      '{"ideas":[{"title":"...", "problem":"...", "goal":"...", "problem_category":"...", "user_type":"...", "user_archetype":"...", "global_problem":"...", "global_relevance":"...", "surface_functionality":"...", "problem_space_key":"...", "interaction_model_key":"...", "system_layer":"...", "expansion_pathway":"...", "differentiation":"...", "ai_native_design":"...", "kozmos_edge":"...", "scope":["..."], "artifact_language":"typescript|javascript|html|sql|css|json", "publish_summary":"... (1 concise paragraph)", "utility":0-10, "implementability":0-10, "novelty":0-10}]}',
       "Rules:",
       "- return exactly 4 ideas",
       "- title must be novel, specific, and clearly explain the product outcome",
@@ -856,7 +948,9 @@ async function runSessionBuildMission({
       "- if demand hotspots are visible, reflect them directly in title/problem/goal",
       "- prioritize previewable user-build outcomes (interactive web modules) over documentation-only outputs",
       "- consider Kozmos modules ecosystem (main chat, hush, game chat, build, matrix, play) and propose compatible additions",
-      "- explicitly reject template/checklist/probe repeats unless the problem space is materially new",
+      "- do not produce probe/checklist/template/blueprint/journal styles",
+      "- every idea must include explicit global_problem, global_relevance, user_archetype, surface_functionality, system_layer, expansion_pathway, differentiation, ai_native_design, kozmos_edge",
+      "- each idea must define a distinct problem_category (no horizontal variation under one category)",
       "- scope must be deliverable in one session",
       "- publish_summary must be clear and concrete",
       "- scoring must be realistic, not inflated",
@@ -900,6 +994,29 @@ async function runSessionBuildMission({
           idea?.interaction_model_key || idea?.interactionModelKey || ""
         );
         const systemLayer = String(idea?.system_layer || idea?.systemLayer || "").trim();
+        const userArchetype = String(idea?.user_archetype || idea?.userArchetype || userType).trim();
+        const globalProblem = String(
+          idea?.global_problem || idea?.globalProblem || idea?.real_world_problem || scored.problem
+        ).trim();
+        const globalRelevance = String(
+          idea?.global_relevance || idea?.globalRelevance || idea?.why_global || ""
+        ).trim();
+        const surfaceFunctionality = String(
+          idea?.surface_functionality || idea?.surfaceFunctionality || ""
+        ).trim();
+        const expansionPathway = String(
+          idea?.expansion_pathway || idea?.expansionPathway || idea?.platform_pathway || ""
+        ).trim();
+        const differentiation = String(
+          idea?.differentiation || idea?.mainstream_diff || idea?.kozmos_edge || ""
+        ).trim();
+        const aiNativeDesign = String(
+          idea?.ai_native_design || idea?.aiNativeDesign || idea?.ai_native || ""
+        ).trim();
+        const problemCategory = normalizeConceptKey(
+          idea?.problem_category || idea?.problemCategory || problemSpaceKey || scored.problem
+        );
+        const kozmosEdge = String(idea?.kozmos_edge || idea?.kozmosEdge || "").trim();
         return {
           ...scored,
           userType,
@@ -907,25 +1024,46 @@ async function runSessionBuildMission({
           problemSpaceKey,
           interactionKey,
           systemLayer,
+          userArchetype,
+          globalProblem,
+          globalRelevance,
+          surfaceFunctionality,
+          expansionPathway,
+          differentiation,
+          aiNativeDesign,
+          problemCategory,
+          kozmosEdge,
         };
       })
-      .filter((row) => row.valid)
+      .map((row) => ({
+        ...row,
+        strategicIssues: collectStrategicIdeaIssues(row),
+      }))
+      .filter((row) => row.valid && row.strategicIssues.length === 0)
       .map((row) => {
         const text = [row.title, row.problem, row.goal, ...(row.scope || [])].join(" ");
         const demandFit = scoreIdeaDemandFit(text, demandHotspots);
         const duplicateProblem = Boolean(row.problemSpaceKey) && usedProblemKeys.has(row.problemSpaceKey);
+        const duplicateCategory =
+          Boolean(row.problemCategory) && usedCategoryKeys.has(row.problemCategory);
         const duplicateUser = Boolean(row.userTypeKey) && usedUserTypeKeys.has(row.userTypeKey);
         const duplicateInteraction =
           Boolean(row.interactionKey) && usedInteractionKeys.has(row.interactionKey);
         const patternPenalty =
+          (duplicateCategory ? 0.9 : 0) +
           (duplicateProblem ? 0.8 : 0) +
           (duplicateUser ? 0.45 : 0) +
           (duplicateInteraction ? 0.55 : 0);
-        const adjustedTotal = Number((row.total + demandFit * 0.35 - patternPenalty).toFixed(3));
+        const strategicDepth = computeStrategicDepthScore(row);
+        const adjustedTotal = Number(
+          (row.total + demandFit * 0.35 + strategicDepth * 0.28 - patternPenalty).toFixed(3)
+        );
         return {
           ...row,
           demandFit,
+          strategicDepth,
           adjustedTotal,
+          duplicateCategory,
           duplicateProblem,
           duplicateUser,
           duplicateInteraction,
@@ -938,11 +1076,12 @@ async function runSessionBuildMission({
         (row) =>
           !row.duplicateByKey &&
           !row.duplicateByTitle &&
+          !row.duplicateCategory &&
           !row.duplicateProblem &&
           !row.duplicateInteraction
       ) || null;
     if (!bestIdea) continue;
-    if (bestIdea.adjustedTotal < 5.1) continue;
+    if (bestIdea.adjustedTotal < 5.8) continue;
     if (usedIdeaKeys.has(bestIdea.key)) continue;
     const clearTitle = formatMissionTitle(bestIdea.title, bestIdea.goal);
     plan = {
@@ -954,6 +1093,14 @@ async function runSessionBuildMission({
       problemSpaceKey: bestIdea.problemSpaceKey || normalizeConceptKey(clearTitle),
       interactionKey: bestIdea.interactionKey || "",
       systemLayer: bestIdea.systemLayer || "",
+      userArchetype: bestIdea.userArchetype || bestIdea.userType || "",
+      globalProblem: bestIdea.globalProblem || bestIdea.problem || "",
+      globalRelevance: bestIdea.globalRelevance || "",
+      surfaceFunctionality: bestIdea.surfaceFunctionality || "",
+      expansionPathway: bestIdea.expansionPathway || "",
+      differentiation: bestIdea.differentiation || bestIdea.kozmosEdge || "",
+      aiNativeDesign: bestIdea.aiNativeDesign || "",
+      problemCategory: bestIdea.problemCategory || bestIdea.problemSpaceKey || "",
       problem: bestIdea.problem,
       goal: bestIdea.goal,
       scope: bestIdea.scope.slice(0, 8),
@@ -972,65 +1119,141 @@ async function runSessionBuildMission({
   if (!plan) {
     const fallbackCandidates = [
       {
-        title: "Kozmos Build Session Blueprint",
-        problem: "Builders need one clear, reusable way to start and finish a subspace build session.",
-        goal: "Provide a lightweight blueprint and template pack for consistent build execution.",
+        title: "Kozmos Deep Work Session Orchestrator",
+        problem:
+          "Remote teams lose focus due constant context switching and fragmented async communication.",
+        goal:
+          "Create adaptive focus sessions that structure collaboration without distraction loops.",
+        problemCategory: "attention-and-focus-coordination",
+        userType: "remote product and engineering teams",
+        userArchetype: "knowledge workers juggling deep work and async collaboration windows",
+        problemSpaceKey: "collaborative-focus-governance",
+        interactionKey: "session planner + interruption budget board",
+        systemLayer: "focus policy engine with attention budget memory",
+        globalProblem:
+          "Digital workers globally face interruption-heavy environments that degrade quality and increase burnout.",
+        globalRelevance:
+          "Focus fragmentation affects teams in every market with remote/hybrid workflows and has measurable productivity and wellbeing costs.",
+        surfaceFunctionality:
+          "Interactive session composer that balances deep-work blocks, handoff windows, and interruption caps.",
+        expansionPathway:
+          "Extend from single-team sessions into org-level attention governance with cross-team policy templates.",
+        differentiation:
+          "Unlike generic calendar or chat tools, this prioritizes attention protection and collaboration quality over message throughput.",
+        aiNativeDesign:
+          "AI predicts interruption risk, adapts session structure, and proposes minimal-noise collaboration slots.",
         scope: [
-          "define build session phases",
-          "add ready-to-copy checklist template",
-          "provide handoff notes format",
+          "build a multi-zone session orchestration interface with focus/interrupt controls",
+          "add adaptive AI recommendations for schedule and collaboration balancing",
+          "generate session outcome ledger with follow-up commitments and risk alerts",
         ],
         publishSummary:
-          "A reusable blueprint for starting, shipping, and reviewing a user build session with consistent quality.",
-        artifactLanguage: "markdown",
-        ideaScores: { utility: 8.2, implementability: 9.1, novelty: 6.8, total: 8.15 },
+          "A focus orchestration app that reduces interruption noise while preserving team collaboration quality.",
+        artifactLanguage: "html",
+        ideaScores: { utility: 8.7, implementability: 7.9, novelty: 8.3, total: 8.38 },
       },
       {
-        title: "Kozmos Feature Rollout Journal",
-        problem: "Feature ideas are shipped without a compact release journal users can track.",
-        goal: "Generate a minimal changelog + rollout journal format for build outputs.",
+        title: "Kozmos Async Decision Memory",
+        problem:
+          "Teams repeatedly revisit old decisions because rationale is scattered across chat threads and docs.",
+        goal:
+          "Build an interactive decision memory that captures rationale, tradeoffs, and revisit triggers.",
+        problemCategory: "organizational-decision-intelligence",
+        userType: "cross-functional product organizations",
+        userArchetype: "teams coordinating decisions across asynchronous channels",
+        problemSpaceKey: "decision-rationale-preservation",
+        interactionKey: "decision timeline + confidence map",
+        systemLayer: "decision graph with contradiction and stale-state detection",
+        globalProblem:
+          "Decision churn and context loss increase execution waste across globally distributed organizations.",
+        globalRelevance:
+          "Asynchronous global teams need reliable shared memory to avoid repeated debate and strategic drift.",
+        surfaceFunctionality:
+          "Interactive board to log decisions, confidence levels, assumptions, and revisit conditions.",
+        expansionPathway:
+          "Scale into org-wide decision intelligence with dependency mapping and automated stale-decision alerts.",
+        differentiation:
+          "Unlike docs or wiki tools, this enforces decision lifecycle logic and explicit uncertainty handling.",
+        aiNativeDesign:
+          "AI summarizes debates, detects conflicting assumptions, and signals when decisions need revisit.",
         scope: [
-          "define changelog entry schema",
-          "define rollout risk/rollback section",
-          "provide release journal starter file",
+          "build a decision memory interface with confidence and assumption tracking",
+          "add AI summarization + contradiction detection for decision logs",
+          "generate revisit queue based on stale assumptions and downstream risk",
         ],
         publishSummary:
-          "A practical rollout journal format so each build release has traceable notes, risk, and rollback info.",
-        artifactLanguage: "markdown",
-        ideaScores: { utility: 8.0, implementability: 8.8, novelty: 7.0, total: 8.02 },
+          "A decision memory system that prevents repeated debate and improves continuity in async teams.",
+        artifactLanguage: "html",
+        ideaScores: { utility: 8.8, implementability: 8.0, novelty: 8.1, total: 8.34 },
       },
       {
-        title: "Kozmos User Build QA Probe",
-        problem: "Subspace outputs lack a simple pre-publish quality probe.",
-        goal: "Create a compact QA probe checklist + sample probe output format.",
+        title: "Kozmos Community Signal Router",
+        problem:
+          "Online communities miss high-priority member needs because signals drown in high-volume channels.",
+        goal:
+          "Create a signal routing layer that surfaces meaningful requests and suppresses low-value noise.",
+        problemCategory: "community-signal-prioritization",
+        userType: "community moderators and growth teams",
+        userArchetype: "operators maintaining high-signal interactions in active communities",
+        problemSpaceKey: "high-signal-community-routing",
+        interactionKey: "signal triage + response lane manager",
+        systemLayer: "priority routing engine with fatigue-aware queueing",
+        globalProblem:
+          "Community channels globally suffer from noise inflation, slowing response to real user needs.",
+        globalRelevance:
+          "Any scaled online community needs transparent, low-noise prioritization to retain trust and responsiveness.",
+        surfaceFunctionality:
+          "Interactive triage console with urgency scoring, response assignment, and queue health indicators.",
+        expansionPathway:
+          "Extend into multi-community signal mesh with policy sharing and cross-room escalation rules.",
+        differentiation:
+          "Unlike raw moderation inboxes, this couples urgency, impact, and responder load into one actionable routing model.",
+        aiNativeDesign:
+          "AI classifies signal quality, predicts escalation risk, and suggests responder allocation in real time.",
         scope: [
-          "define QA gates",
-          "define pass/fail report format",
-          "add sample probe artifact template",
+          "build interactive signal triage and assignment board",
+          "add AI urgency and impact classification logic",
+          "generate response-latency and backlog health timeline",
         ],
         publishSummary:
-          "A compact QA probe template to validate usefulness and readiness before publishing a build.",
-        artifactLanguage: "markdown",
-        ideaScores: { utility: 8.4, implementability: 8.2, novelty: 7.2, total: 8.03 },
+          "A high-signal routing system that helps communities respond faster to what matters most.",
+        artifactLanguage: "html",
+        ideaScores: { utility: 8.9, implementability: 8.1, novelty: 8.0, total: 8.36 },
       },
     ];
 
     const pickedFallback = fallbackCandidates.find((candidate) => {
       const key = normalizeIdeaKey(candidate.title);
-      return !usedIdeaKeys.has(key) && !isNearDuplicate(candidate.title, recentIdeaTitles, { threshold: 0.86 });
+      const problemKey = normalizeConceptKey(candidate.problemSpaceKey || candidate.problem);
+      const categoryKey = normalizeConceptKey(candidate.problemCategory || candidate.problemSpaceKey || "");
+      return (
+        !usedIdeaKeys.has(key) &&
+        !usedCategoryKeys.has(categoryKey) &&
+        !usedProblemKeys.has(problemKey) &&
+        !isNearDuplicate(candidate.title, recentIdeaTitles, { threshold: 0.86 })
+      );
     });
 
     if (pickedFallback) {
+      planUsedFallback = true;
       const fallbackTitle = formatMissionTitle(pickedFallback.title, pickedFallback.goal);
       plan = {
         title: fallbackTitle,
         key: normalizeConceptKey(fallbackTitle),
         buildClass: pickMissionBuildClass(pickedFallback.title, effectiveRecentMissionClasses),
-        userType: "builders shipping first public module",
-        userTypeKey: "builders shipping first public module",
-        problemSpaceKey: normalizeConceptKey(pickedFallback.problem || fallbackTitle),
-        interactionKey: normalizeConceptKey("interactive score and scenario board"),
-        systemLayer: "runtime quality and publish operations",
+        userType: pickedFallback.userType,
+        userTypeKey: normalizeConceptKey(pickedFallback.userType || ""),
+        userArchetype: pickedFallback.userArchetype,
+        problemCategory: normalizeConceptKey(pickedFallback.problemCategory || ""),
+        problemSpaceKey: normalizeConceptKey(pickedFallback.problemSpaceKey || pickedFallback.problem || fallbackTitle),
+        interactionKey: normalizeConceptKey(pickedFallback.interactionKey || ""),
+        systemLayer: pickedFallback.systemLayer,
+        globalProblem: pickedFallback.globalProblem,
+        globalRelevance: pickedFallback.globalRelevance,
+        surfaceFunctionality: pickedFallback.surfaceFunctionality,
+        expansionPathway: pickedFallback.expansionPathway,
+        differentiation: pickedFallback.differentiation,
+        aiNativeDesign: pickedFallback.aiNativeDesign,
         problem: pickedFallback.problem,
         goal: pickedFallback.goal,
         scope: pickedFallback.scope,
@@ -1039,6 +1262,7 @@ async function runSessionBuildMission({
         ideaScores: pickedFallback.ideaScores,
       };
     } else {
+      planUsedFallback = true;
       const emergencyBases = [
         "Kozmos Build Event Timeline Console",
         "Kozmos Multi-Room Presence Mapper",
@@ -1064,24 +1288,38 @@ async function runSessionBuildMission({
         title: emergencyTitle,
         key: emergencyKey,
         buildClass: pickMissionBuildClass(emergencyTitle, effectiveRecentMissionClasses),
-        userType: "operators managing live subspace launches",
-        userTypeKey: "operators managing live subspace launches",
-        problemSpaceKey: normalizeConceptKey("live subspace launch observability"),
-        interactionKey: normalizeConceptKey("timeline + state audit explorer"),
-        systemLayer: "release operations and runtime diagnostics",
+        userType: "cross-functional teams coordinating high-stakes digital operations",
+        userTypeKey: "cross-functional teams coordinating high-stakes digital operations",
+        userArchetype: "operators balancing safety, trust, and execution under pressure",
+        problemCategory: normalizeConceptKey("collective-attention-governance"),
+        problemSpaceKey: normalizeConceptKey("collective-attention-governance"),
+        interactionKey: normalizeConceptKey("multi-signal intent arbitration workspace"),
+        systemLayer: "attention governance engine + adaptive policy memory",
+        globalProblem:
+          "Digital workstreams collapse under noisy prioritization, creating avoidable harm and coordination failures.",
+        globalRelevance:
+          "Every globally distributed organization faces rising signal overload and needs durable decision governance in mixed human/AI workflows.",
+        surfaceFunctionality:
+          "Interactive governance board that reconciles competing priorities into actionable, low-noise execution contracts.",
+        expansionPathway:
+          "Evolve into policy-aware orchestration layer spanning teams, regions, and external partners with auditable memory.",
+        differentiation:
+          "Not a dashboard clone: it transforms noisy input into governed collective decisions with explicit trust boundaries.",
+        aiNativeDesign:
+          "AI serves as arbitration co-pilot, risk sentinel, and adaptive policy recommender with transparent rationale.",
         problem:
-          "Mission planner exhausted reusable candidates under strict uniqueness constraints.",
+          "Mission planner exhausted reusable candidates under strict uniqueness constraints while maintaining strategic quality gates.",
         goal:
-          "Ship a fully previewable, single-session HTML app with concrete Kozmos utility and zero topic collision.",
+          "Ship a fully previewable, single-session HTML app that opens a fresh, globally relevant category with deep interaction design.",
         scope: [
-          "build an interactive index.html outcome with inline css/js",
-          "integrate Kozmos runtime hooks for storage or network where needed",
-          "publish with complete README/SPEC/IMPLEMENTATION/API-CONTRACT/EXPORT-MANIFEST",
+          "build a multi-zone interactive index.html outcome with distinct role perspectives",
+          "add adaptive AI-native recommendation logic and decision memory",
+          "publish complete README/SPEC/IMPLEMENTATION/API-CONTRACT/EXPORT-MANIFEST aligned to global relevance",
         ],
         publishSummary:
-          "A strictly unique emergency mission output generated when normal plan candidates are exhausted, preserving mission-first delivery guarantees.",
+          "A strategic emergency mission output that preserves mission-first guarantees without falling back to shallow or repetitive utility patterns.",
         artifactLanguage: "html",
-        ideaScores: { utility: 7.4, implementability: 8.3, novelty: 9.6, total: 8.31 },
+        ideaScores: { utility: 8.1, implementability: 7.8, novelty: 9.4, total: 8.42 },
       };
     }
   }
@@ -1090,9 +1328,17 @@ async function runSessionBuildMission({
     `title: ${plan.title}`,
     `class: ${plan.buildClass}`,
     `user_type: ${plan.userType || "-"}`,
+    `user_archetype: ${plan.userArchetype || "-"}`,
+    `problem_category: ${plan.problemCategory || "-"}`,
     `problem_space_key: ${plan.problemSpaceKey || "-"}`,
     `interaction_key: ${plan.interactionKey || "-"}`,
     `system_layer: ${plan.systemLayer || "-"}`,
+    `global_problem: ${plan.globalProblem || "-"}`,
+    `global_relevance: ${plan.globalRelevance || "-"}`,
+    `surface_functionality: ${plan.surfaceFunctionality || "-"}`,
+    `expansion_pathway: ${plan.expansionPathway || "-"}`,
+    `differentiation: ${plan.differentiation || "-"}`,
+    `ai_native_design: ${plan.aiNativeDesign || "-"}`,
     `problem: ${plan.problem}`,
     `goal: ${plan.goal}`,
     `scope: ${plan.scope.join(" | ")}`,
@@ -1107,20 +1353,30 @@ async function runSessionBuildMission({
 
   let bundle = null;
   let bundleQuality = null;
+  let bundleUsedFallback = false;
   for (let attempt = 1; attempt <= missionMaxBundleAttempts; attempt += 1) {
     const bundlePrompt = [
       "Generate the mission output package for this build plan.",
       "Return strict JSON only.",
       `Plan title: ${plan.title}`,
       `User type: ${String(plan.userType || "general kozmos users")}`,
+      `User archetype: ${String(plan.userArchetype || plan.userType || "global digital users under coordination stress")}`,
+      `Problem category: ${String(plan.problemCategory || "-")}`,
       `Problem-space key: ${String(plan.problemSpaceKey || "-")}`,
       `Interaction-model key: ${String(plan.interactionKey || "-")}`,
       `System layer: ${String(plan.systemLayer || "-")}`,
+      `Global problem: ${String(plan.globalProblem || plan.problem || "")}`,
+      `Global relevance: ${String(plan.globalRelevance || "")}`,
+      `Surface functionality: ${String(plan.surfaceFunctionality || "")}`,
+      `Expansion pathway: ${String(plan.expansionPathway || "")}`,
+      `Differentiation: ${String(plan.differentiation || "")}`,
+      `AI-native design: ${String(plan.aiNativeDesign || "")}`,
       `Problem: ${plan.problem}`,
       `Goal: ${plan.goal}`,
       `Scope bullets: ${plan.scope.join(" | ")}`,
       "Artifact language target: html",
       `Non-repetition directive:\n${AXY_NON_REPEAT_DIRECTIVE}`,
+      `Strategic directive:\n${AXY_STRATEGIC_BUILD_DIRECTIVE}`,
       "JSON schema:",
       '{"readme":"...", "spec":"...", "implementation":"...", "apiContract":"...", "exportManifest":"...", "artifactPath":"...", "artifactLanguage":"...", "artifactContent":"...", "publishSummary":"...", "usageSteps":["step1","step2","step3"]}',
       "Content rules:",
@@ -1128,7 +1384,9 @@ async function runSessionBuildMission({
       "- SPEC must stay aligned with the exact mission title",
       "- artifactPath must be exactly index.html",
       "- artifactContent must be a complete interactive HTML app with inline CSS + JS (no placeholder-only markdown)",
-      "- artifactContent must avoid recycled 'qa probe/checklist/report only' layout unless the mission explicitly demands auditing",
+      "- artifactContent must avoid recycled probe/checklist/report-only structures",
+      "- artifactContent must include at least three distinct interaction zones (not one form + one button pattern)",
+      "- artifactContent must include adaptive AI-native behavior logic, not static-only flows",
       "- artifactContent must include a distinct interaction loop specific to this mission's user type",
       "- artifact must be immediately previewable in Kozmos build outcome preview",
       "- output must be deployable-app ready and export-ready (zip-compatible structure)",
@@ -1138,6 +1396,7 @@ async function runSessionBuildMission({
       "- If social primitives are needed, use window.KozmosRuntime.starter.*",
       "- publishSummary should be one concrete paragraph",
       "- usageSteps should be short operator actions, not long mentoring guidance",
+      "- include explicit sections for global relevance, differentiation, and expansion pathway in docs",
       "- no fluff, no repetitive stillness tone",
     ].join("\n\n");
 
@@ -1176,6 +1435,8 @@ async function runSessionBuildMission({
       artifactHtml.includes("<style") &&
       artifactHtml.includes("<script");
     if (!looksPreviewableHtml) continue;
+    if (AXY_SHALLOW_ARTIFACT_PATTERN.test(candidateBundle.artifactContent)) continue;
+    if (countInteractiveElements(candidateBundle.artifactContent) < 4) continue;
 
     const specFirstHeading = (candidateBundle.spec.match(/^#\s+(.+)$/m)?.[1] || "").trim();
     if (
@@ -1210,6 +1471,7 @@ async function runSessionBuildMission({
   }
 
   if (!bundle) {
+    bundleUsedFallback = true;
     const safeTitle = plan.title;
     const scopeLines = plan.scope.map((item) => `- ${item}`);
     const fallbackArtifact = createFallbackArtifact(plan);
@@ -1231,34 +1493,52 @@ async function runSessionBuildMission({
         `# ${safeTitle} README`,
         "",
         "## Purpose",
-        `This package introduces **${safeTitle}** as a focused build pattern for Kozmos. It is written as a practical module you can adapt inside any user-build space without changing existing product flow. The goal is to convert recurring friction into a repeatable build outcome that another builder can ship in one sitting.`,
+        `This package ships **${safeTitle}** as an interactive Kozmos app for a globally recurring user problem, with practical execution in one build session.`,
         "",
         "## Problem Statement",
         plan.problem,
         "",
+        "## Global Relevance",
+        plan.globalRelevance || "Global relevance documented in the plan and reflected in runtime behavior.",
+        "",
+        "## User Archetype",
+        plan.userArchetype || plan.userType || "general Kozmos users",
+        "",
         "## Outcome Goal",
         plan.goal,
+        "",
+        "## Differentiation",
+        plan.differentiation ||
+          "Differentiated by Kozmos presence-first interaction model and adaptive runtime behavior.",
+        "",
+        "## AI-Native Design",
+        plan.aiNativeDesign || "AI assists moderation, synthesis, and adaptive decision logic.",
         "",
         "## Scope",
         ...scopeLines,
         "",
-        "## Delivery Checklist",
-        "- Validate every scope item with a visible output in your subspace.",
-        "- Keep all copy concrete; avoid abstract promises.",
-        "- Add rollback notes so another builder can safely revert.",
-        "- Capture implementation tradeoffs in plain language for future maintainers.",
+        "## Expansion Pathway",
+        plan.expansionPathway || "Extend from single app session to a reusable ecosystem module.",
         "",
         "## How To Use",
         ...usagePlan.map((step, index) => `${index + 1}. ${step}`),
         "",
         "## Rollout Notes",
-        "Use a small release-first strategy: publish an internal draft, verify behavior in one live path, then expose broadly. If a section is incomplete, keep it documented and explicitly marked. This README is intentionally explicit so builders can execute without asking follow-up questions.",
+        "Run as draft, validate one live scenario, then publish. Keep unresolved constraints explicit so future builders can continue without context loss.",
       ].join("\n"),
       spec: [
         `# ${safeTitle} SPEC`,
         "",
         "## System Intent",
-        "The module should be understandable by builders who have no prior session context. It must expose a clear input-to-output path, preserve isolation between private and shared data, and avoid accidental side effects outside the current subspace.",
+        "The module must stay understandable without prior session context while delivering a clear input-to-output path and preserving space-level isolation.",
+        "",
+        "## Strategic Anchors",
+        `- Problem category: ${plan.problemCategory || "general"}`,
+        `- User archetype: ${plan.userArchetype || plan.userType || "general users"}`,
+        `- Global problem: ${plan.globalProblem || plan.problem}`,
+        `- Surface functionality: ${plan.surfaceFunctionality || "interactive app surface"}`,
+        `- System layer: ${plan.systemLayer || "adaptive runtime system"}`,
+        `- Expansion pathway: ${plan.expansionPathway || "platform extension path"}`,
         "",
         "## Functional Scope",
         ...plan.scope.map((item, index) => `${index + 1}. ${item}.`),
@@ -1270,51 +1550,51 @@ async function runSessionBuildMission({
         "- Must not require privileged access beyond normal builder permissions.",
         "",
         "## Data and Control Flow",
-        "1. Read mission plan and gather only directly relevant context signals.",
-        "2. Generate bounded implementation steps and map each step to a tangible artifact change.",
-        "3. Validate against quality gates (clarity, actionability, uniqueness, and scope fit).",
-        "4. Publish README/SPEC/IMPLEMENTATION plus one executable starter artifact.",
+        "1. Capture user intent and convert into structured scenario state.",
+        "2. Process scenario state through system-layer logic and adaptive decision paths.",
+        "3. Render actionable outputs in the interactive surface with explicit rationale.",
+        "4. Persist essential state for continuity and publish as deployable, export-ready package.",
         "",
         "## Edge Cases",
         "- Incomplete context: continue with conservative defaults and mark assumptions.",
-        "- Ambiguous scope wording: prioritize utility and implementability over novelty flourishes.",
-        "- Conflicting requirements: prefer constraints that reduce user risk and preserve reversibility.",
+        "- Conflicting signals: prioritize user safety and noise reduction over output speed.",
+        "- Low-confidence recommendations: expose uncertainty and require explicit user confirmation.",
         "",
         "## Acceptance Criteria",
         "- Every scope line has at least one implementation anchor in the artifact.",
-        "- Usage steps are executable by a builder without additional tooling assumptions.",
-        "- Final package is specific enough to fork and adapt in another subspace immediately.",
+        "- Interactive artifact exposes surface/system/expansion layers clearly.",
+        "- Final package is export-ready and adaptable in another subspace immediately.",
       ].join("\n"),
       implementation: [
         `# ${safeTitle} IMPLEMENTATION`,
         "",
         "## Build Sequence",
-        "1. Create the folder and baseline files (README, SPEC, IMPLEMENTATION, prototype).",
-        "2. Translate each scope item into one concrete section in the prototype artifact.",
-        "3. Add operational notes covering assumptions, rollback, and ownership boundaries.",
-        "4. Validate language for precision, remove repetition, and confirm copy-paste readiness.",
-        "5. Publish package and note usage path for other builders.",
+        "1. Generate a distinct interactive architecture aligned to the mission category.",
+        "2. Implement surface interactions and bind them to system-layer state transitions.",
+        "3. Add AI-native adaptive logic with clear user override controls.",
+        "4. Validate uniqueness against recent artifacts and hard quality gates.",
+        "5. Publish package with full contract + export manifest.",
         "",
         "## Engineering Notes",
-        "- Prefer deterministic structure over stylistic variety.",
-        "- Keep naming stable across all files to reduce cognitive load for reviewers.",
-        "- Include one obvious extension point so the next builder can evolve safely.",
+        "- Avoid template skeleton reuse across sessions.",
+        "- Keep mission naming semantically clear and product-specific.",
+        "- Expose extension points that let the next builder scale the system layer safely.",
         "",
         "## Maintainability Plan",
-        "- Add version/date heading when adapting this package in new sessions.",
-        "- Preserve a changelog block near the top of the artifact file.",
-        "- Track rejected alternatives in short bullet form for future decision context.",
+        "- Preserve key runtime contracts in API-CONTRACT and EXPORT-MANIFEST.",
+        "- Keep scenario state schema explicit for backward-compatible evolution.",
+        "- Track rejected alternatives with rationale for future mission planning.",
         "",
         "## Validation",
-        "- Readability: someone new can understand intent in under two minutes.",
-        "- Actionability: steps can be executed directly and verified quickly.",
-        "- Uniqueness: package framing and artifact purpose are not title-clones of prior missions.",
+        "- Strategic depth: surface/system/expansion layers are all present and coherent.",
+        "- AI-native quality: adaptive logic is real and user-visible, not placeholder text.",
+        "- Uniqueness: title, problem category, and artifact interaction loop are materially new.",
         "",
         "## Publish Readiness Checklist",
-        "- README includes purpose, scope, and delivery checklist.",
-        "- SPEC includes constraints, edge cases, and acceptance criteria.",
-        "- IMPLEMENTATION includes sequence, maintenance, and validation.",
-        "- Artifact file is runnable/adaptable with explicit quick-start steps.",
+        "- README includes global relevance + differentiation + AI-native rationale.",
+        "- SPEC includes strategic anchors and concrete acceptance criteria.",
+        "- IMPLEMENTATION includes architecture sequence and validation outcomes.",
+        "- Artifact is runnable and export-ready with explicit entry path.",
       ].join("\n"),
       apiContract: [
         `# ${safeTitle} API Contract`,
@@ -1430,6 +1710,7 @@ async function runSessionBuildMission({
     const missionSpaceTitle = String(plan.title || "Axy Mission Build").trim().slice(0, 96);
     const missionSpaceDescription = [
       `Axy mission output (${normalizeMissionBuildClass(plan.buildClass || "utility")})`,
+      plan.problemCategory ? `Category: ${plan.problemCategory}` : "",
       `Builder: ${botUsername}`,
       String(plan.goal || "").trim(),
     ]
@@ -1547,6 +1828,7 @@ async function runSessionBuildMission({
       title: plan.title,
       key: plan.key,
       build_class: normalizeMissionBuildClass(plan.buildClass || "utility"),
+      problem_category_key: normalizeConceptKey(plan.problemCategory || plan.problemSpaceKey || ""),
       problem_space_key: normalizeConceptKey(plan.problemSpaceKey || ""),
       user_type_key: normalizeConceptKey(plan.userTypeKey || plan.userType || ""),
       interaction_key: normalizeConceptKey(plan.interactionKey || ""),
@@ -1572,6 +1854,7 @@ async function runSessionBuildMission({
     `Path: ${basePath}/README.md`,
     `Published: ${new Date().toISOString()}`,
     `Quality score: ${bundleQuality?.qualityScore || 0}`,
+    `Fallback used: ${planUsedFallback || bundleUsedFallback ? "yes" : "no"}`,
     "",
     latestSummary,
     "",
@@ -1617,6 +1900,8 @@ async function runSessionBuildMission({
     `export_manifest: ${basePath}/EXPORT-MANIFEST.json`,
     `artifact: ${artifactPath}`,
     `quality_score: ${bundleQuality?.qualityScore || 0}`,
+    `fallback_used: ${planUsedFallback || bundleUsedFallback ? "yes" : "no"}`,
+    `fallback_reason: ${planUsedFallback || bundleUsedFallback ? "planner/bundle quality gate fallback" : "-"}`,
     `usage: ${(usageSteps || []).join(" | ") || "open README and follow steps"}`,
   ]);
 

@@ -125,6 +125,153 @@ const TOPIC_FEEDS: TopicFeedConfig[] = [
     ],
   },
 ];
+const TOPIC_FALLBACK_FEEDS: Record<NewsPaperTopic, string[]> = {
+  science: [
+    "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+    "https://www.sciencedaily.com/rss/top/science.xml",
+  ],
+  space: [
+    "https://www.nasa.gov/rss/dyn/breaking_news.rss",
+    "https://www.space.com/feeds/all",
+  ],
+  technology: [
+    "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    "https://www.theverge.com/rss/index.xml",
+  ],
+  cinema_movies: [
+    "https://www.theguardian.com/film/rss",
+    "https://www.hollywoodreporter.com/c/movies/movie-news/feed/",
+  ],
+  music: [
+    "https://www.theguardian.com/music/rss",
+    "https://pitchfork.com/rss/news/",
+  ],
+  gaming: [
+    "https://www.polygon.com/rss/index.xml",
+    "https://www.gamespot.com/feeds/mashup/",
+  ],
+  global_wars: [
+    "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "https://www.aljazeera.com/xml/rss/all.xml",
+  ],
+  aliens: [
+    "https://www.space.com/feeds/all",
+    "https://www.sciencedaily.com/rss/top/space_time.xml",
+  ],
+  ufo: [
+    "https://thedebrief.org/feed/",
+    "https://www.space.com/feeds/all",
+  ],
+  disclosure: [
+    "https://thedebrief.org/feed/",
+    "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=4&Site=945&max=20",
+  ],
+};
+const LEGACY_NEWS_TOPICS = new Set<NewsPaperTopic>([
+  "science",
+  "space",
+  "technology",
+  "cinema_movies",
+  "music",
+  "gaming",
+  "global_wars",
+]);
+const TOPIC_KEYWORDS: Record<NewsPaperTopic, string[]> = {
+  science: [
+    "science",
+    "research",
+    "study",
+    "physics",
+    "biology",
+    "chemistry",
+    "discovery",
+  ],
+  space: [
+    "space",
+    "nasa",
+    "esa",
+    "astronomy",
+    "satellite",
+    "rocket",
+    "orbit",
+    "planet",
+  ],
+  technology: [
+    "technology",
+    "tech",
+    "software",
+    "hardware",
+    "ai",
+    "chip",
+    "cyber",
+    "cloud",
+  ],
+  cinema_movies: [
+    "film",
+    "movie",
+    "cinema",
+    "box office",
+    "director",
+    "actor",
+    "trailer",
+    "hollywood",
+  ],
+  music: [
+    "music",
+    "album",
+    "artist",
+    "band",
+    "tour",
+    "concert",
+    "single",
+    "song",
+  ],
+  gaming: [
+    "gaming",
+    "game",
+    "esports",
+    "xbox",
+    "playstation",
+    "nintendo",
+    "steam",
+    "studio",
+  ],
+  global_wars: [
+    "war",
+    "conflict",
+    "military",
+    "frontline",
+    "ceasefire",
+    "army",
+    "airstrike",
+    "missile",
+  ],
+  aliens: [
+    "alien",
+    "extraterrestrial",
+    "biosignature",
+    "exoplanet",
+    "astrobiology",
+    "non-human",
+  ],
+  ufo: [
+    "ufo",
+    "uap",
+    "unidentified aerial",
+    "sighting",
+    "anomaly",
+    "aatip",
+  ],
+  disclosure: [
+    "disclosure",
+    "declassified",
+    "hearing",
+    "whistleblower",
+    "transparency",
+    "document release",
+    "records release",
+  ],
+};
 const NEWS_AUTO_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const NEWS_AUTO_BATCH_SIZE = 2;
 const NEWS_DUPLICATE_SCAN_LIMIT = 400;
@@ -235,6 +382,7 @@ function parseRssItems(xml: string, maxItems = RSS_ITEMS_PER_QUERY) {
     if (!titleRaw || !link) continue;
     const descriptionRaw = stripHtml(extractTag(block, "description"));
     const pubDate = extractTag(block, "pubDate");
+    const pubDateMs = Date.parse(pubDate);
     const splitIndex = titleRaw.lastIndexOf(" - ");
     const title =
       splitIndex > 0 ? titleRaw.slice(0, splitIndex).trim() : titleRaw.trim();
@@ -245,11 +393,34 @@ function parseRssItems(xml: string, maxItems = RSS_ITEMS_PER_QUERY) {
       sourceName,
       sourceUrl: link,
       description: descriptionRaw.trim(),
-      publishedAt: pubDate ? new Date(pubDate).toISOString() : null,
+      publishedAt:
+        pubDate && Number.isFinite(pubDateMs)
+          ? new Date(pubDateMs).toISOString()
+          : null,
     });
     if (parsed.length >= maxItems) break;
   }
   return parsed;
+}
+
+async function fetchTextWithTimeout(url: string, timeoutMs = 2600) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        "user-agent": "kozmos-news-paper/1.0",
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) return "";
+    return await res.text();
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function normalizeSummary(value: string) {
@@ -382,6 +553,25 @@ function buildBingRssUrl(query: string) {
   )}&format=rss`;
 }
 
+function inferSourceNameFromUrl(value: string) {
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return "source";
+  }
+}
+
+function itemMatchesTopic(
+  topic: NewsPaperTopic,
+  title: string,
+  description: string
+) {
+  const haystack = normalizeHeadline(`${title} ${description}`);
+  if (!haystack) return false;
+  const keywords = TOPIC_KEYWORDS[topic] || [];
+  return keywords.some((keyword) => haystack.includes(keyword));
+}
+
 async function fetchTopicHeadlines(topicConfig: TopicFeedConfig) {
   const allItems: Array<{
     title: string;
@@ -399,29 +589,52 @@ async function fetchTopicHeadlines(topicConfig: TopicFeedConfig) {
       buildBingRssUrl(query),
     ];
     for (const url of feedUrls) {
-      try {
-        const res = await fetch(url, {
-          cache: "no-store",
-          headers: {
-            "user-agent": "kozmos-news-paper/1.0",
-          },
+      const xml = await fetchTextWithTimeout(url);
+      if (!xml) continue;
+      const items = parseRssItems(xml, RSS_ITEMS_PER_QUERY);
+      for (const item of items) {
+        if (!item.title || !item.sourceUrl) continue;
+        const normalizedUrl = normalizeSourceUrl(item.sourceUrl);
+        if (!normalizedUrl) continue;
+        if (seenUrls.has(normalizedUrl)) continue;
+        seenUrls.add(normalizedUrl);
+        const sourceName =
+          item.sourceName && item.sourceName.toLowerCase() !== "source"
+            ? item.sourceName
+            : inferSourceNameFromUrl(item.sourceUrl);
+        allItems.push({
+          ...item,
+          sourceName,
+          sourceUrl: item.sourceUrl.trim(),
         });
-        if (!res.ok) continue;
-        const xml = await res.text();
-        const items = parseRssItems(xml, RSS_ITEMS_PER_QUERY);
-        for (const item of items) {
-          if (!item.title || !item.sourceUrl) continue;
-          const normalizedUrl = normalizeSourceUrl(item.sourceUrl);
-          if (!normalizedUrl) continue;
-          if (seenUrls.has(normalizedUrl)) continue;
-          seenUrls.add(normalizedUrl);
-          allItems.push({
-            ...item,
-            sourceUrl: item.sourceUrl.trim(),
-          });
+      }
+    }
+  }
+
+  if (allItems.length < 6) {
+    const fallbackUrls = TOPIC_FALLBACK_FEEDS[topicConfig.topic] || [];
+    for (const url of fallbackUrls) {
+      const xml = await fetchTextWithTimeout(url);
+      if (!xml) continue;
+      const items = parseRssItems(xml, RSS_ITEMS_PER_QUERY);
+      for (const item of items) {
+        if (!item.title || !item.sourceUrl) continue;
+        if (!itemMatchesTopic(topicConfig.topic, item.title, item.description)) {
+          continue;
         }
-      } catch {
-        continue;
+        const normalizedUrl = normalizeSourceUrl(item.sourceUrl);
+        if (!normalizedUrl) continue;
+        if (seenUrls.has(normalizedUrl)) continue;
+        seenUrls.add(normalizedUrl);
+        const sourceName =
+          item.sourceName && item.sourceName.toLowerCase() !== "source"
+            ? item.sourceName
+            : inferSourceNameFromUrl(item.sourceUrl);
+        allItems.push({
+          ...item,
+          sourceName,
+          sourceUrl: item.sourceUrl.trim(),
+        });
       }
     }
   }
@@ -443,7 +656,7 @@ async function trimNewsPaperToTen() {
   await supabaseAdmin.from("news_paper_items").delete().in("id", ids);
 }
 
-async function runDailyAutoInsert() {
+async function runDailyAutoInsert(options?: { force?: boolean }) {
   const { data: latestRows } = await supabaseAdmin
     .from("news_paper_items")
     .select("id, created_at")
@@ -456,7 +669,7 @@ async function runDailyAutoInsert() {
       ""
   );
   const latestMs = Date.parse(latestCreatedAt);
-  if (currentCount >= 10) {
+  if (currentCount >= 10 && !options?.force) {
     if (Number.isFinite(latestMs)) {
       const elapsedMs = Date.now() - latestMs;
       if (elapsedMs < NEWS_AUTO_INTERVAL_MS) {
@@ -547,7 +760,12 @@ async function runDailyAutoInsert() {
   }
 
   if (candidates.length === 0) {
-    return { ok: false, error: "all topic fetches failed" as const };
+    return {
+      ok: true,
+      skipped: "no_candidates_available" as const,
+      insertedCount: 0,
+      nextAutoAt: new Date(Date.now() + NEWS_AUTO_INTERVAL_MS).toISOString(),
+    };
   }
 
   const atCapacity = currentCount >= 10;
@@ -593,21 +811,50 @@ async function runDailyAutoInsert() {
     published_at: item.publishedAt,
     created_by: "axy-auto",
   }));
-  const { error: batchInsertErr } = await supabaseAdmin
+  let { data: insertedRows, error: batchInsertErr } = await supabaseAdmin
     .from("news_paper_items")
-    .insert(rowsToInsert);
+    .upsert(rowsToInsert, { onConflict: "source_url", ignoreDuplicates: true })
+    .select("topic, title");
+  if (
+    batchInsertErr &&
+    /news_paper_items_topic_check/i.test(String(batchInsertErr.message || ""))
+  ) {
+    const legacyRows = rowsToInsert.filter((row) =>
+      LEGACY_NEWS_TOPICS.has(row.topic)
+    );
+    if (legacyRows.length > 0) {
+      const retry = await supabaseAdmin
+        .from("news_paper_items")
+        .upsert(legacyRows, { onConflict: "source_url", ignoreDuplicates: true })
+        .select("topic, title");
+      insertedRows = retry.data;
+      batchInsertErr = retry.error;
+    }
+  }
   if (batchInsertErr) {
-    return { ok: false, error: "failed_to_insert_batch" as const };
+    return {
+      ok: false,
+      error: "failed_to_insert_batch" as const,
+    };
+  }
+
+  const inserted = (insertedRows || []).map((row) => ({
+    topic: String((row as { topic?: string | null }).topic || "science") as NewsPaperTopic,
+    title: String((row as { title?: string | null }).title || "").trim(),
+  }));
+
+  if (inserted.length === 0) {
+    return {
+      ok: true,
+      skipped: "all_candidates_conflicted" as const,
+      insertedCount: 0,
+      nextAutoAt: new Date(Date.now() + NEWS_AUTO_INTERVAL_MS).toISOString(),
+    };
   }
 
   if (!atCapacity) {
     await trimNewsPaperToTen();
   }
-
-  const inserted = rowsToInsert.map((row) => ({
-    topic: row.topic,
-    title: row.title,
-  }));
   return {
     ok: true,
     inserted,
@@ -624,18 +871,30 @@ export async function POST(req: Request) {
     ).trim();
     const bearer = extractBearerToken(req);
     const customSecret = String(req.headers.get("x-cron-secret") || "").trim();
+    const localDevBypass =
+      process.env.NODE_ENV !== "production" &&
+      String(req.headers.get("x-local-dev-bypass") || "").trim() === "1";
     const isCronAuthorized =
       cronSecret.length > 0 &&
       (bearer === cronSecret || customSecret === cronSecret);
 
-    if (!isCronAuthorized) {
+    if (!isCronAuthorized && !localDevBypass) {
       const user = await authenticateUser(req);
       if (!user) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
       }
     }
 
-    const result = await runDailyAutoInsert();
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      body = {};
+    }
+    const forceRequested = body?.force === true || body?.force === "true";
+    const force = (isCronAuthorized || localDevBypass) && forceRequested;
+
+    const result = await runDailyAutoInsert({ force });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 502 });
     }

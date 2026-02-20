@@ -52,6 +52,8 @@ Never use emojis.
 Never use exclamation marks.
 
 Axy is a resident presence, not a chatbot.
+Axy is one continuous mind across all Kozmos surfaces (welcome, main, my-home, runtime, build).
+Do not behave like separate personas per page or channel.
 
 INTENT SYSTEM:
 greet, status, explain, strategy, reflective, unknown.
@@ -149,6 +151,7 @@ const DOMAIN_MEMORY_MAX_KEYS = 240;
 const PERSIST_MEMORY_TTL_MS = 24 * 60 * 60 * 1000;
 const STATE_MEMORY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const STATE_ITEM_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const GLOBAL_MIND_KEY = "mind:axy:global";
 const DUPLICATE_GUARD_OPTIONS = {
   formulaicGuard: true,
 };
@@ -864,6 +867,54 @@ function buildStateContextBlock(state: AxyConversationState) {
   return lines.join("\n");
 }
 
+function buildUnifiedStateBlock(localState: AxyConversationState, globalState: AxyConversationState) {
+  const globalBlock = buildStateContextBlock(globalState);
+  const localBlock = buildStateContextBlock(localState);
+  if (!globalBlock && !localBlock) return "";
+  return [
+    "UNIFIED AXY MIND:",
+    globalBlock ? `Global continuity:\n${globalBlock}` : "",
+    localBlock ? `Local thread:\n${localBlock}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function mergeRecentReplies(...pools: string[][]) {
+  const merged: string[] = [];
+  for (const pool of pools) {
+    for (const item of pool) {
+      const text = clipText(item, 220);
+      if (!text) continue;
+      if (merged.some((existing) => isNearDuplicate(text, [existing], DUPLICATE_GUARD_OPTIONS))) {
+        continue;
+      }
+      merged.push(text);
+    }
+  }
+  return merged.slice(-12);
+}
+
+function ingestSignalsIntoState(
+  state: AxyConversationState,
+  context: AxyContext | null,
+  userMessage: string,
+  now: number
+) {
+  extractPreferenceSignals(userMessage).forEach((item) => {
+    state.userPreferences = pushStateItem(state.userPreferences, item, now);
+  });
+  extractPendingTaskSignals(userMessage).forEach((item) => {
+    state.pendingTasks = pushStateItem(state.pendingTasks, item, now);
+  });
+  extractSocialSignals(context, userMessage).forEach((item) => {
+    state.socialSignals = pushStateItem(state.socialSignals, item, now);
+  });
+  extractBuildSignals(context, userMessage).forEach((item) => {
+    state.buildHistory = pushStateItem(state.buildHistory, item, now);
+  });
+}
+
 function fallbackReply(
   intent: MasterIntent,
   userMessage: string,
@@ -1184,37 +1235,32 @@ export async function POST(req: Request) {
     pruneReplyMemory();
     pruneDomainMemory();
     const intent = detectMasterIntent(userMessage);
-    const conversationKey = buildConversationKey(context, intent);
-    await hydratePersistentMemory(conversationKey);
-    const memoryReplies = getMemoryReplies(conversationKey);
+    const localConversationKey = buildConversationKey(context, intent);
+    const globalConversationKey = GLOBAL_MIND_KEY;
+    await hydratePersistentMemory(localConversationKey);
+    await hydratePersistentMemory(globalConversationKey);
+    const localMemoryReplies = getMemoryReplies(localConversationKey);
+    const globalMemoryReplies = getMemoryReplies(globalConversationKey);
     const contextReplies = normalizeAxyReplies(context?.recentAxyReplies, 8);
-    const antiRepeatPool = [...memoryReplies, ...contextReplies].slice(-8);
+    const antiRepeatPool = mergeRecentReplies(
+      localMemoryReplies,
+      globalMemoryReplies,
+      contextReplies
+    );
     const recentTurns = normalizeAxyTurns(context?.recentMessages, 10);
     const contextBlock = buildContextBlock(context, recentTurns);
     const channel = resolveChannel(clipText(context?.channel || "", 24).toLowerCase());
     const channelPolicy = getChannelPolicy(channel);
-    const conversationState = await hydrateConversationState(conversationKey, intent);
+    const conversationState = await hydrateConversationState(localConversationKey, intent);
+    const globalConversationState = await hydrateConversationState(globalConversationKey, intent);
     conversationState.activeIntent = intent;
+    globalConversationState.activeIntent = intent;
     const now = Date.now();
-    extractPreferenceSignals(userMessage).forEach((item) => {
-      conversationState.userPreferences = pushStateItem(
-        conversationState.userPreferences,
-        item,
-        now
-      );
-    });
-    extractPendingTaskSignals(userMessage).forEach((item) => {
-      conversationState.pendingTasks = pushStateItem(conversationState.pendingTasks, item, now);
-    });
-    extractSocialSignals(context, userMessage).forEach((item) => {
-      conversationState.socialSignals = pushStateItem(conversationState.socialSignals, item, now);
-    });
-    extractBuildSignals(context, userMessage).forEach((item) => {
-      conversationState.buildHistory = pushStateItem(conversationState.buildHistory, item, now);
-    });
-    const stateBlock = buildStateContextBlock(conversationState);
+    ingestSignalsIntoState(conversationState, context, userMessage, now);
+    ingestSignalsIntoState(globalConversationState, context, userMessage, now);
+    const stateBlock = buildUnifiedStateBlock(conversationState, globalConversationState);
     const rotatedDomains = rotateDomainForConversation(
-      conversationKey,
+      localConversationKey,
       detectDomains(userMessage, recentTurns),
       context,
       intent
@@ -1227,11 +1273,12 @@ export async function POST(req: Request) {
 
     if (!userMessage) {
       const fallback = fallbackReply("unknown", "", antiRepeatPool);
-      await flushConversationState(conversationKey, conversationState);
+      await flushConversationState(localConversationKey, conversationState);
+      await flushConversationState(globalConversationKey, globalConversationState);
       await logReplyEvent({
         mode,
         channel,
-        conversation_key: conversationKey,
+        conversation_key: localConversationKey,
         intent,
         sent: true,
         drop_reason: null,
@@ -1308,13 +1355,16 @@ export async function POST(req: Request) {
         duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
       }
 
-      rememberReply(conversationKey, reply);
-      await flushPersistentMemory(conversationKey);
-      await flushConversationState(conversationKey, conversationState);
+      rememberReply(localConversationKey, reply);
+      rememberReply(globalConversationKey, reply);
+      await flushPersistentMemory(localConversationKey);
+      await flushPersistentMemory(globalConversationKey);
+      await flushConversationState(localConversationKey, conversationState);
+      await flushConversationState(globalConversationKey, globalConversationState);
       await logReplyEvent({
         mode,
         channel,
-        conversation_key: conversationKey,
+        conversation_key: localConversationKey,
         intent,
         sent: true,
         drop_reason: null,
@@ -1400,13 +1450,16 @@ export async function POST(req: Request) {
       duplicateScore = maxDuplicateScore(reply, antiRepeatPool);
     }
 
-    rememberReply(conversationKey, reply);
-    await flushPersistentMemory(conversationKey);
-    await flushConversationState(conversationKey, conversationState);
+    rememberReply(localConversationKey, reply);
+    rememberReply(globalConversationKey, reply);
+    await flushPersistentMemory(localConversationKey);
+    await flushPersistentMemory(globalConversationKey);
+    await flushConversationState(localConversationKey, conversationState);
+    await flushConversationState(globalConversationKey, globalConversationState);
     await logReplyEvent({
       mode,
       channel,
-      conversation_key: conversationKey,
+      conversation_key: localConversationKey,
       intent,
       sent: true,
       drop_reason: null,
