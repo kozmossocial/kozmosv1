@@ -216,6 +216,234 @@ function stripDateLikeTokens(input) {
     .trim();
 }
 
+function normalizeConceptKey(input) {
+  return normalizeIdeaKey(stripDateLikeTokens(input));
+}
+
+function computeArtifactSignature(content) {
+  const raw = String(content || "");
+  if (!raw) return "";
+  const withoutBlocks = raw
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\b\d+\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const stopWords = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "from",
+    "this",
+    "that",
+    "your",
+    "build",
+    "kozmos",
+    "panel",
+    "section",
+    "button",
+    "input",
+    "report",
+    "gate",
+    "run",
+  ]);
+  const tokens = normalizeForSimilarity(withoutBlocks)
+    .split(" ")
+    .filter((token) => token.length >= 3 && !stopWords.has(token));
+  return tokens.slice(0, 180).join(" ");
+}
+
+function hashNumber(input) {
+  const text = String(input || "");
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function createFallbackArtifact(plan) {
+  const variants = [
+    {
+      shellTitle: "Demand & Clarity Canvas",
+      intro: "Map demand pressure, user intent, and release clarity before publish.",
+      panelA: "Demand Signals",
+      panelB: "Clarity Actions",
+      action: "Synthesize Plan",
+      outTitle: "Action Brief",
+      usage: [
+        "Paste demand notes and user intent evidence.",
+        "Run synthesis and review recommended execution path.",
+        "Persist the brief then publish with explicit next actions.",
+      ],
+    },
+    {
+      shellTitle: "Scenario Stress Studio",
+      intro: "Pressure-test the build concept across optimistic, neutral, and failure scenarios.",
+      panelA: "Scenario Inputs",
+      panelB: "Risk Countermoves",
+      action: "Run Stress Test",
+      outTitle: "Scenario Matrix",
+      usage: [
+        "Define scenarios and boundary conditions.",
+        "Run stress test and inspect risk countermeasures.",
+        "Lock the safest rollout path before publish.",
+      ],
+    },
+    {
+      shellTitle: "System Interaction Mapper",
+      intro: "Model how user actions, runtime hooks, and outcomes connect in one view.",
+      panelA: "Actors & Events",
+      panelB: "Runtime Hooks",
+      action: "Generate Map",
+      outTitle: "Interaction Graph",
+      usage: [
+        "List actors/events and runtime touchpoints.",
+        "Generate the interaction graph and gaps.",
+        "Address missing links before publishing.",
+      ],
+    },
+    {
+      shellTitle: "Value Routing Console",
+      intro: "Route effort toward highest user value with minimal distraction cost.",
+      panelA: "Value Inputs",
+      panelB: "Noise Constraints",
+      action: "Route Value",
+      outTitle: "Priority Route",
+      usage: [
+        "Describe user value and noise constraints.",
+        "Compute a priority route with tradeoffs.",
+        "Execute top route and defer low-impact work.",
+      ],
+    },
+    {
+      shellTitle: "Impact Evidence Tracker",
+      intro: "Track evidence quality for utility, adoption readiness, and long-term impact.",
+      panelA: "Evidence Notes",
+      panelB: "Impact Checks",
+      action: "Score Evidence",
+      outTitle: "Impact Ledger",
+      usage: [
+        "Collect evidence linked to mission scope.",
+        "Score evidence quality and identify weak zones.",
+        "Publish only after weak zones are resolved.",
+      ],
+    },
+  ];
+  const theme = [
+    { panel: "#092212", edge: "#1f5941", glow: "#7dffb2" },
+    { panel: "#0c1e2f", edge: "#2b5e91", glow: "#7dc7ff" },
+    { panel: "#22180a", edge: "#6b4f23", glow: "#ffd57a" },
+    { panel: "#201027", edge: "#704990", glow: "#d6a8ff" },
+    { panel: "#191919", edge: "#4d4d4d", glow: "#d2d2d2" },
+  ];
+  const seed = hashNumber(plan?.key || plan?.title || "fallback");
+  const variant = variants[seed % variants.length];
+  const color = theme[seed % theme.length];
+  const safeTitle = escapeHtml(String(plan?.title || "Kozmos Build"));
+  const safeIntro = escapeHtml(String(variant.intro || ""));
+  const storageKey = normalizeConceptKey(plan?.key || safeTitle) || "kozmos:fallback:state";
+
+  const artifactContent = [
+    "<!doctype html>",
+    "<html lang=\"en\">",
+    "<head>",
+    "  <meta charset=\"utf-8\" />",
+    "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
+    `  <title>${safeTitle}</title>`,
+    "  <style>",
+    "    :root { color-scheme: dark; }",
+    `    body { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#060b08; color:#dcefe2; }`,
+    "    .wrap { max-width: 980px; margin: 24px auto; padding: 20px; }",
+    `    .panel { border:1px solid ${color.edge}; border-radius:12px; padding:16px; margin-bottom:14px; background:${color.panel}; }`,
+    "    h1,h2 { margin:0 0 10px; font-weight:500; letter-spacing:.02em; }",
+    "    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }",
+    "    textarea, button, input { font:inherit; background:#07130d; color:#e8fff0; border:1px solid #2a4a39; border-radius:8px; padding:9px 10px; }",
+    "    textarea { width:100%; min-height:120px; resize:vertical; }",
+    "    button { cursor:pointer; }",
+    `    .accent { color:${color.glow}; }`,
+    "    .meta { opacity:.78; font-size:13px; }",
+    "    pre { white-space:pre-wrap; word-break:break-word; }",
+    "  </style>",
+    "</head>",
+    "<body>",
+    "  <main class=\"wrap\">",
+    `    <section class=\"panel\"><h1>${safeTitle}</h1><div class=\"meta\">${escapeHtml(
+      variant.shellTitle
+    )}</div><div class=\"meta\" style=\"margin-top:6px;\">${safeIntro}</div></section>`,
+    "    <section class=\"panel\">",
+    "      <div class=\"grid\">",
+    `        <div><h2>${escapeHtml(variant.panelA)}</h2><textarea id=\"a\" placeholder=\"Paste high-signal context...\"></textarea></div>`,
+    `        <div><h2>${escapeHtml(variant.panelB)}</h2><textarea id=\"b\" placeholder=\"List constraints and desired outcomes...\"></textarea></div>`,
+    "      </div>",
+    `      <div style=\"margin-top:10px;\"><button id=\"run\">${escapeHtml(variant.action)}</button></div>`,
+    "    </section>",
+    "    <section class=\"panel\">",
+    `      <h2>${escapeHtml(variant.outTitle)}</h2>`,
+    "      <pre id=\"out\" class=\"meta\">Run to generate output...</pre>",
+    "    </section>",
+    "  </main>",
+    "  <script>",
+    "    const outEl = document.getElementById('out');",
+    "    const aEl = document.getElementById('a');",
+    "    const bEl = document.getElementById('b');",
+    "    const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));",
+    "    async function persist(payload) {",
+    "      if (!window.KozmosRuntime || !window.KozmosRuntime.kvSet) return;",
+    `      try { await window.KozmosRuntime.kvSet(${JSON.stringify(storageKey)}, payload); } catch {}`,
+    "    }",
+    "    async function restore() {",
+    "      if (!window.KozmosRuntime || !window.KozmosRuntime.kvGet) return;",
+    "      try {",
+    `        const res = await window.KozmosRuntime.kvGet(${JSON.stringify(storageKey)});`,
+    "        const value = res && res.item && res.item.value;",
+    "        if (value && typeof value === 'object') outEl.textContent = JSON.stringify(value, null, 2);",
+    "      } catch {}",
+    "    }",
+    "    document.getElementById('run').addEventListener('click', async () => {",
+    "      const a = (aEl.value || '').trim();",
+    "      const b = (bEl.value || '').trim();",
+    "      const signal = clamp(Math.floor(a.length / 30), 0, 35);",
+    "      const constraint = clamp(Math.floor(b.length / 30), 0, 35);",
+    "      const coherence = clamp(55 + signal + Math.floor(constraint * 0.7), 0, 100);",
+    "      const risk = clamp(90 - Math.floor((signal + constraint) * 0.6), 5, 95);",
+    "      const payload = {",
+    "        mission: " + JSON.stringify(String(plan?.title || "Kozmos Build")) + ",",
+    "        coherence_score: coherence,",
+    "        risk_index: risk,",
+    "        recommendation: coherence >= 80 ? 'Proceed with publish gate' : 'Refine scope and rerun',",
+    "        next_actions: [",
+    "          'Address weakest constraint first',",
+    "          'Tie every scope item to one measurable output',",
+    "          'Publish after coherence >= 80 and risk <= 40'",
+    "        ]",
+    "      };",
+    "      outEl.textContent = JSON.stringify(payload, null, 2);",
+    "      await persist(payload);",
+    "    });",
+    "    restore();",
+    "  </script>",
+    "</body>",
+    "</html>",
+  ].join("\\n");
+
+  return {
+    artifactContent,
+    usageSteps: variant.usage,
+  };
+}
+
 function formatMissionTitle(titleInput, goalInput) {
   const title = stripDateLikeTokens(titleInput).replace(/\s+/g, " ");
   const goal = String(goalInput || "").trim().replace(/\s+/g, " ");
@@ -247,6 +475,14 @@ const KOZMOS_CORE_LINKS = [
   "/build/manual",
   "/runtime/spec",
 ];
+
+const AXY_NON_REPEAT_DIRECTIVE = [
+  "Do not generate repetitive template utilities or minor UI variations.",
+  "Every build must target a distinct problem space and a distinct user type.",
+  "Design systems, not widgets: include meaningful data flow + interaction model.",
+  "Reduce distraction and noise; prioritize clarity, awareness, and durable value.",
+  "Do not reuse the same layout skeleton, wording pattern, or checklist shell.",
+].join("\n");
 
 function buildKozmosMissionGuardBlock() {
   return [
@@ -354,10 +590,14 @@ function parseMissionHistory(content) {
     return parsed
       .map((row) => ({
         title: String(row?.title || "").trim(),
-        key: normalizeIdeaKey(row?.key || row?.title || ""),
+        key: normalizeConceptKey(row?.key || row?.title || ""),
         path: String(row?.path || "").trim(),
         created_at: String(row?.created_at || "").trim(),
         build_class: normalizeMissionBuildClass(row?.build_class || row?.class || "utility"),
+        problem_space_key: normalizeConceptKey(row?.problem_space_key || ""),
+        user_type_key: normalizeConceptKey(row?.user_type_key || ""),
+        interaction_key: normalizeConceptKey(row?.interaction_key || ""),
+        artifact_signature: normalizeForSimilarity(row?.artifact_signature || ""),
       }))
       .filter((row) => row.title && row.key && row.path);
   } catch {
@@ -376,7 +616,7 @@ function harvestMissionHistoryFromFiles(files) {
     const heading = content.match(/^#\s+(.+)$/m);
     const title = String(heading?.[1] || "").trim();
     if (!title) continue;
-    const key = normalizeIdeaKey(title);
+    const key = normalizeConceptKey(title);
     if (!key) continue;
     harvested.push({
       title,
@@ -384,6 +624,10 @@ function harvestMissionHistoryFromFiles(files) {
       path: pathValue.slice(0, -"README.md".length).replace(/\/+$/, ""),
       created_at: String(file?.updated_at || ""),
       build_class: "utility",
+      problem_space_key: "",
+      user_type_key: "",
+      interaction_key: "",
+      artifact_signature: "",
     });
   }
   return harvested;
@@ -485,8 +729,20 @@ async function runSessionBuildMission({
     ...recentMissionClasses,
   ].filter(Boolean);
   const usedIdeaKeys = new Set(
-    usedHistory.map((row) => normalizeIdeaKey(row.key || row.title || "")).filter(Boolean)
+    usedHistory.map((row) => normalizeConceptKey(row.key || row.title || "")).filter(Boolean)
   );
+  const usedProblemKeys = new Set(
+    usedHistory.map((row) => normalizeConceptKey(row.problem_space_key || "")).filter(Boolean)
+  );
+  const usedUserTypeKeys = new Set(
+    usedHistory.map((row) => normalizeConceptKey(row.user_type_key || "")).filter(Boolean)
+  );
+  const usedInteractionKeys = new Set(
+    usedHistory.map((row) => normalizeConceptKey(row.interaction_key || "")).filter(Boolean)
+  );
+  const recentArtifactSignatures = usedHistory
+    .map((row) => normalizeForSimilarity(row.artifact_signature || ""))
+    .filter(Boolean);
 
   const nowMs = Date.now();
   const repeatWindowMs = Math.max(1, missionNoRepeatDays) * 24 * 60 * 60 * 1000;
@@ -554,29 +810,54 @@ async function runSessionBuildMission({
           .join("\n")
       : "- no strong hotspot yet";
     const principleBlock = buildKozmosMissionGuardBlock();
+    const recentProblemBlock = usedHistory
+      .map((row) => normalizeConceptKey(row.problem_space_key || row.title || ""))
+      .filter(Boolean)
+      .slice(0, 24)
+      .map((row) => `- ${row}`)
+      .join("\n") || "- none";
+    const recentUserTypeBlock = usedHistory
+      .map((row) => normalizeConceptKey(row.user_type_key || ""))
+      .filter(Boolean)
+      .slice(0, 24)
+      .map((row) => `- ${row}`)
+      .join("\n") || "- none";
+    const recentInteractionBlock = usedHistory
+      .map((row) => normalizeConceptKey(row.interaction_key || ""))
+      .filter(Boolean)
+      .slice(0, 24)
+      .map((row) => `- ${row}`)
+      .join("\n") || "- none";
 
     const planPrompt = [
       "Create candidate Kozmos build missions and score them.",
       `Identity: ${botUsername}.`,
       "Return strict JSON only.",
       principleBlock,
+      `Non-repetition directive:\n${AXY_NON_REPEAT_DIRECTIVE}`,
       `Never repeat or clone any prior idea/title in this list:\n${existingBlock}`,
+      `Avoid these recent problem space keys:\n${recentProblemBlock}`,
+      `Avoid these recent user-type keys:\n${recentUserTypeBlock}`,
+      `Avoid these recent interaction-model keys:\n${recentInteractionBlock}`,
       `Recent shared conversation signals:\n${sharedContextBlock}`,
       `Recent private note signals:\n${notesContextBlock}`,
       `Current user-build ecosystem signals:\n${buildContextBlock}`,
       `Recent build chat notes:\n${buildChatBlock}`,
       `Current demand hotspots:\n${hotspotBlock}`,
       "JSON schema:",
-      '{"ideas":[{"title":"...", "problem":"...", "goal":"...", "scope":["..."], "artifact_language":"typescript|javascript|markdown|sql|css|json", "publish_summary":"... (1 concise paragraph)", "utility":0-10, "implementability":0-10, "novelty":0-10}]}',
+      '{"ideas":[{"title":"...", "problem":"...", "goal":"...", "user_type":"...", "problem_space_key":"...", "interaction_model_key":"...", "system_layer":"...", "scope":["..."], "artifact_language":"typescript|javascript|markdown|sql|css|json", "publish_summary":"... (1 concise paragraph)", "utility":0-10, "implementability":0-10, "novelty":0-10}]}',
       "Rules:",
       "- return exactly 4 ideas",
       "- title must be novel, specific, and clearly explain the product outcome",
       "- title format should read like a product name + function (e.g. 'X: what it does')",
+      "- each idea must define a distinct user_type and problem_space_key",
+      "- each idea must define a distinct interaction_model_key and system_layer",
       "- practical utility for Kozmos users",
       "- prioritize globally recurring user demand and highest traffic request surfaces",
       "- if demand hotspots are visible, reflect them directly in title/problem/goal",
       "- prioritize previewable user-build outcomes (interactive web modules) over documentation-only outputs",
       "- consider Kozmos modules ecosystem (main chat, hush, game chat, build, matrix, play) and propose compatible additions",
+      "- explicitly reject template/checklist/probe repeats unless the problem space is materially new",
       "- scope must be deliverable in one session",
       "- publish_summary must be clear and concrete",
       "- scoring must be realistic, not inflated",
@@ -606,31 +887,74 @@ async function runSessionBuildMission({
           ];
 
     const scoredIdeas = candidateIdeas
-      .map((idea) =>
-        scoreMissionIdea(idea, {
+      .map((idea) => {
+        const scored = scoreMissionIdea(idea, {
           usedIdeaKeys: Array.from(usedIdeaKeys),
           usedIdeaTitles: recentIdeaTitles,
-        })
-      )
+        });
+        const userType = String(idea?.user_type || idea?.userType || "").trim();
+        const userTypeKey = normalizeConceptKey(userType);
+        const problemSpaceKey = normalizeConceptKey(
+          idea?.problem_space_key || idea?.problemSpaceKey || scored.title || scored.problem
+        );
+        const interactionKey = normalizeConceptKey(
+          idea?.interaction_model_key || idea?.interactionModelKey || ""
+        );
+        const systemLayer = String(idea?.system_layer || idea?.systemLayer || "").trim();
+        return {
+          ...scored,
+          userType,
+          userTypeKey,
+          problemSpaceKey,
+          interactionKey,
+          systemLayer,
+        };
+      })
       .filter((row) => row.valid)
       .map((row) => {
         const text = [row.title, row.problem, row.goal, ...(row.scope || [])].join(" ");
         const demandFit = scoreIdeaDemandFit(text, demandHotspots);
-        const adjustedTotal = Number((row.total + demandFit * 0.35).toFixed(3));
-        return { ...row, demandFit, adjustedTotal };
+        const duplicateProblem = Boolean(row.problemSpaceKey) && usedProblemKeys.has(row.problemSpaceKey);
+        const duplicateUser = Boolean(row.userTypeKey) && usedUserTypeKeys.has(row.userTypeKey);
+        const duplicateInteraction =
+          Boolean(row.interactionKey) && usedInteractionKeys.has(row.interactionKey);
+        const patternPenalty =
+          (duplicateProblem ? 0.8 : 0) +
+          (duplicateUser ? 0.45 : 0) +
+          (duplicateInteraction ? 0.55 : 0);
+        const adjustedTotal = Number((row.total + demandFit * 0.35 - patternPenalty).toFixed(3));
+        return {
+          ...row,
+          demandFit,
+          adjustedTotal,
+          duplicateProblem,
+          duplicateUser,
+          duplicateInteraction,
+        };
       })
       .sort((a, b) => b.adjustedTotal - a.adjustedTotal);
 
     const bestIdea =
-      scoredIdeas.find((row) => !row.duplicateByKey && !row.duplicateByTitle) || null;
+      scoredIdeas.find(
+        (row) =>
+          !row.duplicateByKey &&
+          !row.duplicateByTitle &&
+          !row.duplicateProblem &&
+          !row.duplicateInteraction
+      ) || null;
     if (!bestIdea) continue;
     if (bestIdea.adjustedTotal < 5.1) continue;
     if (usedIdeaKeys.has(bestIdea.key)) continue;
     const clearTitle = formatMissionTitle(bestIdea.title, bestIdea.goal);
     plan = {
       title: clearTitle,
-      key: normalizeIdeaKey(clearTitle),
+      key: normalizeConceptKey(clearTitle),
       buildClass: pickMissionBuildClass(bestIdea.title, effectiveRecentMissionClasses),
+      userType: bestIdea.userType || "",
+      userTypeKey: bestIdea.userTypeKey || "",
+      problemSpaceKey: bestIdea.problemSpaceKey || normalizeConceptKey(clearTitle),
+      interactionKey: bestIdea.interactionKey || "",
+      systemLayer: bestIdea.systemLayer || "",
       problem: bestIdea.problem,
       goal: bestIdea.goal,
       scope: bestIdea.scope.slice(0, 8),
@@ -701,8 +1025,13 @@ async function runSessionBuildMission({
       const fallbackTitle = formatMissionTitle(pickedFallback.title, pickedFallback.goal);
       plan = {
         title: fallbackTitle,
-        key: normalizeIdeaKey(fallbackTitle),
+        key: normalizeConceptKey(fallbackTitle),
         buildClass: pickMissionBuildClass(pickedFallback.title, effectiveRecentMissionClasses),
+        userType: "builders shipping first public module",
+        userTypeKey: "builders shipping first public module",
+        problemSpaceKey: normalizeConceptKey(pickedFallback.problem || fallbackTitle),
+        interactionKey: normalizeConceptKey("interactive score and scenario board"),
+        systemLayer: "runtime quality and publish operations",
         problem: pickedFallback.problem,
         goal: pickedFallback.goal,
         scope: pickedFallback.scope,
@@ -731,11 +1060,16 @@ async function runSessionBuildMission({
         emergencyTitleBase,
         "interactive publish-readiness and runtime quality probe"
       );
-      const emergencyKey = normalizeIdeaKey(emergencyTitle);
+      const emergencyKey = normalizeConceptKey(emergencyTitle);
       plan = {
         title: emergencyTitle,
         key: emergencyKey,
         buildClass: pickMissionBuildClass(emergencyTitle, effectiveRecentMissionClasses),
+        userType: "operators managing live subspace launches",
+        userTypeKey: "operators managing live subspace launches",
+        problemSpaceKey: normalizeConceptKey("live subspace launch observability"),
+        interactionKey: normalizeConceptKey("timeline + state audit explorer"),
+        systemLayer: "release operations and runtime diagnostics",
         problem:
           "Mission planner exhausted reusable candidates under strict uniqueness constraints.",
         goal:
@@ -756,6 +1090,10 @@ async function runSessionBuildMission({
   await pushBuildNote("plan", [
     `title: ${plan.title}`,
     `class: ${plan.buildClass}`,
+    `user_type: ${plan.userType || "-"}`,
+    `problem_space_key: ${plan.problemSpaceKey || "-"}`,
+    `interaction_key: ${plan.interactionKey || "-"}`,
+    `system_layer: ${plan.systemLayer || "-"}`,
     `problem: ${plan.problem}`,
     `goal: ${plan.goal}`,
     `scope: ${plan.scope.join(" | ")}`,
@@ -775,10 +1113,15 @@ async function runSessionBuildMission({
       "Generate the mission output package for this build plan.",
       "Return strict JSON only.",
       `Plan title: ${plan.title}`,
+      `User type: ${String(plan.userType || "general kozmos users")}`,
+      `Problem-space key: ${String(plan.problemSpaceKey || "-")}`,
+      `Interaction-model key: ${String(plan.interactionKey || "-")}`,
+      `System layer: ${String(plan.systemLayer || "-")}`,
       `Problem: ${plan.problem}`,
       `Goal: ${plan.goal}`,
       `Scope bullets: ${plan.scope.join(" | ")}`,
       "Artifact language target: html",
+      `Non-repetition directive:\n${AXY_NON_REPEAT_DIRECTIVE}`,
       "JSON schema:",
       '{"readme":"...", "spec":"...", "implementation":"...", "apiContract":"...", "exportManifest":"...", "artifactPath":"...", "artifactLanguage":"...", "artifactContent":"...", "publishSummary":"...", "usageSteps":["step1","step2","step3"]}',
       "Content rules:",
@@ -786,6 +1129,8 @@ async function runSessionBuildMission({
       "- SPEC must stay aligned with the exact mission title",
       "- artifactPath must be exactly index.html",
       "- artifactContent must be a complete interactive HTML app with inline CSS + JS (no placeholder-only markdown)",
+      "- artifactContent must avoid recycled 'qa probe/checklist/report only' layout unless the mission explicitly demands auditing",
+      "- artifactContent must include a distinct interaction loop specific to this mission's user type",
       "- artifact must be immediately previewable in Kozmos build outcome preview",
       "- output must be deployable-app ready and export-ready (zip-compatible structure)",
       "- exportManifest must be valid JSON text with version, entry, files, and runtime contract",
@@ -844,6 +1189,15 @@ async function runSessionBuildMission({
     const quality = scoreMissionBundleQuality(candidateBundle);
     if (!quality.ok) continue;
 
+    const candidateArtifactSignature = computeArtifactSignature(candidateBundle.artifactContent);
+    if (
+      candidateArtifactSignature &&
+      recentArtifactSignatures.length > 0 &&
+      isNearDuplicate(candidateArtifactSignature, recentArtifactSignatures, { threshold: 0.74 })
+    ) {
+      continue;
+    }
+
     const artifactKey = normalizeBuildPath(candidateBundle.artifactPath).toLowerCase();
     const alreadyUsedPath = files.some((file) => {
       const existingPath = normalizeBuildPath(file?.path || "").toLowerCase();
@@ -859,11 +1213,12 @@ async function runSessionBuildMission({
   if (!bundle) {
     const safeTitle = plan.title;
     const scopeLines = plan.scope.map((item) => `- ${item}`);
-    const usagePlan = [
-      "Open the published README and copy the checklist into your active subspace notes.",
-      "Implement the artifact section-by-section, validating each scope item before moving forward.",
-      "Record what changed, what was skipped, and why in your release notes before sharing.",
-    ];
+    const fallbackArtifact = createFallbackArtifact(plan);
+    const usagePlan =
+      (Array.isArray(fallbackArtifact.usageSteps) ? fallbackArtifact.usageSteps : [])
+        .map((step) => String(step || "").trim())
+        .filter(Boolean)
+        .slice(0, 6);
     const fallbackPublishSummary = (() => {
       const raw = String(plan.publishSummary || "").trim();
       const padded =
@@ -1051,113 +1406,9 @@ async function runSessionBuildMission({
       ),
       artifactPath: "index.html",
       artifactLanguage: "html",
-      artifactContent: [
-        "<!doctype html>",
-        "<html lang=\"en\">",
-        "<head>",
-        "  <meta charset=\"utf-8\" />",
-        "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
-        `  <title>${safeTitle}</title>`,
-        "  <style>",
-        "    :root { color-scheme: dark; }",
-        "    body { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#060b08; color:#dcefe2; }",
-        "    .wrap { max-width: 980px; margin: 24px auto; padding: 20px; }",
-        "    .panel { border:1px solid #2a4a39; border-radius:12px; padding:16px; margin-bottom:14px; background:rgba(4,24,13,.55); }",
-        "    h1,h2 { margin:0 0 10px; font-weight:500; letter-spacing:.02em; }",
-        "    .row { display:grid; grid-template-columns: 1fr auto; gap:10px; margin-bottom:8px; }",
-        "    input, button, textarea { font:inherit; background:#07130d; color:#e8fff0; border:1px solid #2a4a39; border-radius:8px; padding:9px 10px; }",
-        "    button { cursor:pointer; }",
-        "    .ok { color:#88f7b1; } .warn { color:#ffd279; } .bad { color:#ff8f8f; }",
-        "    .gates { display:grid; gap:8px; }",
-        "    .gate { display:grid; grid-template-columns: 1fr 70px; gap:10px; align-items:center; }",
-        "    .meta { opacity:.8; font-size:13px; }",
-        "  </style>",
-        "</head>",
-        "<body>",
-        "  <main class=\"wrap\">",
-        `    <section class=\"panel\"><h1>${safeTitle}</h1><div class=\"meta\">Interactive publish-readiness probe for Kozmos user builds.</div></section>`,
-        "    <section class=\"panel\">",
-        "      <h2>Build Input</h2>",
-        "      <div class=\"row\"><input id=\"buildName\" placeholder=\"Build name\" /><button id=\"run\">Run Probe</button></div>",
-        "      <textarea id=\"notes\" rows=\"5\" placeholder=\"Paste scope / implementation summary here\"></textarea>",
-        "    </section>",
-        "    <section class=\"panel\">",
-        "      <h2>QA Gates</h2>",
-        "      <div class=\"gates\" id=\"gates\"></div>",
-        "    </section>",
-        "    <section class=\"panel\">",
-        "      <h2>Report</h2>",
-        "      <pre id=\"report\" class=\"meta\">Run probe to generate PASS/FAIL report.</pre>",
-        "    </section>",
-        "  </main>",
-        "  <script>",
-        "    const gateDefs = [",
-        "      ['scope_clarity', 'Scope is concrete and testable'],",
-        "      ['preview_ready', 'Outcome preview is runnable and visible'],",
-        "      ['rollback_plan', 'Rollback / fallback is documented'],",
-        "      ['data_safety', 'No private data leakage or unsafe sharing'],",
-        "      ['maintainability', 'Naming + structure are maintainable'],",
-        "      ['publish_quality', 'Ready for read-only public publish']",
-        "    ];",
-        "    const gatesEl = document.getElementById('gates');",
-        "    const reportEl = document.getElementById('report');",
-        "    const rand = () => Math.floor(62 + Math.random() * 38);",
-        "    const clamp = (n, a, b) => Math.max(a, Math.min(b, n));",
-        "    const renderGates = (scores) => {",
-        "      gatesEl.innerHTML = '';",
-        "      gateDefs.forEach(([key, label], i) => {",
-        "        const score = scores[i];",
-        "        const cls = score >= 80 ? 'ok' : score >= 65 ? 'warn' : 'bad';",
-        "        const row = document.createElement('div'); row.className = 'gate';",
-        "        row.innerHTML = `<div>${label} <span class=\"meta\">(${key})</span></div><div class=\"${cls}\">${score}</div>`;",
-        "        gatesEl.appendChild(row);",
-        "      });",
-        "    };",
-        "    const persist = async (payload) => {",
-        "      if (!window.KozmosRuntime || !window.KozmosRuntime.kvSet) return;",
-        "      try { await window.KozmosRuntime.kvSet('qa_probe:last_report', payload); } catch {}",
-        "    };",
-        "    const restore = async () => {",
-        "      if (!window.KozmosRuntime || !window.KozmosRuntime.kvGet) return;",
-        "      try {",
-        "        const res = await window.KozmosRuntime.kvGet('qa_probe:last_report');",
-        "        const value = res && res.item && res.item.value;",
-        "        if (value && typeof value === 'object') reportEl.textContent = JSON.stringify(value, null, 2);",
-        "      } catch {}",
-        "    };",
-        "    document.getElementById('run').addEventListener('click', async () => {",
-        "      const buildName = (document.getElementById('buildName').value || 'untitled-build').trim();",
-        "      const notes = (document.getElementById('notes').value || '').trim();",
-        "      const base = gateDefs.map(() => rand());",
-        "      const noteBoost = clamp(Math.floor(notes.length / 40), 0, 8);",
-        "      const scores = base.map((s) => clamp(s + noteBoost, 0, 100));",
-        "      const total = Math.round(scores.reduce((a,b)=>a+b,0) / scores.length);",
-        "      const pass = total >= 80 && scores.every((s) => s >= 65);",
-        "      renderGates(scores);",
-        "      const blockers = [];",
-        "      scores.forEach((s, i) => { if (s < 65) blockers.push(gateDefs[i][0]); });",
-        "      const next = pass ? ['Publish read-only', 'Attach manifest', 'Announce in build chat'] : ['Fix blockers', 'Re-run probe', 'Publish after PASS'];",
-        "      const out = {",
-        "        build: buildName,",
-        "        result: pass ? 'PASS' : 'FAIL',",
-        "        score: total,",
-        "        blockers,",
-        "        next_actions: next",
-        "      };",
-        "      reportEl.textContent = JSON.stringify(out, null, 2);",
-        "      await persist(out);",
-        "    });",
-        "    restore();",
-        "  </script>",
-        "</body>",
-        "</html>",
-      ].join("\n"),
+      artifactContent: String(fallbackArtifact.artifactContent || "").trim(),
       publishSummary: fallbackPublishSummary,
-      usageSteps: [
-        "Open index.html in outcome preview.",
-        "Run the probe and verify PASS/FAIL report generation.",
-        "Publish room as read-only after PASS score.",
-      ],
+      usageSteps: usagePlan,
     };
     const fallbackQuality = scoreMissionBundleQuality(fallbackBundle);
     if (!fallbackQuality.ok) {
@@ -1218,6 +1469,7 @@ async function runSessionBuildMission({
     .map((step) => String(step || "").trim())
     .filter(Boolean)
     .slice(0, 6);
+  const artifactSignature = computeArtifactSignature(artifactContent);
 
   const byExtLanguage = (() => {
     const ext = path.extname(artifactPath).toLowerCase();
@@ -1296,6 +1548,10 @@ async function runSessionBuildMission({
       title: plan.title,
       key: plan.key,
       build_class: normalizeMissionBuildClass(plan.buildClass || "utility"),
+      problem_space_key: normalizeConceptKey(plan.problemSpaceKey || ""),
+      user_type_key: normalizeConceptKey(plan.userTypeKey || plan.userType || ""),
+      interaction_key: normalizeConceptKey(plan.interactionKey || ""),
+      artifact_signature: artifactSignature,
       path: basePath,
       created_at: new Date().toISOString(),
     },
