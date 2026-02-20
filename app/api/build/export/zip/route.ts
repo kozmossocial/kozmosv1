@@ -227,6 +227,9 @@ export async function GET(req: Request) {
     if (!access.space || !access.canRead) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+    if (access.space.owner_id !== user.id) {
+      return NextResponse.json({ error: "only subspace owner can export zip" }, { status: 403 });
+    }
 
     const { data, error } = await supabaseAdmin
       .from("user_build_files")

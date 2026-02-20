@@ -35,6 +35,8 @@ type RuntimeOrbRow = {
 type RoomAura = "calm" | "bright" | "heavy" | "fast";
 type RoomEntry = "click" | "proximity";
 type RoomIcon = "dot" | "square" | "ring";
+type RoomRuntimeEvent = "onEnter" | "onLeave" | "onTick" | "onMessage";
+type RoomRuntimeHooks = Partial<Record<RoomRuntimeEvent, string>>;
 
 type WorldRoomRow = {
   id: string;
@@ -45,6 +47,13 @@ type WorldRoomRow = {
   aura?: RoomAura | string;
   entry?: RoomEntry | string;
   icon?: RoomIcon | string;
+  runtime?: {
+    contract?: string;
+    hooks?: RoomRuntimeHooks;
+    backend?: {
+      starterMode?: boolean;
+    };
+  };
   ownerUsername?: string;
   updatedAt?: string;
 };
@@ -58,6 +67,13 @@ type WorldRoomRender = {
   aura: RoomAura;
   entry: RoomEntry;
   icon: RoomIcon;
+  runtime: {
+    contract: string;
+    hooks: RoomRuntimeHooks;
+    backend: {
+      starterMode: boolean;
+    };
+  };
   ownerUsername: string;
   updatedAt: string | null;
 };
@@ -528,6 +544,22 @@ export default function MainSpacePage() {
             aura: normalizeRoomAura(row?.aura),
             entry: normalizeRoomEntry(row?.entry),
             icon: normalizeRoomIcon(row?.icon),
+            runtime: {
+              contract:
+                typeof row?.runtime?.contract === "string"
+                  ? row.runtime.contract
+                  : "kozmos.room.runtime.v1",
+              hooks:
+                row?.runtime?.hooks && typeof row.runtime.hooks === "object"
+                  ? row.runtime.hooks
+                  : {},
+              backend: {
+                starterMode:
+                  typeof row?.runtime?.backend?.starterMode === "boolean"
+                    ? row.runtime.backend.starterMode
+                    : true,
+              },
+            },
             ownerUsername:
               typeof row?.ownerUsername === "string" && row.ownerUsername.trim()
                 ? row.ownerUsername.trim().slice(0, 32)

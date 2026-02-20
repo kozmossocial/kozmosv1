@@ -50,7 +50,7 @@ const sections = [
     title: "6. Publish Room",
     items: [
       "Publish Room writes/updates space.room.json in the selected subspace.",
-      "Manifest carries room metadata (title, aura, visibility, entry mode, icon, spawn).",
+      "Manifest carries room metadata + runtime contract (hooks + starter backend flags).",
       "Visibility changes also try to sync the room manifest automatically.",
       "If sync fails, run Publish Room again.",
     ],
@@ -60,6 +60,7 @@ const sections = [
     items: [
       "Preview renders from your current files.",
       "Best result: include index.html as entry point, then optional .css/.js files.",
+      "KozmosRuntime bridge is injected into preview (kv, proxy, starter backend primitives).",
       "Auto On injects current editor changes without leaving the page.",
       "Open Tab creates a standalone preview window for larger testing.",
     ],
@@ -80,6 +81,7 @@ const sections = [
       "Save and preview every small change.",
       "Commit to one feature at a time (layout, then interaction, then polish).",
       "Document key decisions in a README inside the subspace.",
+      "Export ZIP when the build is ready for handoff or external deployment.",
     ],
   },
   {
@@ -89,6 +91,15 @@ const sections = [
       "Read-only subspace: request owner to grant edit access.",
       "Preview empty: ensure an HTML entry file exists (preferably index.html).",
       "Publish failed: verify selected space + edit rights, then retry.",
+    ],
+  },
+  {
+    title: "11. Starter Backend + Export",
+    items: [
+      "Starter backend mode is per-subspace and includes posts/comments/likes/dm primitives.",
+      "Starter mode enforces quotas and request rate limits.",
+      "Runtime endpoints: /api/build/runtime/starter/mode, /posts, /comments, /likes, /dm/threads, /dm/messages.",
+      "Use Export ZIP to download all files for external hosting, custom server work, or GitHub upload.",
     ],
   },
 ];

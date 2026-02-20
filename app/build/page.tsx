@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 type BuildSpace = {
   id: string;
   owner_id: string;
+  owner_username?: string;
   title: string;
   is_public: boolean;
   can_edit?: boolean;
@@ -35,7 +36,18 @@ type SpaceAccessEntry = {
   canEdit: boolean;
 };
 
-const LANGUAGE_OPTIONS = ["text", "ts", "tsx", "js", "json", "md", "sql", "py"];
+const LANGUAGE_OPTIONS = [
+  "text",
+  "html",
+  "css",
+  "js",
+  "ts",
+  "tsx",
+  "json",
+  "md",
+  "sql",
+  "py",
+];
 
 type AxyTurn = {
   id: string;
@@ -50,14 +62,17 @@ const ROOM_AURAS = ["calm", "bright", "heavy", "fast"] as const;
 const ROOM_VISIBILITIES = ["public", "unlisted", "private"] as const;
 const ROOM_ENTRIES = ["click", "proximity"] as const;
 const ROOM_ICONS = ["dot", "square", "ring"] as const;
+const ROOM_RUNTIME_EVENTS = ["onEnter", "onLeave", "onTick", "onMessage"] as const;
 
 type RoomAura = (typeof ROOM_AURAS)[number];
 type RoomVisibility = (typeof ROOM_VISIBILITIES)[number];
 type RoomEntry = (typeof ROOM_ENTRIES)[number];
 type RoomIcon = (typeof ROOM_ICONS)[number];
+type RoomRuntimeEvent = (typeof ROOM_RUNTIME_EVENTS)[number];
+type RoomRuntimeHooks = Partial<Record<RoomRuntimeEvent, string>>;
 
 type RoomManifest = {
-  version: 1;
+  version: 2;
   room: {
     title: string;
     subtitle?: string;
@@ -66,6 +81,28 @@ type RoomManifest = {
     visibility: RoomVisibility;
     entry: RoomEntry;
     icon: RoomIcon;
+  };
+  runtime: {
+    contract: "kozmos.room.runtime.v1";
+    hooks: RoomRuntimeHooks;
+    backend: {
+      starterMode: boolean;
+      endpoints: {
+        posts: string;
+        comments: string;
+        likes: string;
+        dmThreads: string;
+        dmMessages: string;
+      };
+    };
+    preview: {
+      entry: "index.html";
+      supportsKozmosRuntime: true;
+    };
+    export: {
+      format: "zip";
+      apiPath: "/api/build/export/zip";
+    };
   };
 };
 
@@ -97,12 +134,34 @@ function normalizeSpawn(value: unknown) {
   };
 }
 
+function normalizeRuntimeHooks(value: unknown): RoomRuntimeHooks | null {
+  if (!value || typeof value !== "object") return null;
+  const out: RoomRuntimeHooks = {};
+  ROOM_RUNTIME_EVENTS.forEach((eventName) => {
+    const raw = (value as Record<string, unknown>)[eventName];
+    if (typeof raw !== "string") return;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    out[eventName] = trimmed.slice(0, 120);
+  });
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 function parseExistingRoomManifest(content: string | undefined) {
   if (!content) return {};
   try {
-    const parsed = JSON.parse(content) as { version?: unknown; room?: unknown };
+    const parsed = JSON.parse(content) as {
+      version?: unknown;
+      room?: unknown;
+      runtime?: unknown;
+    };
     if (typeof parsed !== "object" || !parsed) return {};
-    if (typeof parsed.version !== "number" || parsed.version !== 1) return {};
+    if (
+      typeof parsed.version !== "number" ||
+      (parsed.version !== 1 && parsed.version !== 2)
+    ) {
+      return {};
+    }
     if (!parsed.room || typeof parsed.room !== "object") return {};
     const room = parsed.room as {
       title?: unknown;
@@ -113,6 +172,13 @@ function parseExistingRoomManifest(content: string | undefined) {
       entry?: unknown;
       icon?: unknown;
     };
+    const runtime = parsed.runtime as
+      | {
+          hooks?: unknown;
+          backend?: { starterMode?: unknown } | unknown;
+        }
+      | undefined;
+    const runtimeHooks = normalizeRuntimeHooks(runtime?.hooks);
     return {
       title: clipText(typeof room.title === "string" ? room.title : "", 32) || null,
       subtitle: clipText(typeof room.subtitle === "string" ? room.subtitle : "", 48) || null,
@@ -121,6 +187,13 @@ function parseExistingRoomManifest(content: string | undefined) {
       visibility: normalizeEnum(room.visibility, ROOM_VISIBILITIES),
       entry: normalizeEnum(room.entry, ROOM_ENTRIES),
       icon: normalizeEnum(room.icon, ROOM_ICONS),
+      runtimeHooks: runtimeHooks || null,
+      starterMode:
+        typeof runtime?.backend === "object" &&
+        runtime?.backend &&
+        typeof (runtime.backend as { starterMode?: unknown }).starterMode === "boolean"
+          ? Boolean((runtime.backend as { starterMode?: unknown }).starterMode)
+          : null,
     };
   } catch {
     return {};
@@ -183,6 +256,75 @@ function injectPreviewRuntimeBridge(
     "    proxy: async function (input) {",
     "      const payload = (input && typeof input === 'object') ? input : {};",
     "      return req('/api/build/runtime/proxy', { method: 'POST', body: JSON.stringify({ ...payload, spaceId: __SPACE_ID__ }) });",
+    "    },",
+    "    starter: {",
+    "      mode: {",
+    "        get: async function () {",
+    "          const q = new URLSearchParams({ spaceId: __SPACE_ID__ });",
+    "          return req('/api/build/runtime/starter/mode?' + q.toString(), { method: 'GET' });",
+    "        },",
+    "        set: async function (input) {",
+    "          const payload = (input && typeof input === 'object') ? input : {};",
+    "          return req('/api/build/runtime/starter/mode', { method: 'PUT', body: JSON.stringify({ ...payload, spaceId: __SPACE_ID__ }) });",
+    "        }",
+    "      },",
+    "      posts: {",
+    "        list: async function (input) {",
+    "          const payload = (input && typeof input === 'object') ? input : {};",
+    "          const q = new URLSearchParams({ spaceId: __SPACE_ID__ });",
+    "          if (Number.isFinite(Number(payload.limit))) q.set('limit', String(Math.round(Number(payload.limit))));",
+    "          if (Number.isFinite(Number(payload.beforeId))) q.set('beforeId', String(Math.round(Number(payload.beforeId))));",
+    "          return req('/api/build/runtime/starter/posts?' + q.toString(), { method: 'GET' });",
+    "        },",
+    "        create: async function (body, meta) {",
+    "          return req('/api/build/runtime/starter/posts', { method: 'POST', body: JSON.stringify({ spaceId: __SPACE_ID__, body: String(body || ''), meta: (meta && typeof meta === 'object') ? meta : {} }) });",
+    "        }",
+    "      },",
+    "      comments: {",
+    "        list: async function (postId, input) {",
+    "          const payload = (input && typeof input === 'object') ? input : {};",
+    "          const q = new URLSearchParams({ spaceId: __SPACE_ID__, postId: String(postId || '') });",
+    "          if (Number.isFinite(Number(payload.limit))) q.set('limit', String(Math.round(Number(payload.limit))));",
+    "          return req('/api/build/runtime/starter/comments?' + q.toString(), { method: 'GET' });",
+    "        },",
+    "        create: async function (postId, body, meta) {",
+    "          return req('/api/build/runtime/starter/comments', { method: 'POST', body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0), body: String(body || ''), meta: (meta && typeof meta === 'object') ? meta : {} }) });",
+    "        }",
+    "      },",
+    "      likes: {",
+    "        get: async function (postId) {",
+    "          const q = new URLSearchParams({ spaceId: __SPACE_ID__, postId: String(postId || '') });",
+    "          return req('/api/build/runtime/starter/likes?' + q.toString(), { method: 'GET' });",
+    "        },",
+    "        like: async function (postId) {",
+    "          return req('/api/build/runtime/starter/likes', { method: 'PUT', body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0) }) });",
+    "        },",
+    "        unlike: async function (postId) {",
+    "          return req('/api/build/runtime/starter/likes', { method: 'DELETE', body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0) }) });",
+    "        }",
+    "      },",
+    "      dm: {",
+    "        threadsList: async function (input) {",
+    "          const payload = (input && typeof input === 'object') ? input : {};",
+    "          const q = new URLSearchParams({ spaceId: __SPACE_ID__ });",
+    "          if (Number.isFinite(Number(payload.limit))) q.set('limit', String(Math.round(Number(payload.limit))));",
+    "          return req('/api/build/runtime/starter/dm/threads?' + q.toString(), { method: 'GET' });",
+    "        },",
+    "        threadsCreate: async function (input) {",
+    "          const payload = (input && typeof input === 'object') ? input : {};",
+    "          return req('/api/build/runtime/starter/dm/threads', { method: 'POST', body: JSON.stringify({ ...payload, spaceId: __SPACE_ID__ }) });",
+    "        },",
+    "        messagesList: async function (threadId, input) {",
+    "          const payload = (input && typeof input === 'object') ? input : {};",
+    "          const q = new URLSearchParams({ spaceId: __SPACE_ID__, threadId: String(threadId || '') });",
+    "          if (Number.isFinite(Number(payload.limit))) q.set('limit', String(Math.round(Number(payload.limit))));",
+    "          if (Number.isFinite(Number(payload.afterId))) q.set('afterId', String(Math.round(Number(payload.afterId))));",
+    "          return req('/api/build/runtime/starter/dm/messages?' + q.toString(), { method: 'GET' });",
+    "        },",
+    "        messagesSend: async function (threadId, body, metadata) {",
+    "          return req('/api/build/runtime/starter/dm/messages', { method: 'POST', body: JSON.stringify({ spaceId: __SPACE_ID__, threadId: String(threadId || ''), body: String(body || ''), metadata: (metadata && typeof metadata === 'object') ? metadata : {} }) });",
+    "        }",
+    "      }",
     "    }",
     "  };",
     "})();",
@@ -736,15 +878,43 @@ export default function BuildPage() {
       entry: existing.entry || "proximity",
       icon: existing.icon || "ring",
     };
-    const subtitle = existing.subtitle || fallbackSubtitle;
-    if (subtitle) roomPayload.subtitle = subtitle;
-    if (existing.spawn) roomPayload.spawn = existing.spawn;
+  const subtitle = existing.subtitle || fallbackSubtitle;
+  if (subtitle) roomPayload.subtitle = subtitle;
+  if (existing.spawn) roomPayload.spawn = existing.spawn;
+  const runtimeHooks = existing.runtimeHooks || {
+    onEnter: "app.onEnter",
+    onLeave: "app.onLeave",
+    onTick: "app.onTick",
+    onMessage: "app.onMessage",
+  };
 
-    return {
-      version: 1,
-      room: roomPayload,
-    };
-  }
+  return {
+    version: 2,
+    room: roomPayload,
+    runtime: {
+      contract: "kozmos.room.runtime.v1",
+      hooks: runtimeHooks,
+      backend: {
+        starterMode: existing.starterMode ?? true,
+        endpoints: {
+          posts: "/api/build/runtime/starter/posts",
+          comments: "/api/build/runtime/starter/comments",
+          likes: "/api/build/runtime/starter/likes",
+          dmThreads: "/api/build/runtime/starter/dm/threads",
+          dmMessages: "/api/build/runtime/starter/dm/messages",
+        },
+      },
+      preview: {
+        entry: "index.html",
+        supportsKozmosRuntime: true,
+      },
+      export: {
+        format: "zip",
+        apiPath: "/api/build/export/zip",
+      },
+    },
+  };
+}
 
   async function writeRoomManifest(spaceId: string, manifest: RoomManifest) {
     return fetchAuthedJson("/api/build/files", {
@@ -1253,6 +1423,9 @@ export default function BuildPage() {
                             : space.is_public
                               ? "public"
                               : "shared"}
+                      </span>
+                      <span style={{ marginLeft: 8, opacity: 0.48, fontSize: 10 }}>
+                        by {space.owner_username || "user"}
                       </span>
                     </button>
                   ))

@@ -477,14 +477,18 @@ async function runSessionBuildMission({
       `Scope bullets: ${plan.scope.join(" | ")}`,
       "Artifact language target: html",
       "JSON schema:",
-      '{"readme":"...", "spec":"...", "implementation":"...", "artifactPath":"...", "artifactLanguage":"...", "artifactContent":"...", "publishSummary":"...", "usageSteps":["step1","step2","step3"]}',
+      '{"readme":"...", "spec":"...", "implementation":"...", "apiContract":"...", "exportManifest":"...", "artifactPath":"...", "artifactLanguage":"...", "artifactContent":"...", "publishSummary":"...", "usageSteps":["step1","step2","step3"]}',
       "Content rules:",
-      "- README/SPEC/IMPLEMENTATION should be concise release engineering notes, not teaching/tutorial text",
+      "- README/SPEC/IMPLEMENTATION/API-CONTRACT should be concise release engineering notes, not teaching/tutorial text",
       "- SPEC must stay aligned with the exact mission title",
       "- artifactPath must be exactly index.html",
       "- artifactContent must be a complete interactive HTML app with inline CSS + JS (no placeholder-only markdown)",
       "- artifact must be immediately previewable in Kozmos build outcome preview",
+      "- output must be deployable-app ready and export-ready (zip-compatible structure)",
+      "- exportManifest must be valid JSON text with version, entry, files, and runtime contract",
+      "- apiContract must describe starter endpoints: posts/comments/likes/dm + mode",
       "- If persistence or network is needed, use window.KozmosRuntime.kv* and window.KozmosRuntime.proxy",
+      "- If social primitives are needed, use window.KozmosRuntime.starter.*",
       "- publishSummary should be one concrete paragraph",
       "- usageSteps should be short operator actions, not long mentoring guidance",
       "- no fluff, no repetitive stillness tone",
@@ -504,6 +508,8 @@ async function runSessionBuildMission({
       readme: String(parsed.readme || "").trim(),
       spec: String(parsed.spec || "").trim(),
       implementation: String(parsed.implementation || "").trim(),
+      apiContract: String(parsed.apiContract || "").trim(),
+      exportManifest: String(parsed.exportManifest || "").trim(),
       artifactPath: normalizeBuildPath(parsed.artifactPath || "index.html"),
       artifactLanguage: String(parsed.artifactLanguage || "html")
         .trim()
@@ -518,6 +524,7 @@ async function runSessionBuildMission({
     const artifactHtml = candidateBundle.artifactContent.toLowerCase();
     const looksPreviewableHtml =
       artifactPathLower === "index.html" &&
+      artifactHtml.includes("<!doctype html>") &&
       artifactHtml.includes("<html") &&
       artifactHtml.includes("<style") &&
       artifactHtml.includes("<script");
@@ -548,7 +555,6 @@ async function runSessionBuildMission({
 
   if (!bundle) {
     const safeTitle = plan.title;
-    const fallbackArtifactPath = `prototype-${slugify(safeTitle)}.md`;
     const scopeLines = plan.scope.map((item) => `- ${item}`);
     const usagePlan = [
       "Open the published README and copy the checklist into your active subspace notes.",
@@ -653,6 +659,79 @@ async function runSessionBuildMission({
         "- IMPLEMENTATION includes sequence, maintenance, and validation.",
         "- Artifact file is runnable/adaptable with explicit quick-start steps.",
       ].join("\n"),
+      apiContract: [
+        `# ${safeTitle} API Contract`,
+        "",
+        "## Runtime Base",
+        "- All calls are authenticated with current Kozmos session token.",
+        "- Space scoping is mandatory via `spaceId`.",
+        "",
+        "## Starter Mode",
+        "- `GET /api/build/runtime/starter/mode?spaceId=<id>`",
+        "- `PUT /api/build/runtime/starter/mode` body: `{ spaceId, enabled, postsQuota?, commentsQuota?, likesQuota?, dmThreadsQuota?, dmMessagesQuota? }`",
+        "",
+        "## Posts",
+        "- `GET /api/build/runtime/starter/posts?spaceId=<id>&limit=<n>&beforeId=<id>`",
+        "- `POST /api/build/runtime/starter/posts` body: `{ spaceId, body, meta? }`",
+        "",
+        "## Comments",
+        "- `GET /api/build/runtime/starter/comments?spaceId=<id>&postId=<id>&limit=<n>`",
+        "- `POST /api/build/runtime/starter/comments` body: `{ spaceId, postId, body, meta? }`",
+        "",
+        "## Likes",
+        "- `GET /api/build/runtime/starter/likes?spaceId=<id>&postId=<id>`",
+        "- `PUT /api/build/runtime/starter/likes` body: `{ spaceId, postId }`",
+        "- `DELETE /api/build/runtime/starter/likes` body: `{ spaceId, postId }`",
+        "",
+        "## DM",
+        "- `GET /api/build/runtime/starter/dm/threads?spaceId=<id>&limit=<n>`",
+        "- `POST /api/build/runtime/starter/dm/threads` body: `{ spaceId, subject?, participantUserIds?, metadata? }`",
+        "- `GET /api/build/runtime/starter/dm/messages?spaceId=<id>&threadId=<id>&limit=<n>&afterId=<id>`",
+        "- `POST /api/build/runtime/starter/dm/messages` body: `{ spaceId, threadId, body, metadata? }`",
+        "",
+        "## Errors",
+        "- `409` starter mode disabled",
+        "- `429` starter rate limit or quota exceeded",
+        "- `403` forbidden for this space/thread",
+      ].join("\n"),
+      exportManifest: JSON.stringify(
+        {
+          version: 1,
+          title: safeTitle,
+          entry: "index.html",
+          files: [
+            "README.md",
+            "SPEC.md",
+            "IMPLEMENTATION.md",
+            "API-CONTRACT.md",
+            "EXPORT-MANIFEST.json",
+            "index.html",
+          ],
+          runtime: {
+            contract: "kozmos.room.runtime.v1",
+            hooks: {
+              onEnter: "app.onEnter",
+              onLeave: "app.onLeave",
+              onTick: "app.onTick",
+              onMessage: "app.onMessage",
+            },
+            starterEndpoints: {
+              mode: "/api/build/runtime/starter/mode",
+              posts: "/api/build/runtime/starter/posts",
+              comments: "/api/build/runtime/starter/comments",
+              likes: "/api/build/runtime/starter/likes",
+              dmThreads: "/api/build/runtime/starter/dm/threads",
+              dmMessages: "/api/build/runtime/starter/dm/messages",
+            },
+          },
+          export: {
+            format: "zip",
+            endpoint: "/api/build/export/zip?spaceId=<SPACE_ID>",
+          },
+        },
+        null,
+        2
+      ),
       artifactPath: "index.html",
       artifactLanguage: "html",
       artifactContent: [
@@ -784,6 +863,8 @@ async function runSessionBuildMission({
   const readmeContent = `# ${plan.title}\n\n${bundle.readme}`.trim();
   const specContent = `# ${plan.title} - Spec\n\n${bundle.spec}`.trim();
   const implementationContent = `# ${plan.title} - Implementation\n\n${bundle.implementation}`.trim();
+  const apiContractContent = `# ${plan.title} - API Contract\n\n${String(bundle.apiContract || "").trim()}`.trim();
+  const exportManifestContent = String(bundle.exportManifest || "").trim();
   const artifactContent = bundle.artifactContent;
   const latestSummary = String(bundle.publishSummary || plan.publishSummary).trim();
   const usageSteps = (Array.isArray(bundle.usageSteps) ? bundle.usageSteps : [])
@@ -797,7 +878,7 @@ async function runSessionBuildMission({
     if (ext === ".js" || ext === ".mjs" || ext === ".cjs") return "javascript";
     if (ext === ".sql") return "sql";
     if (ext === ".css") return "css";
-    if (ext === ".html" || ext === ".htm") return "text";
+    if (ext === ".html" || ext === ".htm") return "html";
     if (ext === ".json") return "json";
     if (ext === ".md") return "markdown";
     return bundle.artifactLanguage || "text";
@@ -823,6 +904,18 @@ async function runSessionBuildMission({
   });
   await callAxyOps(baseUrl, token, "build.files.save", {
     spaceId: targetSpaceId,
+    path: `${basePath}/API-CONTRACT.md`,
+    language: "markdown",
+    content: apiContractContent,
+  });
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
+    path: `${basePath}/EXPORT-MANIFEST.json`,
+    language: "json",
+    content: exportManifestContent,
+  });
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
     path: artifactPath,
     language: byExtLanguage,
     content: artifactContent,
@@ -839,6 +932,8 @@ async function runSessionBuildMission({
       "",
       "## Entry",
       `- ${basePath}/README.md`,
+      `- ${basePath}/API-CONTRACT.md`,
+      `- ${basePath}/EXPORT-MANIFEST.json`,
       `- ${artifactPath}`,
       "",
       "## Usage",
@@ -913,6 +1008,8 @@ async function runSessionBuildMission({
   await pushBuildNote("report", [
     `title: ${plan.title}`,
     `path: ${basePath}/README.md`,
+    `api_contract: ${basePath}/API-CONTRACT.md`,
+    `export_manifest: ${basePath}/EXPORT-MANIFEST.json`,
     `artifact: ${artifactPath}`,
     `quality_score: ${bundleQuality?.qualityScore || 0}`,
     `usage: ${(usageSteps || []).join(" | ") || "open README and follow steps"}`,

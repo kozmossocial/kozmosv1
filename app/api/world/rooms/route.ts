@@ -21,6 +21,8 @@ type RoomAura = (typeof ROOM_AURAS)[number];
 type RoomVisibility = (typeof ROOM_VISIBILITIES)[number];
 type RoomEntry = (typeof ROOM_ENTRIES)[number];
 type RoomIcon = (typeof ROOM_ICONS)[number];
+type RoomRuntimeEvent = "onEnter" | "onLeave" | "onTick" | "onMessage";
+type RoomRuntimeHooks = Partial<Record<RoomRuntimeEvent, string>>;
 
 type SpaceRow = {
   id: string;
@@ -51,6 +53,13 @@ type RoomManifest = {
   visibility: RoomVisibility;
   entry: RoomEntry;
   icon: RoomIcon;
+  runtime: {
+    contract: "kozmos.room.runtime.v1";
+    hooks: RoomRuntimeHooks;
+    backend: {
+      starterMode: boolean;
+    };
+  };
 };
 
 function extractBearerToken(req: Request) {
@@ -116,6 +125,36 @@ function normalizeSpawn(value: unknown) {
   };
 }
 
+function normalizeRuntimeHooks(value: unknown): RoomRuntimeHooks {
+  const out: RoomRuntimeHooks = {};
+  if (!value || typeof value !== "object") return out;
+  const source = value as Record<string, unknown>;
+  const keys: RoomRuntimeEvent[] = ["onEnter", "onLeave", "onTick", "onMessage"];
+  keys.forEach((key) => {
+    const raw = source[key];
+    if (typeof raw !== "string") return;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    out[key] = trimmed.slice(0, 120);
+  });
+  return out;
+}
+
+function defaultRuntimeManifest() {
+  return {
+    contract: "kozmos.room.runtime.v1" as const,
+    hooks: {
+      onEnter: "app.onEnter",
+      onLeave: "app.onLeave",
+      onTick: "app.onTick",
+      onMessage: "app.onMessage",
+    },
+    backend: {
+      starterMode: true,
+    },
+  };
+}
+
 function defaultSpawn(spaceId: string) {
   const hash = hashString(spaceId);
   const angle = ((hash % 3600) / 3600) * Math.PI * 2;
@@ -143,6 +182,7 @@ function parseRoomManifest(file: BuildFileRow | undefined, space: SpaceRow): Roo
       visibility: fallbackVisibility,
       entry: "proximity",
       icon: "ring",
+      runtime: defaultRuntimeManifest(),
     };
   }
 
@@ -152,7 +192,7 @@ function parseRoomManifest(file: BuildFileRow | undefined, space: SpaceRow): Roo
   }
 
   const version = (parsed as { version?: unknown }).version;
-  if (typeof version !== "number" || version !== 1) {
+  if (typeof version !== "number" || (version !== 1 && version !== 2)) {
     throw new Error("manifest version unsupported");
   }
 
@@ -160,6 +200,23 @@ function parseRoomManifest(file: BuildFileRow | undefined, space: SpaceRow): Roo
   if (!room || typeof room !== "object") {
     throw new Error("room block missing");
   }
+
+  const runtimeRaw =
+    version === 2 && typeof (parsed as { runtime?: unknown }).runtime === "object"
+      ? ((parsed as { runtime?: unknown }).runtime as Record<string, unknown>)
+      : null;
+
+  const runtimeContract = (() => {
+    const value = String(runtimeRaw?.contract || "").trim();
+    return (value === "kozmos.room.runtime.v1" ? value : "kozmos.room.runtime.v1") as "kozmos.room.runtime.v1";
+  })();
+
+  const backendStarterMode =
+    typeof runtimeRaw?.backend === "object" &&
+    runtimeRaw.backend &&
+    typeof (runtimeRaw.backend as { starterMode?: unknown }).starterMode === "boolean"
+      ? Boolean((runtimeRaw.backend as { starterMode?: unknown }).starterMode)
+      : true;
 
   return {
     title: normalizeText((room as { title?: unknown }).title, 32) || fallbackTitle,
@@ -171,6 +228,16 @@ function parseRoomManifest(file: BuildFileRow | undefined, space: SpaceRow): Roo
       "public",
     entry: normalizeEnum((room as { entry?: unknown }).entry, ROOM_ENTRIES) || "proximity",
     icon: normalizeEnum((room as { icon?: unknown }).icon, ROOM_ICONS) || "ring",
+    runtime: {
+      contract: runtimeContract,
+      hooks: {
+        ...defaultRuntimeManifest().hooks,
+        ...normalizeRuntimeHooks(runtimeRaw?.hooks),
+      },
+      backend: {
+        starterMode: backendStarterMode,
+      },
+    },
   };
 }
 
@@ -261,6 +328,7 @@ export async function GET(req: Request) {
             visibility: space.is_public ? "public" : "private",
             entry: "proximity",
             icon: "ring",
+            runtime: defaultRuntimeManifest(),
           };
         }
 
@@ -279,6 +347,7 @@ export async function GET(req: Request) {
           visibility: manifest.visibility,
           entry: manifest.entry,
           icon: manifest.icon,
+          runtime: manifest.runtime,
           ownerUsername: ownerById.get(space.owner_id) || "user",
           updatedAt: pickNewestTimestamp(space.updated_at, manifestFile?.updated_at),
         };

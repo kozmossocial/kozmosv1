@@ -17,6 +17,7 @@ type SpaceRow = {
 
 type SpaceResponseRow = SpaceRow & {
   can_edit: boolean;
+  owner_username?: string;
 };
 
 function extractBearerToken(req: Request) {
@@ -107,7 +108,25 @@ async function listAccessibleSpaces(userId: string) {
     can_edit: space.owner_id === userId || sharedEditMap.get(space.id) === true,
   })) as SpaceResponseRow[];
 
-  return { spaces, error: null };
+  const ownerIds = Array.from(new Set(spaces.map((space) => space.owner_id).filter(Boolean)));
+  let ownerNameMap = new Map<string, string>();
+  if (ownerIds.length > 0) {
+    const { data: owners, error: ownersErr } = await supabaseAdmin
+      .from("profileskozmos")
+      .select("id, username")
+      .in("id", ownerIds);
+    if (ownersErr) return { spaces: [] as SpaceResponseRow[], error: ownersErr };
+    ownerNameMap = new Map(
+      (owners || []).map((row) => [String((row as { id: string }).id), String((row as { username?: string }).username || "user")])
+    );
+  }
+
+  const withOwner = spaces.map((space) => ({
+    ...space,
+    owner_username: ownerNameMap.get(space.owner_id) || "user",
+  }));
+
+  return { spaces: withOwner, error: null };
 }
 
 async function assertOwner(spaceId: string, userId: string) {

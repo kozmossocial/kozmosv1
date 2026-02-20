@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/kozmos-logo.png",
+        url: "/kozmos-logo2.png",
         width: 1200,
         height: 630,
         alt: "KOZMOS logo",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "KOZMOS.",
     description: "A shared social space for presence, not performance.",
-    images: ["/kozmos-logo.png"],
+    images: ["/kozmos-logo2.png"],
   },
 };
 
