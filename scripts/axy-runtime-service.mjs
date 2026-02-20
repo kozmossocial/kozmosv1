@@ -171,6 +171,7 @@ async function runSessionBuildMission({
   baseUrl,
   token,
   botUsername,
+  actorUserId,
   buildSpaceId,
   missionSessionId,
   missionMaxIdeaAttempts,
@@ -207,9 +208,14 @@ async function runSessionBuildMission({
     const editable = (Array.isArray(spacesRes?.data) ? spacesRes.data : []).filter(
       (space) => space?.id && space?.can_edit === true
     );
-    const preferred = editable.find(
-      (space) => String(space?.title || "").trim().toLowerCase() === "axy published builds"
-    );
+    const preferred = editable.find((space) => {
+      const title = String(space?.title || "").trim().toLowerCase();
+      const ownerId = String(space?.owner_id || "").trim();
+      return (
+        title === "axy published builds" &&
+        (!actorUserId || (ownerId && ownerId === actorUserId))
+      );
+    });
     if (preferred?.id) {
       targetSpaceId = String(preferred.id);
     }
@@ -2535,6 +2541,7 @@ async function main() {
               baseUrl,
               token,
               botUsername,
+              actorUserId: String(user?.id || "").trim(),
               buildSpaceId: missionTargetSpaceId || buildSpaceId,
               missionSessionId,
               missionMaxIdeaAttempts,
