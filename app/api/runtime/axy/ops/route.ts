@@ -26,6 +26,8 @@ const ACTION_ALIASES: Record<string, string> = {
   "dm.message.send": "dm.send",
   "build.space.list": "build.spaces.list",
   "build.files.write": "build.files.save",
+  "build.chat.messages": "build.chat.list",
+  "build.chat.post": "build.chat.send",
   "matrix.color": "matrix.set_color",
   "swarm.enter": "quite_swarm.enter",
   "swarm.exit": "quite_swarm.exit",
@@ -74,6 +76,8 @@ const KNOWN_ACTIONS = new Set<string>([
   "build.files.create",
   "build.files.save",
   "build.files.delete",
+  "build.chat.list",
+  "build.chat.send",
   "build.access.list",
   "build.access.grant",
   "build.access.revoke",
@@ -192,6 +196,14 @@ type BuildFileRow = {
   content: string;
   language: string;
   updated_at: string;
+};
+
+type BuildChatMessageRow = {
+  id: number;
+  user_id: string;
+  username: string;
+  content: string;
+  created_at: string;
 };
 
 type RuntimePresenceMatrixRow = {
@@ -2163,6 +2175,36 @@ function listKozmosPlay() {
   return KOZMOS_PLAY_CATALOG.map((game) => ({ ...game }));
 }
 
+async function listBuildChatMessages(limitInput: number) {
+  const limit = Math.max(1, Math.min(240, Number(limitInput) || 120));
+  const { data, error } = await supabaseAdmin
+    .from("build_chat_messages")
+    .select("id, user_id, username, content, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error("build chat list failed");
+  return ((data || []) as BuildChatMessageRow[]).reverse();
+}
+
+async function sendBuildChatMessage(userId: string, username: string, contentInput: string) {
+  const content = asTrimmedString(contentInput);
+  if (!content) throw new Error("content required");
+
+  const { data, error } = await supabaseAdmin
+    .from("build_chat_messages")
+    .insert({
+      user_id: userId,
+      username,
+      content: content.slice(0, 5000),
+    })
+    .select("id, user_id, username, content, created_at")
+    .single();
+
+  if (error || !data) throw new Error("build chat send failed");
+  return data as BuildChatMessageRow;
+}
+
 function getKozmosPlayHint(gameIdInput: string) {
   const gameId = asTrimmedString(gameIdInput).toLowerCase();
   const selected =
@@ -3384,12 +3426,14 @@ async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
 async function buildSnapshot(actor: RuntimeActor) {
   const starfallProfilePromise = getStarfallProfile(actor.userId).catch(() => null);
   const missionPromise = getLatestMission(actor.userId).catch(() => null);
+  const buildChatPromise = listBuildChatMessages(120).catch(() => []);
   const [
     notes,
     touch,
     chats,
     hush,
     buildSpaces,
+    buildChat,
     matrix,
     matrixPosition,
     quiteSwarmPosition,
@@ -3403,6 +3447,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     listDirectChats(actor.userId),
     listHush(actor.userId),
     listBuildSpaces(actor.userId),
+    buildChatPromise,
     getMatrixProfile(actor.userId),
     getMatrixPosition(actor.userId),
     getQuiteSwarmPosition(actor.userId),
@@ -3422,6 +3467,7 @@ async function buildSnapshot(actor: RuntimeActor) {
     chats,
     hush,
     build_spaces: buildSpaces,
+    build_chat: buildChat,
     mission,
     matrix,
     matrix_position: matrixPosition,
@@ -3733,6 +3779,18 @@ export async function POST(req: Request) {
       const path = normalizeBuildPath((payload as { path?: unknown })?.path);
       const result = await deleteBuildFile(actor.userId, spaceId, path);
       return respond(200, { ok: true, action, data: result });
+    }
+
+    if (action === "build.chat.list") {
+      const limit = Number((payload as { limit?: unknown })?.limit ?? 120);
+      const rows = await listBuildChatMessages(limit);
+      return respond(200, { ok: true, action, data: rows });
+    }
+
+    if (action === "build.chat.send") {
+      const content = asTrimmedString((payload as { content?: unknown })?.content);
+      const message = await sendBuildChatMessage(actor.userId, actor.username, content);
+      return respond(200, { ok: true, action, data: message });
     }
 
     if (action === "build.access.list") {

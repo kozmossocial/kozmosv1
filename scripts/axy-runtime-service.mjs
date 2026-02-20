@@ -176,10 +176,21 @@ async function runSessionBuildMission({
   missionMaxBundleAttempts,
   missionHistoryLimit,
   missionNoRepeatDays,
+  missionNotesToBuildChat,
   missionContext,
   onState,
 }) {
   const setState = typeof onState === "function" ? onState : async () => {};
+  const pushBuildNote = async (title, bodyLines = []) => {
+    if (!missionNotesToBuildChat) return;
+    const lines = [
+      `[Axy Build Note] ${String(title || "").trim()}`.trim(),
+      ...bodyLines.map((line) => String(line || "").trim()).filter(Boolean),
+    ].filter(Boolean);
+    const content = lines.join("\n").slice(0, 5000);
+    if (!content) return;
+    await callAxyOps(baseUrl, token, "build.chat.send", { content });
+  };
   await setState("mission_planning");
   let targetSpaceId = String(buildSpaceId || "").trim();
 
@@ -266,6 +277,12 @@ async function runSessionBuildMission({
         })
         .filter(Boolean)
     : [];
+  const contextBuildChat = Array.isArray(missionContext?.buildChat)
+    ? missionContext.buildChat
+        .slice(-20)
+        .map((row) => `${row?.username || "user"}: ${String(row?.content || "").trim()}`)
+        .filter((line) => line.length > 3)
+    : [];
 
   let plan = null;
   for (let attempt = 1; attempt <= missionMaxIdeaAttempts; attempt += 1) {
@@ -281,6 +298,9 @@ async function runSessionBuildMission({
     const buildContextBlock = contextBuildSpaces.length
       ? contextBuildSpaces.map((line) => `- ${line}`).join("\n")
       : "- no visible user-build signals";
+    const buildChatBlock = contextBuildChat.length
+      ? contextBuildChat.slice(-12).map((line) => `- ${line}`).join("\n")
+      : "- no recent build chat notes";
 
     const planPrompt = [
       "Create candidate Kozmos build missions and score them.",
@@ -290,6 +310,7 @@ async function runSessionBuildMission({
       `Recent shared conversation signals:\n${sharedContextBlock}`,
       `Recent private note signals:\n${notesContextBlock}`,
       `Current user-build ecosystem signals:\n${buildContextBlock}`,
+      `Recent build chat notes:\n${buildChatBlock}`,
       "JSON schema:",
       '{"ideas":[{"title":"...", "problem":"...", "goal":"...", "scope":["..."], "artifact_language":"typescript|javascript|markdown|sql|css|json", "publish_summary":"... (1 concise paragraph)", "utility":0-10, "implementability":0-10, "novelty":0-10}]}',
       "Rules:",
@@ -342,6 +363,14 @@ async function runSessionBuildMission({
   if (!plan) {
     throw new Error("mission plan generation failed (unique idea not found)");
   }
+
+  await pushBuildNote("plan", [
+    `title: ${plan.title}`,
+    `problem: ${plan.problem}`,
+    `goal: ${plan.goal}`,
+    `scope: ${plan.scope.join(" | ")}`,
+    `scores: utility=${plan.ideaScores?.utility ?? 0}, implementability=${plan.ideaScores?.implementability ?? 0}, novelty=${plan.ideaScores?.novelty ?? 0}, total=${plan.ideaScores?.total ?? 0}`,
+  ]);
 
   await setState("mission_building", {
     topic: plan.title,
@@ -421,6 +450,11 @@ async function runSessionBuildMission({
     qualityScore: bundleQuality?.qualityScore || 0,
     outputPath: "",
   });
+  await pushBuildNote("review", [
+    `title: ${plan.title}`,
+    `quality_score: ${bundleQuality?.qualityScore || 0}`,
+    `issues: ${(bundleQuality?.issues || []).join(", ") || "none"}`,
+  ]);
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const basePath = `${MISSION_ROOT_PATH}/${stamp}-${slugify(plan.title)}`;
@@ -540,6 +574,13 @@ async function runSessionBuildMission({
     published: true,
     publishedAt: new Date().toISOString(),
   });
+  await pushBuildNote("report", [
+    `title: ${plan.title}`,
+    `path: ${basePath}/README.md`,
+    `artifact: ${artifactPath}`,
+    `quality_score: ${bundleQuality?.qualityScore || 0}`,
+    `usage: ${(usageSteps || []).join(" | ") || "open README and follow steps"}`,
+  ]);
 
   const publishMessage = `Axy published: ${plan.title} • value: ${latestSummary} • path: ${basePath}/README.md • use: open README then follow steps.`;
   return {
@@ -1607,6 +1648,11 @@ async function main() {
       120
     )
   );
+  const missionNotesToBuildChat = toBool(
+    args["mission-notes-to-build-chat"] ??
+      process.env.KOZMOS_MISSION_NOTES_TO_BUILD_CHAT,
+    true
+  );
   const evalFile = String(args["eval-file"] || process.env.KOZMOS_EVAL_FILE || "logs/axy-eval.json").trim();
   const evalWriteSeconds = Math.max(
     5,
@@ -1754,6 +1800,7 @@ async function main() {
       autoDm,
       autoBuild,
       sessionBuildFirst,
+      missionNotesToBuildChat,
       autoPlay,
       autoStarfall,
       autoNight,
@@ -1926,7 +1973,7 @@ async function main() {
       `[${now()}] build helper request=${buildRequestPath} output=${buildOutputPath}${buildSpaceId ? ` space=${buildSpaceId}` : ""}`
     );
     console.log(
-      `[${now()}] mission-first=${sessionBuildFirst} publish=${missionPublishToShared} retry=${missionRetryMinSeconds}-${missionRetryMaxSeconds}s attempts(idea=${missionMaxIdeaAttempts},bundle=${missionMaxBundleAttempts}) noRepeatDays=${missionNoRepeatDays}`
+      `[${now()}] mission-first=${sessionBuildFirst} publish=${missionPublishToShared} buildChatNotes=${missionNotesToBuildChat} retry=${missionRetryMinSeconds}-${missionRetryMaxSeconds}s attempts(idea=${missionMaxIdeaAttempts},bundle=${missionMaxBundleAttempts}) noRepeatDays=${missionNoRepeatDays}`
     );
   }
   if (autoTouchRequest) {
@@ -2246,10 +2293,12 @@ async function main() {
               missionMaxBundleAttempts,
               missionHistoryLimit,
               missionNoRepeatDays,
+              missionNotesToBuildChat,
               missionContext: {
                 sharedTurns: sharedRecentTurns,
                 notes: snapshot?.data?.notes || [],
                 buildSpaces: snapshot?.data?.build_spaces || [],
+                buildChat: snapshot?.data?.build_chat || [],
               },
               onState: async (status, patch = {}) => {
                 await persistMissionState(status, patch);

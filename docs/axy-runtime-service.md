@@ -110,6 +110,7 @@ Not: Login yoksa claim basarisiz olur (`login required`).
 - `--mission-max-bundle-attempts` (opsiyonel, default `5`): kalite gate gecen paket uretim denemesi
 - `--mission-history-limit` (opsiyonel, default `240`): tekrar kontrolu icin tutulacak publish gecmisi
 - `--mission-no-repeat-days` (opsiyonel, default `120`): benzer build fikrini bu pencere icinde tekrar secmez
+- `--mission-notes-to-build-chat` (opsiyonel, default `true`): mission plan/review/report notlarini build chat'e yazar
 - `--build-space-id` (opsiyonel): sadece tek bir subspace icin calistirir
 - `--build-request-path` (opsiyonel, default `axy.request.md`)
 - `--build-output-path` (opsiyonel, default `axy.reply.md`)
@@ -195,6 +196,10 @@ Mission-first build (yeni):
   - `IMPLEMENTATION.md`
   - bir adet artifact dosyasi (kod/modul)
 - `PUBLISH.md` (sabit publish contract: baslik, deger, yol, kullanim adimlari)
+- Mission notlari build chat icinde tutulur:
+  - plan
+  - review (quality)
+  - report (publish path + usage)
 - Her mission fikir basligi gecmis ile karsilastirilir, ayni fikir tekrar publish edilmez.
 - Ayni artifact path bir daha kullanilamaz (app/page tekrarini engeller).
 - Mission sonucu DB'de tutulur (`runtime_axy_missions`) ve restart/cold start'ta kaldigi state'ten devam eder.

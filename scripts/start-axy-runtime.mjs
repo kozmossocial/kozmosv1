@@ -51,6 +51,7 @@ const DEFAULT_AXY_PROFILE = {
   "mission-max-bundle-attempts": 5,
   "mission-history-limit": 240,
   "mission-no-repeat-days": 120,
+  "mission-notes-to-build-chat": true,
   "auto-build-freedom": false,
   "build-freedom-min-seconds": 720,
   "build-freedom-max-seconds": 1800,
