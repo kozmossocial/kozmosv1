@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-const DELETE_MAIL_FROM = process.env.KOZMOS_EMAIL_FROM || "axy@kosmos.social";
+const DELETE_MAIL_FROM = process.env.KOZMOS_EMAIL_FROM || "axy@kozmos.social";
 const DELETE_CODE_TTL_MINUTES = 10;
 const USER_WINDOW_MINUTES = 15;
 const USER_WINDOW_MAX = 3;
