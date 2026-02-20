@@ -192,7 +192,13 @@ export default function LoginClient() {
           width={131}
           height={98}
           className="kozmos-logo mother-logo-static"
-          style={{ height: "auto" }}
+          style={{
+            width: 80,
+            height: "auto",
+            opacity: 0.85,
+            borderRadius: 6,
+            transition: "opacity 0.25s ease, transform 0.08s ease",
+          }}
         />
       </div>
 
