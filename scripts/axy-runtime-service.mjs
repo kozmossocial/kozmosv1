@@ -1809,10 +1809,8 @@ async function main() {
     args["session-build-first"] ?? process.env.KOZMOS_SESSION_BUILD_FIRST,
     true
   );
-  const missionPublishToShared = toBool(
-    args["mission-publish-to-shared"] ?? process.env.KOZMOS_MISSION_PUBLISH_TO_SHARED,
-    true
-  );
+  // Hard policy: build/mission outputs are confined to build chat only.
+  const missionPublishToShared = false;
   const missionRetryMinSeconds = Math.max(
     15,
     toInt(
@@ -2565,16 +2563,7 @@ async function main() {
               `[${now()}] mission build published title="${missionRes.title}" space=${missionTargetSpaceId}`
             );
             if (missionPublishToShared && missionRes.publishMessage) {
-              await sendManagedOutput({
-                channel: "shared",
-                conversationId: "shared:main",
-                content: missionRes.publishMessage,
-                minGapMs: Math.max(5000, pollSeconds * 1000),
-                send: async (safeContent) => {
-                  await postShared(baseUrl, token, safeContent);
-                },
-                logLabel: "mission-publish",
-              });
+              // Intentionally disabled by policy (build chat only).
             }
           } catch (missionErr) {
             lastMissionError = missionErr?.body?.error || missionErr?.message || "mission failed";
