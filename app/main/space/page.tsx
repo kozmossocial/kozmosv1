@@ -963,7 +963,7 @@ export default function MainSpacePage() {
                 style={{
                   position: "absolute",
                   left: `${xPercent}%`,
-                  top: `calc(${yPercent}% - ${size * 0.95}px)`,
+                  top: `calc(${yPercent}% - ${size * 1.02}px)`,
                   transform: "translate(-50%, -100%)",
                   fontSize: 11,
                   lineHeight: 1.2,
@@ -982,7 +982,7 @@ export default function MainSpacePage() {
                   style={{
                     position: "absolute",
                     left: `${xPercent}%`,
-                    top: `calc(${yPercent}% - ${size * 0.42}px)`,
+                    top: `calc(${yPercent}% - ${size * 0.64}px)`,
                     transform: "translate(-50%, -100%)",
                     fontSize: 10,
                     lineHeight: 1.2,

@@ -20,6 +20,7 @@ import {
   normalizeIdeaKey,
   normalizeForSimilarity,
   pickBestMissionIdea,
+  scoreMissionIdea,
   scoreMissionBundleQuality,
 } from "../lib/axy-core.mjs";
 
@@ -178,6 +179,97 @@ function formatMissionTitle(titleInput, goalInput) {
     .trim();
   if (!goalSnippet) return title.slice(0, 96);
   return `${title}: ${goalSnippet}`.slice(0, 96);
+}
+
+const KOZMOS_PRINCIPLES = [
+  "Reduced noise: avoid spammy output and artificial engagement loops.",
+  "Intentional interaction: prioritize clarity and concrete utility over volume.",
+  "Users first: optimize for real user value, not vanity metrics.",
+  "Open curiosity: enable exploration, do not over-constrain discovery.",
+  "Persistent presence: build outcomes should remain useful beyond one moment.",
+];
+
+const KOZMOS_CORE_LINKS = [
+  "/main",
+  "/main/space",
+  "/build",
+  "/build/manual",
+  "/runtime/spec",
+];
+
+function buildKozmosMissionGuardBlock() {
+  return [
+    "Kozmos operating principles (hard constraints):",
+    ...KOZMOS_PRINCIPLES.map((line) => `- ${line}`),
+    "Kozmos core surfaces to stay aligned with:",
+    ...KOZMOS_CORE_LINKS.map((line) => `- ${line}`),
+  ].join("\n");
+}
+
+function computeDemandHotspots({
+  sharedLines = [],
+  buildLines = [],
+  noteLines = [],
+  ecosystemLines = [],
+}) {
+  const buckets = [
+    { key: "shared-chat", rx: /(shared|main chat|open chat|channel)/i },
+    { key: "build", rx: /(build|subspace|preview|publish|export)/i },
+    { key: "dm-hush", rx: /(dm|direct chat|hush|private)/i },
+    { key: "matrix-space", rx: /(matrix|space|room|world|presence|orb)/i },
+    { key: "play-games", rx: /(play|game|starfall|night|swarm)/i },
+    { key: "news-notes", rx: /(news|paper|note|journal|report)/i },
+  ];
+  const counts = new Map(buckets.map((bucket) => [bucket.key, 0]));
+  const feed = [...sharedLines, ...buildLines, ...noteLines, ...ecosystemLines].map((line) =>
+    String(line || "")
+  );
+  feed.forEach((line) => {
+    buckets.forEach((bucket) => {
+      if (bucket.rx.test(line)) {
+        counts.set(bucket.key, (counts.get(bucket.key) || 0) + 1);
+      }
+    });
+  });
+  return Array.from(counts.entries())
+    .map(([key, count]) => ({ key, count }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+}
+
+function scoreIdeaDemandFit(ideaText, demandHotspots) {
+  if (!Array.isArray(demandHotspots) || demandHotspots.length === 0) return 0;
+  const normalized = normalizeForSimilarity(ideaText);
+  let score = 0;
+  const matchers = {
+    "shared-chat": /(shared|chat|open|channel)/i,
+    build: /(build|subspace|preview|publish|export)/i,
+    "dm-hush": /(dm|direct|hush|private)/i,
+    "matrix-space": /(matrix|space|room|world|presence|orb)/i,
+    "play-games": /(play|game|starfall|night|swarm)/i,
+    "news-notes": /(news|paper|note|journal|report)/i,
+  };
+  for (const hotspot of demandHotspots) {
+    const rx = matchers[hotspot.key];
+    if (!rx) continue;
+    if (rx.test(normalized)) {
+      score += Math.min(2.4, 0.8 + hotspot.count * 0.2);
+    }
+  }
+  return Number(Math.min(3, score).toFixed(2));
+}
+
+function formatDemandHotspotLabel(key) {
+  const labels = {
+    "shared-chat": "Shared Chat",
+    build: "User Build",
+    "dm-hush": "DM/Hush",
+    "matrix-space": "Matrix/Space",
+    "play-games": "Play/Games",
+    "news-notes": "News/Notes",
+  };
+  return labels[key] || key;
 }
 
 function pickCodeFence(text) {
@@ -377,6 +469,12 @@ async function runSessionBuildMission({
         .map((row) => `${row?.username || "user"}: ${String(row?.content || "").trim()}`)
         .filter((line) => line.length > 3)
     : [];
+  const demandHotspots = computeDemandHotspots({
+    sharedLines: contextShared,
+    buildLines: contextBuildChat,
+    noteLines: contextNotes,
+    ecosystemLines: contextBuildSpaces,
+  });
 
   let plan = null;
   for (let attempt = 1; attempt <= missionMaxIdeaAttempts; attempt += 1) {
@@ -395,16 +493,24 @@ async function runSessionBuildMission({
     const buildChatBlock = contextBuildChat.length
       ? contextBuildChat.slice(-12).map((line) => `- ${line}`).join("\n")
       : "- no recent build chat notes";
+    const hotspotBlock = demandHotspots.length
+      ? demandHotspots
+          .map((row) => `- ${formatDemandHotspotLabel(row.key)} (${row.count})`)
+          .join("\n")
+      : "- no strong hotspot yet";
+    const principleBlock = buildKozmosMissionGuardBlock();
 
     const planPrompt = [
       "Create candidate Kozmos build missions and score them.",
       `Identity: ${botUsername}.`,
       "Return strict JSON only.",
+      principleBlock,
       `Never repeat or clone any prior idea/title in this list:\n${existingBlock}`,
       `Recent shared conversation signals:\n${sharedContextBlock}`,
       `Recent private note signals:\n${notesContextBlock}`,
       `Current user-build ecosystem signals:\n${buildContextBlock}`,
       `Recent build chat notes:\n${buildChatBlock}`,
+      `Current demand hotspots:\n${hotspotBlock}`,
       "JSON schema:",
       '{"ideas":[{"title":"...", "problem":"...", "goal":"...", "scope":["..."], "artifact_language":"typescript|javascript|markdown|sql|css|json", "publish_summary":"... (1 concise paragraph)", "utility":0-10, "implementability":0-10, "novelty":0-10}]}',
       "Rules:",
@@ -412,6 +518,8 @@ async function runSessionBuildMission({
       "- title must be novel, specific, and clearly explain the product outcome",
       "- title format should read like a product name + function (e.g. 'X: what it does')",
       "- practical utility for Kozmos users",
+      "- prioritize globally recurring user demand and highest traffic request surfaces",
+      "- if demand hotspots are visible, reflect them directly in title/problem/goal",
       "- prioritize previewable user-build outcomes (interactive web modules) over documentation-only outputs",
       "- consider Kozmos modules ecosystem (main chat, hush, game chat, build, matrix, play) and propose compatible additions",
       "- scope must be deliverable in one session",
@@ -442,12 +550,26 @@ async function runSessionBuildMission({
             },
           ];
 
-    const bestIdea = pickBestMissionIdea(candidateIdeas, {
-      usedIdeaKeys: Array.from(usedIdeaKeys),
-      usedIdeaTitles: recentIdeaTitles,
-    });
+    const scoredIdeas = candidateIdeas
+      .map((idea) =>
+        scoreMissionIdea(idea, {
+          usedIdeaKeys: Array.from(usedIdeaKeys),
+          usedIdeaTitles: recentIdeaTitles,
+        })
+      )
+      .filter((row) => row.valid)
+      .map((row) => {
+        const text = [row.title, row.problem, row.goal, ...(row.scope || [])].join(" ");
+        const demandFit = scoreIdeaDemandFit(text, demandHotspots);
+        const adjustedTotal = Number((row.total + demandFit * 0.35).toFixed(3));
+        return { ...row, demandFit, adjustedTotal };
+      })
+      .sort((a, b) => b.adjustedTotal - a.adjustedTotal);
+
+    const bestIdea =
+      scoredIdeas.find((row) => !row.duplicateByKey && !row.duplicateByTitle) || null;
     if (!bestIdea) continue;
-    if (bestIdea.total < 4.8) continue;
+    if (bestIdea.adjustedTotal < 5.1) continue;
     if (usedIdeaKeys.has(bestIdea.key)) continue;
     const clearTitle = formatMissionTitle(bestIdea.title, bestIdea.goal);
     plan = {
@@ -463,7 +585,7 @@ async function runSessionBuildMission({
         utility: bestIdea.utility,
         implementability: bestIdea.implementability,
         novelty: bestIdea.novelty,
-        total: bestIdea.total,
+        total: bestIdea.adjustedTotal,
       },
     };
     break;
