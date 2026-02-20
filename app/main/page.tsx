@@ -16,6 +16,7 @@ type Message = {
   user_id: string;
   username: string;
   content: string;
+  created_at?: string;
 };
 
 type ChatMode = "open" | "game" | "build";
@@ -297,6 +298,14 @@ function parseTsMs(value: string | null | undefined) {
   if (!value) return 0;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatMessageTimestampUtc(value: string | null | undefined) {
+  if (!value) return "unknown time";
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return "unknown time";
+  const iso = new Date(ms).toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC +0`;
 }
 
 function createVsSession(participants: string[], running = false): VsSession {
@@ -1404,15 +1413,15 @@ export default function Main() {
             .maybeSingle(),
           supabase
             .from("main_messages")
-            .select("id, user_id, username, content")
+            .select("id, user_id, username, content, created_at")
             .order("created_at", { ascending: true }),
           supabase
             .from("game_chat_messages")
-            .select("id, user_id, username, content")
+            .select("id, user_id, username, content, created_at")
             .order("created_at", { ascending: true }),
           supabase
             .from("build_chat_messages")
-            .select("id, user_id, username, content")
+            .select("id, user_id, username, content, created_at")
             .order("created_at", { ascending: true }),
         ]);
 
@@ -2936,7 +2945,7 @@ export default function Main() {
           username: currentUsername,
           content,
         })
-        .select("id, user_id, username, content")
+        .select("id, user_id, username, content, created_at")
         .single();
 
       if (error) {
@@ -2944,7 +2953,7 @@ export default function Main() {
         console.error("build chat send failed", error);
         const { data: fallbackRows } = await supabase
           .from("build_chat_messages")
-          .select("id, user_id, username, content")
+          .select("id, user_id, username, content, created_at")
           .order("created_at", { ascending: true });
         if (fallbackRows) {
           setBuildMessages(fallbackRows);
@@ -3025,7 +3034,7 @@ export default function Main() {
 
     const { data: rows, error: reloadError } = await supabase
       .from("main_messages")
-      .select("id, user_id, username, content")
+      .select("id, user_id, username, content, created_at")
       .order("created_at", { ascending: true });
     if (reloadError) {
       console.error("main chat delete sync failed", reloadError);
@@ -3058,7 +3067,7 @@ export default function Main() {
 
     const { data: rows, error: reloadError } = await supabase
       .from("game_chat_messages")
-      .select("id, user_id, username, content")
+      .select("id, user_id, username, content, created_at")
       .order("created_at", { ascending: true });
     if (reloadError) {
       console.error("game chat delete sync failed", reloadError);
@@ -3091,7 +3100,7 @@ export default function Main() {
 
     const { data: rows, error: reloadError } = await supabase
       .from("build_chat_messages")
-      .select("id, user_id, username, content")
+      .select("id, user_id, username, content, created_at")
       .order("created_at", { ascending: true });
     if (reloadError) {
       console.error("build chat delete sync failed", reloadError);
@@ -4859,12 +4868,14 @@ export default function Main() {
               marginBottom: "-100%",
               pointerEvents: "none",
               zIndex: 0,
+              contain: "paint",
               backgroundImage: `url('${AXY_SHIP_SRC}')`,
               backgroundRepeat: "no-repeat",
               backgroundPosition: "center 62%",
               backgroundSize: "min(460px, 74%) auto",
               mixBlendMode: "screen",
               opacity: 0.12,
+              willChange: "opacity",
               WebkitMaskImage:
                 "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.74) 52%, rgba(0,0,0,0.28) 72%, rgba(0,0,0,0) 88%)",
               maskImage:
@@ -4890,11 +4901,13 @@ export default function Main() {
                 style={{
                   position: "absolute",
                   inset: 0,
+                  contain: "paint",
                   backgroundImage: `url('${AXY_SHIP_SRC}')`,
                   backgroundRepeat: "no-repeat",
                   backgroundPosition: "center 62%",
                   backgroundSize: "min(460px, 74%) auto",
                   mixBlendMode: "screen",
+                  willChange: "opacity",
                   WebkitMaskImage:
                     "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.9) 48%, rgba(0,0,0,0.44) 68%, rgba(0,0,0,0) 86%)",
                   maskImage:
@@ -4972,6 +4985,16 @@ export default function Main() {
                         delete
                       </span>
                     )}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 3,
+                      fontSize: 10,
+                      opacity: 0.4,
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    {formatMessageTimestampUtc(m.created_at)}
                   </div>
 
                   {chatMode === "open" && axyMsgReflection[reflectionKey] && (

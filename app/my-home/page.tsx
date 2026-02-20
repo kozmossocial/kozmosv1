@@ -51,6 +51,14 @@ const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
 const AXY_SHIP_SRC = "/ufo.png";
 const LUMI_SHIP_SRC = "/ufoholo.png";
 
+function formatTimestampUtc(value: string | null | undefined) {
+  if (!value) return "unknown time";
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return "unknown time";
+  const iso = new Date(ms).toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC +0`;
+}
+
 export default function MyHome() {
   const router = useRouter();
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -141,6 +149,7 @@ export default function MyHome() {
   const holoLaunchRafRef = useRef<number | null>(null);
   const holoDockRafRef = useRef<number | null>(null);
   const holoSpecialRafRef = useRef<number | null>(null);
+  const holoInlineClearRafRef = useRef<number | null>(null);
   const holoSpecialLaunchTimerRef = useRef<number | null>(null);
   const lumiMobileTapHintTimerRef = useRef<number | null>(null);
   const holoDockLeft = isMobileLayout ? 12 : 18;
@@ -648,7 +657,7 @@ export default function MyHome() {
 
         const { data: notesData } = await supabase
           .from("notes")
-          .select("id, content")
+          .select("id, content, created_at")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
@@ -910,7 +919,7 @@ useEffect(() => {
         user_id: userId,
         content: noteInput,
       })
-      .select("id, content")
+      .select("id, content, created_at")
       .single();
 
     if (data) {
@@ -1018,6 +1027,10 @@ useEffect(() => {
       window.cancelAnimationFrame(holoSpecialRafRef.current);
       holoSpecialRafRef.current = null;
     }
+    if (holoInlineClearRafRef.current !== null) {
+      window.cancelAnimationFrame(holoInlineClearRafRef.current);
+      holoInlineClearRafRef.current = null;
+    }
   }
 
   function clearHoloSpecialSchedule() {
@@ -1025,6 +1038,39 @@ useEffect(() => {
       window.clearTimeout(holoSpecialLaunchTimerRef.current);
       holoSpecialLaunchTimerRef.current = null;
     }
+  }
+
+  function applyHoloInlineMotion(next: { transform?: string; opacity?: number }) {
+    const ship = holoShipRef.current;
+    if (!ship) return;
+    if (typeof next.transform === "string") {
+      ship.style.transform = next.transform;
+    }
+    if (typeof next.opacity === "number") {
+      ship.style.opacity = String(next.opacity);
+    }
+  }
+
+  function clearHoloInlineMotion() {
+    const ship = holoShipRef.current;
+    if (!ship) return;
+    ship.style.transform = "";
+    ship.style.opacity = "";
+  }
+
+  function scheduleClearHoloInlineMotion() {
+    if (holoInlineClearRafRef.current !== null) {
+      window.cancelAnimationFrame(holoInlineClearRafRef.current);
+      holoInlineClearRafRef.current = null;
+    }
+    // Wait for idle render commit, then clear inline override so dock hover resumes
+    // without a one-frame jump.
+    holoInlineClearRafRef.current = window.requestAnimationFrame(() => {
+      holoInlineClearRafRef.current = window.requestAnimationFrame(() => {
+        holoInlineClearRafRef.current = null;
+        clearHoloInlineMotion();
+      });
+    });
   }
 
   function launchHoloFlight() {
@@ -1124,6 +1170,7 @@ useEffect(() => {
 
     holoLaunchRafRef.current = window.requestAnimationFrame(() => {
       holoLaunchRafRef.current = null;
+      clearHoloInlineMotion();
       setHoloFlightPhase("tour");
 
       const toExit = window.setTimeout(() => {
@@ -1178,6 +1225,7 @@ useEffect(() => {
       transform: "translate(-50%, -50%) translate(0px, 0px) rotate(-2deg) scale(1)",
       opacity: 0.78,
     });
+    clearHoloInlineMotion();
 
     const easeInOut = (value: number) =>
       value < 0.5
@@ -1210,7 +1258,7 @@ useEffect(() => {
       let y = originY;
       let rotate = -2;
       let scale = 1;
-      let opacity = 0.78;
+      const opacity = 0.78;
 
       if (elapsed < enterMs) {
         const t = easeOut(elapsed / enterMs);
@@ -1231,7 +1279,6 @@ useEffect(() => {
         y = state.y;
         rotate = state.rotate;
         scale = state.scale;
-        opacity = 0.74 + Math.sin(t * Math.PI * 20) * 0.04;
       } else if (elapsed < enterMs + hoverMs + loopMs + slowMs) {
         const t = easeOut((elapsed - enterMs - hoverMs - loopMs) / slowMs);
         const endState = loopState(1);
@@ -1247,7 +1294,7 @@ useEffect(() => {
         scale = lerp(1.01, 1, t);
       }
 
-      setHoloFlightMotionStyle({
+      applyHoloInlineMotion({
         transform: `translate(-50%, -50%) translate(${(x - originX).toFixed(2)}px, ${(y - originY).toFixed(2)}px) rotate(${rotate.toFixed(2)}deg) scale(${scale.toFixed(3)})`,
         opacity,
       });
@@ -1273,12 +1320,17 @@ useEffect(() => {
       transform: "translate(-50%, -50%) translate(0px, 0px) rotate(-2deg) scale(1)",
       opacity: 0.78,
     });
+    applyHoloInlineMotion({
+      transform: "translate(-50%, -50%) translate(0px, 0px) rotate(-2deg) scale(1)",
+      opacity: 0.78,
+    });
 
     holoDockRafRef.current = window.requestAnimationFrame(() => {
       holoDockRafRef.current = null;
       setHoloFlightPhase("idle");
       setHoloFlightOrigin(null);
       setHoloFlightMotionStyle({});
+      scheduleClearHoloInlineMotion();
     });
   }
 
@@ -1290,6 +1342,7 @@ useEffect(() => {
     return () => {
       clearHoloFlightTimers();
       clearHoloSpecialSchedule();
+      clearHoloInlineMotion();
       if (lumiMobileTapHintTimerRef.current !== null) {
         window.clearTimeout(lumiMobileTapHintTimerRef.current);
         lumiMobileTapHintTimerRef.current = null;
@@ -1304,6 +1357,7 @@ useEffect(() => {
       setHoloFlightPhase("idle");
       setHoloFlightOrigin(null);
       setHoloFlightMotionStyle({});
+      clearHoloInlineMotion();
       return;
     }
     if (notesBootstrapping) return;
@@ -2013,12 +2067,16 @@ useEffect(() => {
                 inset: 0,
                 pointerEvents: "none",
                 zIndex: 0,
+                contain: "paint",
+                transform: "translateZ(0)",
+                backfaceVisibility: "hidden",
                 backgroundImage: `url('${AXY_SHIP_SRC}')`,
                 backgroundRepeat: "no-repeat",
                 backgroundPosition: "center 62%",
                 backgroundSize: "min(380px, 82%) auto",
                 mixBlendMode: "screen",
                 opacity: 0.16,
+                willChange: "opacity, transform",
                 WebkitMaskImage:
                   "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.8) 52%, rgba(0,0,0,0.34) 72%, rgba(0,0,0,0) 88%)",
                 maskImage:
@@ -2034,7 +2092,16 @@ useEffect(() => {
             }}
           >
           {notesBootstrapping ? (
-            <div aria-hidden style={{ position: "relative", zIndex: 1, height: "100%" }}>
+            <div
+              aria-hidden
+              style={{
+                position: "relative",
+                zIndex: 1,
+                height: "100%",
+                contain: "paint",
+                transform: "translateZ(0)",
+              }}
+            >
               <div
                 className={
                   isMobileLayout
@@ -2075,6 +2142,16 @@ useEffect(() => {
                   <div style={{ flex: 1 }}>
                     <div style={noteContentStyle}>
                       {note.content}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 4,
+                        fontSize: 10,
+                        opacity: 0.4,
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      {formatTimestampUtc(note.created_at)}
                     </div>
 
                     {axyReflection[note.id] && (
@@ -2332,6 +2409,8 @@ const notesShellStyle: React.CSSProperties = {
   maxHeight: "clamp(340px, 46vh, 560px)",
   position: "relative",
   overflow: "hidden",
+  isolation: "isolate",
+  contain: "layout paint style",
 };
 
 const notesListStyle: React.CSSProperties = {
@@ -2342,12 +2421,17 @@ const notesListStyle: React.CSSProperties = {
   paddingRight: 8,
   position: "relative",
   zIndex: 1,
+  contain: "layout paint",
 };
 
 const notesBootPlaceholderStyle: React.CSSProperties = {
   height: "100%",
   background: `url('${AXY_SHIP_SRC}') no-repeat center 62% / min(380px, 82%) auto`,
   mixBlendMode: "screen",
+  contain: "paint",
+  transform: "translateZ(0)",
+  backfaceVisibility: "hidden",
+  willChange: "opacity, transform",
   WebkitMaskImage:
     "radial-gradient(circle at 50% 62%, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.92) 42%, rgba(0,0,0,0.44) 66%, rgba(0,0,0,0) 84%)",
   maskImage:
@@ -2478,7 +2562,7 @@ const touchHoloShipStyle: React.CSSProperties = {
   top: -128,
   width: 140,
   height: "auto",
-  opacity: 0.72,
+  opacity: 0.78,
   pointerEvents: "auto",
   userSelect: "none",
   cursor: "pointer",
@@ -2496,7 +2580,7 @@ const touchHoloShipImageStyle: React.CSSProperties = {
 const touchHoloShipImageMobileStyle: React.CSSProperties = {
   ...touchHoloShipImageStyle,
   filter:
-    "drop-shadow(10px 0 8px rgba(132,212,255,0.18)) drop-shadow(-10px 0 8px rgba(154,216,255,0.16))",
+    "drop-shadow(8px 0 6px rgba(132,212,255,0.14)) drop-shadow(-8px 0 6px rgba(154,216,255,0.12))",
   opacity: 0.76,
 };
 
@@ -2507,9 +2591,8 @@ const touchHoloFlightOverlayStyle: React.CSSProperties = {
   pointerEvents: "none",
   userSelect: "none",
   zIndex: 4,
-  opacity: 0.76,
-  filter:
-    "drop-shadow(0 0 12px rgba(224,236,255,0.26)) drop-shadow(0 0 22px rgba(188,210,246,0.18))",
+  opacity: 0.78,
+  filter: "none",
 };
 
 const touchPanelContentLayerStyle: React.CSSProperties = {
