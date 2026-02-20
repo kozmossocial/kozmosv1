@@ -18,6 +18,7 @@ export default function AccountPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [username, setUsername] = useState("user");
+  const [spiceBalance, setSpiceBalance] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
@@ -78,6 +79,17 @@ export default function AccountPage() {
       setAvatarUrl(
         typeof data?.avatar_url === "string" ? data.avatar_url : null
       );
+
+      const { data: wallet } = await supabase
+        .from("spice_wallets")
+        .select("balance")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const rawBalance = (wallet as { balance?: number | string } | null)?.balance;
+      const parsedBalance =
+        typeof rawBalance === "number" ? rawBalance : Number(rawBalance ?? 0);
+      setSpiceBalance(Number.isFinite(parsedBalance) ? parsedBalance : 0);
       setLoading(false);
     };
 
@@ -678,6 +690,11 @@ export default function AccountPage() {
         <div style={{ marginBottom: 32 }}>
           <div style={label}>email</div>
           <div>{email}</div>
+        </div>
+
+        <div style={{ marginBottom: 32 }}>
+          <div style={label}>spice</div>
+          <div>{spiceBalance.toLocaleString("en-US")} SPICE</div>
         </div>
 
         <div style={{ marginBottom: 28 }}>

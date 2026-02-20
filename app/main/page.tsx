@@ -265,6 +265,8 @@ type NewsPaperItem = {
   createdAt: string;
 };
 
+type SpiceEventName = "game_play" | "news_click";
+
 const VS_PLAYER_COLORS = [
   "#7df9ff",
   "#8cb8ff",
@@ -2892,6 +2894,31 @@ export default function Main() {
     prevNewsPaperOpenRef.current = newsPaperOpen;
   }, [newsPaperOpen, newsPaperOpenedAfterUnread, newsPaperUnreadSignal, userId]);
 
+  const emitSpiceEvent = useCallback(
+    async (
+      event: SpiceEventName,
+      metadata: Record<string, unknown>,
+      options?: { keepalive?: boolean }
+    ) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) return;
+
+      await fetch("/api/spice/event", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ event, metadata }),
+        keepalive: options?.keepalive === true,
+      }).catch(() => {});
+    },
+    []
+  );
+
   /*  send */
   async function sendMessage() {
     if (!input.trim() || !userId) return;
@@ -3154,6 +3181,7 @@ export default function Main() {
       | typeof QUITE_SWARM_MODE
       | typeof NIGHT_PROTOCOL_MODE
   ) {
+    void emitSpiceEvent("game_play", { game });
     setActivePlay(game);
     if (game === "signal-drift") {
       setDriftRunning(false);
@@ -3875,6 +3903,17 @@ export default function Main() {
                     href={item.sourceUrl}
                     target="_blank"
                     rel="noreferrer noopener"
+                    onClick={() => {
+                      void emitSpiceEvent(
+                        "news_click",
+                        {
+                          newsItemId: item.id,
+                          topic: item.topic,
+                          sourceName: item.sourceName,
+                        },
+                        { keepalive: true }
+                      );
+                    }}
                     style={{
                       color: "rgba(156,214,255,0.94)",
                       display: "inline-block",
