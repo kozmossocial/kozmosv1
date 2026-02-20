@@ -137,11 +137,62 @@ function findRoomManifestFile(files: BuildFile[]) {
   return files.find((file) => isRoomManifestPath(file.path));
 }
 
+function injectPreviewRuntimeBridge(doc: string, spaceId: string, accessToken: string) {
+  const safeSpaceId = JSON.stringify(spaceId);
+  const safeToken = JSON.stringify(accessToken);
+  const bridgeScript = [
+    "<script>",
+    "(function () {",
+    `  const __SPACE_ID__ = ${safeSpaceId};`,
+    `  const __TOKEN__ = ${safeToken};`,
+    "  async function req(url, init) {",
+    "    const headers = new Headers((init && init.headers) || {});",
+    "    headers.set('Authorization', 'Bearer ' + __TOKEN__);",
+    "    if (init && init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');",
+    "    const res = await fetch(url, { ...(init || {}), headers });",
+    "    const data = await res.json().catch(function () { return {}; });",
+    "    if (!res.ok) throw new Error((data && data.error) || ('http ' + res.status));",
+    "    return data;",
+    "  }",
+    "  window.KozmosRuntime = {",
+    "    spaceId: __SPACE_ID__,",
+    "    kvGet: async function (key) {",
+    "      const q = new URLSearchParams({ spaceId: __SPACE_ID__, key: String(key || '') });",
+    "      return req('/api/build/runtime/kv?' + q.toString(), { method: 'GET' });",
+    "    },",
+    "    kvList: async function (prefix, limit) {",
+    "      const q = new URLSearchParams({ spaceId: __SPACE_ID__ });",
+    "      if (prefix) q.set('prefix', String(prefix));",
+    "      if (Number.isFinite(Number(limit))) q.set('limit', String(Math.round(Number(limit))));",
+    "      return req('/api/build/runtime/kv?' + q.toString(), { method: 'GET' });",
+    "    },",
+    "    kvSet: async function (key, value) {",
+    "      return req('/api/build/runtime/kv', { method: 'PUT', body: JSON.stringify({ spaceId: __SPACE_ID__, key: String(key || ''), value }) });",
+    "    },",
+    "    kvDelete: async function (key) {",
+    "      return req('/api/build/runtime/kv', { method: 'DELETE', body: JSON.stringify({ spaceId: __SPACE_ID__, key: String(key || '') }) });",
+    "    },",
+    "    proxy: async function (input) {",
+    "      const payload = (input && typeof input === 'object') ? input : {};",
+    "      return req('/api/build/runtime/proxy', { method: 'POST', body: JSON.stringify({ ...payload, spaceId: __SPACE_ID__ }) });",
+    "    }",
+    "  };",
+    "})();",
+    "</script>",
+  ].join("");
+
+  if (/<\/head>/i.test(doc)) {
+    return doc.replace(/<\/head>/i, `${bridgeScript}</head>`);
+  }
+  return `${bridgeScript}${doc}`;
+}
+
 export default function BuildPage() {
   const router = useRouter();
 
   const [bootLoading, setBootLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [sessionAccessToken, setSessionAccessToken] = useState<string>("");
   const [username, setUsername] = useState("user");
   const [isDesktop, setIsDesktop] = useState(true);
 
@@ -231,14 +282,18 @@ export default function BuildPage() {
       .map((file) => file.content || "")
       .join("\n\n");
 
+    let doc = "";
     if (!htmlFile) {
-      return `<!doctype html><html><body style="margin:0;padding:18px;background:#0b0b0b;color:#eaeaea;font-family:system-ui,sans-serif;">
+      doc = `<!doctype html><html><body style="margin:0;padding:18px;background:#0b0b0b;color:#eaeaea;font-family:system-ui,sans-serif;">
 <h3 style="margin:0 0 8px;">No HTML entry found</h3>
 <p style="opacity:.75;">Create <code>index.html</code> and save it to see live outcome here.</p>
 </body></html>`;
+      if (selectedSpaceId && sessionAccessToken) {
+        return injectPreviewRuntimeBridge(doc, selectedSpaceId, sessionAccessToken);
+      }
+      return doc;
     }
-
-    let doc = htmlFile.content || "";
+    doc = htmlFile.content || "";
     const styleTag = css ? `\n<style>\n${css}\n</style>\n` : "";
     const scriptTag = js ? `\n<script>\n${js}\n</script>\n` : "";
 
@@ -250,8 +305,19 @@ export default function BuildPage() {
       if (/<\/body>/i.test(doc)) doc = doc.replace(/<\/body>/i, `${scriptTag}</body>`);
       else doc = `${doc}${scriptTag}`;
     }
+    if (selectedSpaceId && sessionAccessToken) {
+      return injectPreviewRuntimeBridge(doc, selectedSpaceId, sessionAccessToken);
+    }
     return doc;
-  }, [editorContent, editorLanguage, files, previewAutoRefresh, selectedFilePath]);
+  }, [
+    editorContent,
+    editorLanguage,
+    files,
+    previewAutoRefresh,
+    selectedFilePath,
+    selectedSpaceId,
+    sessionAccessToken,
+  ]);
 
   async function fetchAuthedJson(url: string, init?: RequestInit) {
     const {
@@ -385,6 +451,7 @@ export default function BuildPage() {
       }
 
       setUserId(user.id);
+      setSessionAccessToken(session?.access_token || "");
       const { data: profile } = await supabase
         .from("profileskozmos")
         .select("username")

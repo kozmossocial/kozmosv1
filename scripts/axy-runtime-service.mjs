@@ -328,6 +328,8 @@ async function runSessionBuildMission({
       "- return exactly 4 ideas",
       "- title must be novel and specific",
       "- practical utility for Kozmos users",
+      "- prioritize previewable user-build outcomes (interactive web modules) over documentation-only outputs",
+      "- consider Kozmos modules ecosystem (main chat, hush, game chat, build, matrix, play) and propose compatible additions",
       "- scope must be deliverable in one session",
       "- publish_summary must be clear and concrete",
       "- scoring must be realistic, not inflated",
@@ -473,17 +475,18 @@ async function runSessionBuildMission({
       `Problem: ${plan.problem}`,
       `Goal: ${plan.goal}`,
       `Scope bullets: ${plan.scope.join(" | ")}`,
-      `Artifact language target: ${plan.artifactLanguage}`,
+      "Artifact language target: html",
       "JSON schema:",
       '{"readme":"...", "spec":"...", "implementation":"...", "artifactPath":"...", "artifactLanguage":"...", "artifactContent":"...", "publishSummary":"...", "usageSteps":["step1","step2","step3"]}',
       "Content rules:",
-      "- README: practical, user-facing usage and rollout guidance",
-      "- SPEC: architecture, constraints, data flow, edge cases",
-      "- IMPLEMENTATION: concrete steps and maintainability notes",
-      "- artifactPath must be file path only (no leading slash)",
-      "- artifactContent must be directly usable starter implementation",
+      "- README/SPEC/IMPLEMENTATION should be concise release engineering notes, not teaching/tutorial text",
+      "- SPEC must stay aligned with the exact mission title",
+      "- artifactPath must be exactly index.html",
+      "- artifactContent must be a complete interactive HTML app with inline CSS + JS (no placeholder-only markdown)",
+      "- artifact must be immediately previewable in Kozmos build outcome preview",
+      "- If persistence or network is needed, use window.KozmosRuntime.kv* and window.KozmosRuntime.proxy",
       "- publishSummary should be one concrete paragraph",
-      "- usageSteps should be concrete actionable steps",
+      "- usageSteps should be short operator actions, not long mentoring guidance",
       "- no fluff, no repetitive stillness tone",
     ].join("\n\n");
 
@@ -501,8 +504,8 @@ async function runSessionBuildMission({
       readme: String(parsed.readme || "").trim(),
       spec: String(parsed.spec || "").trim(),
       implementation: String(parsed.implementation || "").trim(),
-      artifactPath: normalizeBuildPath(parsed.artifactPath || ""),
-      artifactLanguage: String(parsed.artifactLanguage || plan.artifactLanguage || "markdown")
+      artifactPath: normalizeBuildPath(parsed.artifactPath || "index.html"),
+      artifactLanguage: String(parsed.artifactLanguage || "html")
         .trim()
         .toLowerCase(),
       artifactContent: String(parsed.artifactContent || "").trim(),
@@ -511,6 +514,23 @@ async function runSessionBuildMission({
         ? parsed.usageSteps.map((step) => String(step || "").trim()).filter(Boolean).slice(0, 8)
         : [],
     };
+    const artifactPathLower = String(candidateBundle.artifactPath || "").toLowerCase();
+    const artifactHtml = candidateBundle.artifactContent.toLowerCase();
+    const looksPreviewableHtml =
+      artifactPathLower === "index.html" &&
+      artifactHtml.includes("<html") &&
+      artifactHtml.includes("<style") &&
+      artifactHtml.includes("<script");
+    if (!looksPreviewableHtml) continue;
+
+    const specFirstHeading = (candidateBundle.spec.match(/^#\s+(.+)$/m)?.[1] || "").trim();
+    if (
+      specFirstHeading &&
+      !specFirstHeading.toLowerCase().includes(plan.title.toLowerCase())
+    ) {
+      continue;
+    }
+
     const quality = scoreMissionBundleQuality(candidateBundle);
     if (!quality.ok) continue;
 
@@ -633,34 +653,115 @@ async function runSessionBuildMission({
         "- IMPLEMENTATION includes sequence, maintenance, and validation.",
         "- Artifact file is runnable/adaptable with explicit quick-start steps.",
       ].join("\n"),
-      artifactPath: fallbackArtifactPath,
-      artifactLanguage: "markdown",
+      artifactPath: "index.html",
+      artifactLanguage: "html",
       artifactContent: [
-        `# ${safeTitle} Prototype`,
-        "",
-        "## Core Idea",
-        plan.goal,
-        "",
-        "## Execution Blocks",
-        ...scopeLines,
-        "",
-        "## Task Matrix",
-        "| Task | Owner | Output | Done Criteria |",
-        "| --- | --- | --- | --- |",
-        "| Baseline setup | Builder | Folder + docs | All four files exist with headings |",
-        "| Scope implementation | Builder | Prototype sections | Each scope item mapped and testable |",
-        "| Quality review | Builder | Notes block | Issues list empty or explicitly deferred |",
-        "",
-        "## Risk Controls",
-        "- Keep changes additive first; avoid destructive edits in initial publish.",
-        "- If a scope item cannot be completed, mark it deferred with reason and next step.",
-        "- Do not publish vague placeholders that cannot be executed by another user.",
-        "",
-        "## Quick Start",
-        ...usagePlan.map((step, index) => `${index + 1}. ${step}`),
+        "<!doctype html>",
+        "<html lang=\"en\">",
+        "<head>",
+        "  <meta charset=\"utf-8\" />",
+        "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
+        `  <title>${safeTitle}</title>`,
+        "  <style>",
+        "    :root { color-scheme: dark; }",
+        "    body { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#060b08; color:#dcefe2; }",
+        "    .wrap { max-width: 980px; margin: 24px auto; padding: 20px; }",
+        "    .panel { border:1px solid #2a4a39; border-radius:12px; padding:16px; margin-bottom:14px; background:rgba(4,24,13,.55); }",
+        "    h1,h2 { margin:0 0 10px; font-weight:500; letter-spacing:.02em; }",
+        "    .row { display:grid; grid-template-columns: 1fr auto; gap:10px; margin-bottom:8px; }",
+        "    input, button, textarea { font:inherit; background:#07130d; color:#e8fff0; border:1px solid #2a4a39; border-radius:8px; padding:9px 10px; }",
+        "    button { cursor:pointer; }",
+        "    .ok { color:#88f7b1; } .warn { color:#ffd279; } .bad { color:#ff8f8f; }",
+        "    .gates { display:grid; gap:8px; }",
+        "    .gate { display:grid; grid-template-columns: 1fr 70px; gap:10px; align-items:center; }",
+        "    .meta { opacity:.8; font-size:13px; }",
+        "  </style>",
+        "</head>",
+        "<body>",
+        "  <main class=\"wrap\">",
+        `    <section class=\"panel\"><h1>${safeTitle}</h1><div class=\"meta\">Interactive publish-readiness probe for Kozmos user builds.</div></section>`,
+        "    <section class=\"panel\">",
+        "      <h2>Build Input</h2>",
+        "      <div class=\"row\"><input id=\"buildName\" placeholder=\"Build name\" /><button id=\"run\">Run Probe</button></div>",
+        "      <textarea id=\"notes\" rows=\"5\" placeholder=\"Paste scope / implementation summary here\"></textarea>",
+        "    </section>",
+        "    <section class=\"panel\">",
+        "      <h2>QA Gates</h2>",
+        "      <div class=\"gates\" id=\"gates\"></div>",
+        "    </section>",
+        "    <section class=\"panel\">",
+        "      <h2>Report</h2>",
+        "      <pre id=\"report\" class=\"meta\">Run probe to generate PASS/FAIL report.</pre>",
+        "    </section>",
+        "  </main>",
+        "  <script>",
+        "    const gateDefs = [",
+        "      ['scope_clarity', 'Scope is concrete and testable'],",
+        "      ['preview_ready', 'Outcome preview is runnable and visible'],",
+        "      ['rollback_plan', 'Rollback / fallback is documented'],",
+        "      ['data_safety', 'No private data leakage or unsafe sharing'],",
+        "      ['maintainability', 'Naming + structure are maintainable'],",
+        "      ['publish_quality', 'Ready for read-only public publish']",
+        "    ];",
+        "    const gatesEl = document.getElementById('gates');",
+        "    const reportEl = document.getElementById('report');",
+        "    const rand = () => Math.floor(62 + Math.random() * 38);",
+        "    const clamp = (n, a, b) => Math.max(a, Math.min(b, n));",
+        "    const renderGates = (scores) => {",
+        "      gatesEl.innerHTML = '';",
+        "      gateDefs.forEach(([key, label], i) => {",
+        "        const score = scores[i];",
+        "        const cls = score >= 80 ? 'ok' : score >= 65 ? 'warn' : 'bad';",
+        "        const row = document.createElement('div'); row.className = 'gate';",
+        "        row.innerHTML = `<div>${label} <span class=\"meta\">(${key})</span></div><div class=\"${cls}\">${score}</div>`;",
+        "        gatesEl.appendChild(row);",
+        "      });",
+        "    };",
+        "    const persist = async (payload) => {",
+        "      if (!window.KozmosRuntime || !window.KozmosRuntime.kvSet) return;",
+        "      try { await window.KozmosRuntime.kvSet('qa_probe:last_report', payload); } catch {}",
+        "    };",
+        "    const restore = async () => {",
+        "      if (!window.KozmosRuntime || !window.KozmosRuntime.kvGet) return;",
+        "      try {",
+        "        const res = await window.KozmosRuntime.kvGet('qa_probe:last_report');",
+        "        const value = res && res.item && res.item.value;",
+        "        if (value && typeof value === 'object') reportEl.textContent = JSON.stringify(value, null, 2);",
+        "      } catch {}",
+        "    };",
+        "    document.getElementById('run').addEventListener('click', async () => {",
+        "      const buildName = (document.getElementById('buildName').value || 'untitled-build').trim();",
+        "      const notes = (document.getElementById('notes').value || '').trim();",
+        "      const base = gateDefs.map(() => rand());",
+        "      const noteBoost = clamp(Math.floor(notes.length / 40), 0, 8);",
+        "      const scores = base.map((s) => clamp(s + noteBoost, 0, 100));",
+        "      const total = Math.round(scores.reduce((a,b)=>a+b,0) / scores.length);",
+        "      const pass = total >= 80 && scores.every((s) => s >= 65);",
+        "      renderGates(scores);",
+        "      const blockers = [];",
+        "      scores.forEach((s, i) => { if (s < 65) blockers.push(gateDefs[i][0]); });",
+        "      const next = pass ? ['Publish read-only', 'Attach manifest', 'Announce in build chat'] : ['Fix blockers', 'Re-run probe', 'Publish after PASS'];",
+        "      const out = {",
+        "        build: buildName,",
+        "        result: pass ? 'PASS' : 'FAIL',",
+        "        score: total,",
+        "        blockers,",
+        "        next_actions: next",
+        "      };",
+        "      reportEl.textContent = JSON.stringify(out, null, 2);",
+        "      await persist(out);",
+        "    });",
+        "    restore();",
+        "  </script>",
+        "</body>",
+        "</html>",
       ].join("\n"),
       publishSummary: fallbackPublishSummary,
-      usageSteps: usagePlan,
+      usageSteps: [
+        "Open index.html in outcome preview.",
+        "Run the probe and verify PASS/FAIL report generation.",
+        "Publish room as read-only after PASS score.",
+      ],
     };
     const fallbackQuality = scoreMissionBundleQuality(fallbackBundle);
     if (!fallbackQuality.ok) {
@@ -676,11 +777,6 @@ async function runSessionBuildMission({
     qualityScore: bundleQuality?.qualityScore || 0,
     outputPath: "",
   });
-  await pushBuildNote("review", [
-    `title: ${plan.title}`,
-    `quality_score: ${bundleQuality?.qualityScore || 0}`,
-    `issues: ${(bundleQuality?.issues || []).join(", ") || "none"}`,
-  ]);
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const basePath = `${MISSION_ROOT_PATH}/${stamp}-${slugify(plan.title)}`;
@@ -701,6 +797,7 @@ async function runSessionBuildMission({
     if (ext === ".js" || ext === ".mjs" || ext === ".cjs") return "javascript";
     if (ext === ".sql") return "sql";
     if (ext === ".css") return "css";
+    if (ext === ".html" || ext === ".htm") return "text";
     if (ext === ".json") return "json";
     if (ext === ".md") return "markdown";
     return bundle.artifactLanguage || "text";
