@@ -34,6 +34,7 @@ export type StarterActor = {
 const STARTER_PASSWORD_BYTES = 64;
 const STARTER_TOKEN_BYTES = 32;
 const DEFAULT_SESSION_DAYS = 30;
+const DEFAULT_INACTIVITY_MINUTES = 30;
 
 export function normalizeStarterUsername(value: unknown) {
   const username = typeof value === "string" ? value.trim() : "";
@@ -80,6 +81,19 @@ function sessionDurationDays() {
 function sessionExpiryIso() {
   const ms = sessionDurationDays() * 24 * 60 * 60 * 1000;
   return new Date(Date.now() + ms).toISOString();
+}
+
+function sessionInactivityMinutes() {
+  const raw = Number(process.env.KOZMOS_STARTER_INACTIVITY_MINUTES || DEFAULT_INACTIVITY_MINUTES);
+  if (!Number.isFinite(raw)) return DEFAULT_INACTIVITY_MINUTES;
+  return Math.max(5, Math.min(24 * 60, Math.round(raw)));
+}
+
+function isSessionInactive(lastSeenAt: string | null | undefined, nowMs: number) {
+  const lastSeenMs = Date.parse(String(lastSeenAt || ""));
+  if (!Number.isFinite(lastSeenMs)) return true;
+  const inactivityMs = sessionInactivityMinutes() * 60 * 1000;
+  return nowMs - lastSeenMs > inactivityMs;
 }
 
 export async function createStarterUser(params: {
@@ -188,7 +202,8 @@ export async function resolveStarterActor(spaceId: string, token: string) {
     return { error: "starter token required", actor: null as StarterActor | null };
   }
   const tokenHash = hashStarterToken(tokenValue);
-  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
 
   const { data: session, error: sessionErr } = await supabaseAdmin
     .from("user_build_starter_sessions")
@@ -199,6 +214,10 @@ export async function resolveStarterActor(spaceId: string, token: string) {
     .maybeSingle();
   if (sessionErr) return { error: "starter session lookup failed", actor: null as StarterActor | null };
   if (!session) return { error: "starter session invalid", actor: null as StarterActor | null };
+  if (isSessionInactive((session as StarterSessionRow).last_seen_at, nowMs)) {
+    await supabaseAdmin.from("user_build_starter_sessions").delete().eq("id", (session as StarterSessionRow).id);
+    return { error: "starter session inactive", actor: null as StarterActor | null };
+  }
 
   const { data: user, error: userErr } = await supabaseAdmin
     .from("user_build_starter_users")

@@ -31,6 +31,7 @@ All rows should return a non-null relation name.
 - `KOZMOS_BUILD_PROXY_ALLOWLIST`  
   Example: `api.openai.com,*.supabase.co`
 - `KOZMOS_STARTER_SESSION_DAYS` (optional, default `30`)
+- `KOZMOS_STARTER_INACTIVITY_MINUTES` (optional, default `30`)
 
 ## 3) Deploy Checks
 
