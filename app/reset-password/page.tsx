@@ -4,13 +4,20 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
+const PENDING_RECOVERY_KEY = "kozmos:pending_password_recovery";
+const PENDING_RECOVERY_TTL_MS = 45 * 60 * 1000;
+
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  const [pendingRecoveryEmail, setPendingRecoveryEmail] = useState<string | null>(
+    null
+  );
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,7 +32,30 @@ export default function ResetPasswordPage() {
       window.history.replaceState({}, "", `${url.pathname}${url.search}`);
     };
 
+    const readPendingRecoveryEmail = () => {
+      try {
+        const raw = localStorage.getItem(PENDING_RECOVERY_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { at?: number; email?: string };
+        const at = Number(parsed?.at || 0);
+        const email = String(parsed?.email || "").trim();
+        if (!Number.isFinite(at) || at <= 0 || !email) {
+          localStorage.removeItem(PENDING_RECOVERY_KEY);
+          return null;
+        }
+        if (Date.now() - at > PENDING_RECOVERY_TTL_MS) {
+          localStorage.removeItem(PENDING_RECOVERY_KEY);
+          return null;
+        }
+        return email;
+      } catch {
+        localStorage.removeItem(PENDING_RECOVERY_KEY);
+        return null;
+      }
+    };
+
     const resolveRecoverySession = async () => {
+      setPendingRecoveryEmail(readPendingRecoveryEmail());
       const hashRaw = window.location.hash.startsWith("#")
         ? window.location.hash.slice(1)
         : window.location.hash;
@@ -77,6 +107,23 @@ export default function ResetPasswordPage() {
             return;
           }
           cleanResetUrl();
+        } else {
+          const tokenHash = search.get("token_hash");
+          if (type === "recovery" && tokenHash) {
+            const { error } = await supabase.auth.verifyOtp({
+              type: "recovery",
+              token_hash: tokenHash,
+            });
+            if (!active) return;
+            if (error) {
+              setMessage("reset link invalid or expired. request a new one.");
+              setHasSession(false);
+              setSessionReady(true);
+              cleanResetUrl();
+              return;
+            }
+            cleanResetUrl();
+          }
         }
       }
 
@@ -103,6 +150,45 @@ export default function ResetPasswordPage() {
       subscription.unsubscribe();
     };
   }, []);
+
+  async function handleResendResetLink() {
+    const targetEmail = String(pendingRecoveryEmail || "").trim();
+    if (!targetEmail) {
+      setMessage("go back to login and request reset link again");
+      return;
+    }
+
+    setResendLoading(true);
+    setMessage(null);
+
+    const redirectToUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/reset-password?flow=recovery`
+        : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+      redirectTo: redirectToUrl,
+    });
+
+    if (error) {
+      setMessage(error.message);
+      setResendLoading(false);
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        PENDING_RECOVERY_KEY,
+        JSON.stringify({
+          at: Date.now(),
+          email: targetEmail,
+        })
+      );
+    }
+
+    setMessage("new reset mail sent");
+    setResendLoading(false);
+  }
 
   async function handleReset(e: React.FormEvent) {
     e.preventDefault();
@@ -210,9 +296,19 @@ export default function ResetPasswordPage() {
         />
 
         {!hasSession ? (
-          <div style={{ marginBottom: 12, fontSize: 12, opacity: 0.64 }}>
-            open this page from the reset mail link.
-          </div>
+          <>
+            <div style={{ marginBottom: 12, fontSize: 12, opacity: 0.64 }}>
+              open this page from the reset mail link.
+            </div>
+            <button
+              type="button"
+              onClick={handleResendResetLink}
+              disabled={resendLoading}
+              style={{ ...buttonStyle, marginBottom: 12 }}
+            >
+              {resendLoading ? "sending..." : "request new reset link"}
+            </button>
+          </>
         ) : null}
 
         {message ? (
