@@ -1713,12 +1713,12 @@ body {
   transform-origin: 50% 50%;
   will-change: transform, filter, opacity;
   filter:
-    drop-shadow(14px 0 10px rgba(122, 226, 255, 0.24))
-    drop-shadow(-14px 0 10px rgba(160, 210, 255, 0.2))
-    drop-shadow(26px 0 18px rgba(96, 216, 255, 0.18))
-    drop-shadow(-26px 0 18px rgba(136, 196, 255, 0.16))
-    drop-shadow(0 2px 4px rgba(140, 196, 246, 0.06))
-    drop-shadow(0 -2px 4px rgba(124, 188, 244, 0.05))
+    drop-shadow(14px 0 10px rgba(122, 226, 255, 0.12))
+    drop-shadow(-14px 0 10px rgba(160, 210, 255, 0.1))
+    drop-shadow(26px 0 18px rgba(96, 216, 255, 0.09))
+    drop-shadow(-26px 0 18px rgba(136, 196, 255, 0.08))
+    drop-shadow(0 2px 4px rgba(140, 196, 246, 0.03))
+    drop-shadow(0 -2px 4px rgba(124, 188, 244, 0.025))
     saturate(1.16)
     contrast(1.06)
     hue-rotate(0deg);
@@ -1767,12 +1767,12 @@ body {
   0% {
     opacity: 0.74;
     filter:
-      drop-shadow(12px 0 8px rgba(126, 220, 255, 0.2))
-      drop-shadow(-12px 0 8px rgba(164, 206, 255, 0.17))
-      drop-shadow(22px 0 14px rgba(98, 210, 255, 0.14))
-      drop-shadow(-22px 0 14px rgba(142, 198, 255, 0.12))
-      drop-shadow(0 2px 3px rgba(144, 200, 248, 0.05))
-      drop-shadow(0 -2px 3px rgba(132, 194, 244, 0.04))
+      drop-shadow(12px 0 8px rgba(126, 220, 255, 0.1))
+      drop-shadow(-12px 0 8px rgba(164, 206, 255, 0.085))
+      drop-shadow(22px 0 14px rgba(98, 210, 255, 0.07))
+      drop-shadow(-22px 0 14px rgba(142, 198, 255, 0.06))
+      drop-shadow(0 2px 3px rgba(144, 200, 248, 0.025))
+      drop-shadow(0 -2px 3px rgba(132, 194, 244, 0.02))
       saturate(1.12)
       contrast(1.04)
       hue-rotate(-4deg);
@@ -1780,12 +1780,12 @@ body {
   50% {
     opacity: 0.92;
     filter:
-      drop-shadow(16px 0 12px rgba(188, 242, 255, 0.34))
-      drop-shadow(-16px 0 12px rgba(208, 236, 255, 0.3))
-      drop-shadow(32px 0 24px rgba(126, 226, 255, 0.28))
-      drop-shadow(-32px 0 24px rgba(168, 214, 255, 0.24))
-      drop-shadow(0 2px 4px rgba(150, 206, 250, 0.06))
-      drop-shadow(0 -2px 4px rgba(138, 200, 248, 0.05))
+      drop-shadow(16px 0 12px rgba(188, 242, 255, 0.17))
+      drop-shadow(-16px 0 12px rgba(208, 236, 255, 0.15))
+      drop-shadow(32px 0 24px rgba(126, 226, 255, 0.14))
+      drop-shadow(-32px 0 24px rgba(168, 214, 255, 0.12))
+      drop-shadow(0 2px 4px rgba(150, 206, 250, 0.03))
+      drop-shadow(0 -2px 4px rgba(138, 200, 248, 0.025))
       saturate(1.24)
       contrast(1.12)
       hue-rotate(8deg);
@@ -1793,12 +1793,12 @@ body {
   100% {
     opacity: 0.78;
     filter:
-      drop-shadow(13px 0 9px rgba(156, 228, 255, 0.24))
-      drop-shadow(-13px 0 9px rgba(178, 218, 255, 0.2))
-      drop-shadow(24px 0 16px rgba(108, 214, 255, 0.18))
-      drop-shadow(-24px 0 16px rgba(150, 204, 255, 0.16))
-      drop-shadow(0 2px 3px rgba(140, 200, 250, 0.05))
-      drop-shadow(0 -2px 3px rgba(130, 194, 246, 0.04))
+      drop-shadow(13px 0 9px rgba(156, 228, 255, 0.12))
+      drop-shadow(-13px 0 9px rgba(178, 218, 255, 0.1))
+      drop-shadow(24px 0 16px rgba(108, 214, 255, 0.09))
+      drop-shadow(-24px 0 16px rgba(150, 204, 255, 0.08))
+      drop-shadow(0 2px 3px rgba(140, 200, 250, 0.025))
+      drop-shadow(0 -2px 3px rgba(130, 194, 246, 0.02))
       saturate(1.16)
       contrast(1.07)
       hue-rotate(-2deg);
@@ -1884,24 +1884,24 @@ body {
 @keyframes ufoHoloBreatheFlight {
   0% {
     filter:
-      drop-shadow(8px 0 6px rgba(126, 220, 255, 0.1))
-      drop-shadow(-8px 0 6px rgba(164, 206, 255, 0.09))
-      drop-shadow(14px 0 10px rgba(98, 210, 255, 0.07))
-      drop-shadow(-14px 0 10px rgba(142, 198, 255, 0.06))
-      drop-shadow(0 1px 2px rgba(144, 200, 248, 0.03))
-      drop-shadow(0 -1px 2px rgba(132, 194, 244, 0.03))
+      drop-shadow(8px 0 6px rgba(126, 220, 255, 0.05))
+      drop-shadow(-8px 0 6px rgba(164, 206, 255, 0.045))
+      drop-shadow(14px 0 10px rgba(98, 210, 255, 0.035))
+      drop-shadow(-14px 0 10px rgba(142, 198, 255, 0.03))
+      drop-shadow(0 1px 2px rgba(144, 200, 248, 0.015))
+      drop-shadow(0 -1px 2px rgba(132, 194, 244, 0.015))
       saturate(1.08)
       contrast(1.03)
       hue-rotate(-2deg);
   }
   100% {
     filter:
-      drop-shadow(10px 0 8px rgba(188, 242, 255, 0.16))
-      drop-shadow(-10px 0 8px rgba(208, 236, 255, 0.14))
-      drop-shadow(18px 0 14px rgba(126, 226, 255, 0.12))
-      drop-shadow(-18px 0 14px rgba(168, 214, 255, 0.1))
-      drop-shadow(0 1px 2px rgba(150, 206, 250, 0.03))
-      drop-shadow(0 -1px 2px rgba(138, 200, 248, 0.03))
+      drop-shadow(10px 0 8px rgba(188, 242, 255, 0.08))
+      drop-shadow(-10px 0 8px rgba(208, 236, 255, 0.07))
+      drop-shadow(18px 0 14px rgba(126, 226, 255, 0.06))
+      drop-shadow(-18px 0 14px rgba(168, 214, 255, 0.05))
+      drop-shadow(0 1px 2px rgba(150, 206, 250, 0.015))
+      drop-shadow(0 -1px 2px rgba(138, 200, 248, 0.015))
       saturate(1.14)
       contrast(1.06)
       hue-rotate(5deg);
@@ -2303,6 +2303,20 @@ body {
   .quite-swarm-touch-controls {
     display: block;
   }
+}
+
+/* Performance mode: keep UFO visuals static (no idle motion/pulse). */
+.ufo-ambient-faint,
+.ufo-boot-glow,
+.ufo-boot-glow-main,
+.ufo-boot-glow-soft,
+.ufo-ambient-beam::before,
+.ufo-ambient-beam::after,
+.ufo-ambient-beam.ufo-beam-on::before,
+.ufo-ambient-beam.ufo-beam-on::after,
+.ufo-ambient-beam.ufo-beam-off::before,
+.ufo-ambient-beam.ufo-beam-off::after {
+  animation: none !important;
 }
 
 @media (max-width: 360px) {

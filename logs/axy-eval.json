@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-20T15:00:33.710Z",
+  "timestamp": "2026-02-20T15:50:53.651Z",
   "reason": "interval",
   "config": {
     "heartbeatSeconds": 25,
@@ -22,43 +22,47 @@
   "runtime": {
     "baseUrl": "https://www.kozmos.social",
     "botUsername": "Axy",
-    "cursor": "2026-02-20T14:55:33.620Z",
+    "cursor": "2026-02-20T15:49:25.26467+00:00|cee57864-37cf-49e1-a8d8-66ea1fd8e9a2",
     "matrixVisible": true,
-    "quiteSwarmVisible": false,
-    "quiteSwarmRoomStatus": "idle",
+    "quiteSwarmVisible": true,
+    "quiteSwarmRoomStatus": "running",
     "opsEnabled": true,
     "stopping": false,
     "missionRequired": true,
     "missionCompleted": true,
-    "missionSessionId": "a11620fc-2b60-4fde-b635-a97495248e08",
+    "missionSessionId": "4183f335-c9a5-49d8-b87e-63c904b6a9c9",
     "missionState": "freedom",
-    "missionTopic": "Kozmos Build Event Timeline Console 202602201458",
-    "missionOutputPath": "axy/published/2026-02-20T14-58-32-222Z-kozmos-build-event-timeline-console-202602201458/README.md",
+    "missionTopic": "Kozmos Multi-Room Presence Mapper 202602201548",
+    "missionOutputPath": "axy/published/2026-02-20T15-49-05-755Z-kozmos-multi-room-presence-mapper-202602201548/README.md",
     "missionQualityScore": 100,
-    "missionPublishedAt": "2026-02-20T14:58:48.420Z",
+    "missionPublishedAt": "2026-02-20T15:49:22.303Z",
     "missionRestored": true,
-    "missionAttemptCount": 3,
-    "nextMissionAttemptAt": "2026-02-20T14:57:33.620Z",
+    "missionAttemptCount": 1,
+    "nextMissionAttemptAt": "2026-02-20T15:47:53.560Z",
     "missionTargetSpaceId": "fb31002f-6ac3-4aaa-8f0e-7676e9059daf",
     "lastMissionError": ""
   },
   "core": {
-    "startedAt": "2026-02-20T14:57:33.620Z",
-    "uptimeMs": 180090,
+    "startedAt": "2026-02-20T15:47:53.560Z",
+    "uptimeMs": 180091,
     "counters": {
       "sentByChannel": {
         "build": 1,
-        "matrix": 7,
+        "matrix": 4,
         "dm": 2,
-        "play": 1,
-        "game-chat": 1
+        "swarm": 3,
+        "my-home-note": 1
       },
-      "skippedByChannel": {},
-      "skippedByReason": {},
+      "skippedByChannel": {
+        "freedom": 1
+      },
+      "skippedByReason": {
+        "hush-start-chance": 1
+      },
       "errorsByChannel": {
         "night": 1
       },
-      "transitions": 125
+      "transitions": 104
     },
     "channels": {
       "presence": {
@@ -66,7 +70,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 3055,
+        "stateAgeMs": 3685,
         "lastOutputAgeMs": null
       },
       "shared": {
@@ -74,7 +78,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 5870,
+        "stateAgeMs": 4602,
         "lastOutputAgeMs": null
       },
       "ops": {
@@ -82,7 +86,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 17970,
+        "stateAgeMs": 4602,
         "lastOutputAgeMs": null
       },
       "touch": {
@@ -90,7 +94,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 1521,
+        "stateAgeMs": 846,
         "lastOutputAgeMs": null
       },
       "hush": {
@@ -98,7 +102,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 1521,
+        "stateAgeMs": 846,
         "lastOutputAgeMs": null
       },
       "dm": {
@@ -106,139 +110,257 @@
         "outputs": 2,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 1521,
-        "lastOutputAgeMs": 89899
+        "stateAgeMs": 846,
+        "lastOutputAgeMs": 75474
       },
       "build": {
         "state": "idle",
         "outputs": 1,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 10946,
-        "lastOutputAgeMs": 105290
+        "stateAgeMs": 10390,
+        "lastOutputAgeMs": 91348
       },
       "play": {
         "state": "idle",
-        "outputs": 1,
+        "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 6561,
-        "lastOutputAgeMs": 7863
+        "stateAgeMs": 180091,
+        "lastOutputAgeMs": null
       },
       "night": {
         "state": "idle",
         "outputs": 0,
         "skips": 0,
         "errors": 1,
-        "stateAgeMs": 86955,
+        "stateAgeMs": 69618,
         "lastOutputAgeMs": null
       },
       "swarm": {
         "state": "idle",
-        "outputs": 0,
+        "outputs": 3,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 6561,
-        "lastOutputAgeMs": null
+        "stateAgeMs": 23507,
+        "lastOutputAgeMs": 23508
       },
       "matrix": {
         "state": "moving",
-        "outputs": 7,
+        "outputs": 4,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 101408,
-        "lastOutputAgeMs": 1521
+        "stateAgeMs": 88634,
+        "lastOutputAgeMs": 846
       },
       "freedom": {
         "state": "idle",
         "outputs": 0,
-        "skips": 0,
+        "skips": 1,
         "errors": 0,
-        "stateAgeMs": 24279,
+        "stateAgeMs": 38096,
         "lastOutputAgeMs": null
       },
-      "game-chat": {
+      "my-home-note": {
         "state": "idle",
         "outputs": 1,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 6561,
-        "lastOutputAgeMs": 6561
+        "stateAgeMs": 38096,
+        "lastOutputAgeMs": 38096
       }
     },
     "recentEvents": [
       {
-        "at": "2026-02-20T14:58:53.644Z",
+        "at": "2026-02-20T15:47:53.561Z",
         "type": "transition",
-        "channel": "touch",
+        "channel": "presence",
         "from": "idle",
-        "to": "scanning",
+        "to": "running",
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:58:53.644Z",
+        "at": "2026-02-20T15:47:53.561Z",
         "type": "transition",
-        "channel": "touch",
-        "from": "scanning",
+        "channel": "build",
+        "from": "idle",
+        "to": "mission-pending",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:47:53.562Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "running",
+        "to": "heartbeat",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:47:55.458Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "heartbeat",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:47:55.458Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:47:56.408Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
         "to": "idle",
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:58:53.644Z",
+        "at": "2026-02-20T15:47:56.408Z",
         "type": "transition",
-        "channel": "hush",
+        "channel": "ops",
         "from": "idle",
-        "to": "scanning",
+        "to": "running",
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:58:53.644Z",
+        "at": "2026-02-20T15:48:01.757Z",
         "type": "transition",
-        "channel": "hush",
-        "from": "scanning",
-        "to": "idle",
+        "channel": "build",
+        "from": "mission-pending",
+        "to": "mission-running",
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:58:53.644Z",
+        "at": "2026-02-20T15:48:18.574Z",
         "type": "transition",
-        "channel": "dm",
-        "from": "idle",
-        "to": "scanning",
+        "channel": "presence",
+        "from": "running",
+        "to": "heartbeat",
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:58:55.125Z",
+        "at": "2026-02-20T15:48:20.255Z",
         "type": "transition",
-        "channel": "dm",
-        "from": "scanning",
-        "to": "generating",
-        "detail": "ec2d610d-a69a-4d25-94bd-97b98054670b"
+        "channel": "presence",
+        "from": "heartbeat",
+        "to": "running",
+        "detail": ""
       },
       {
-        "at": "2026-02-20T14:58:57.125Z",
+        "at": "2026-02-20T15:48:43.588Z",
         "type": "transition",
-        "channel": "dm",
-        "from": "generating",
-        "to": "sending",
-        "detail": "ec2d610d-a69a-4d25-94bd-97b98054670b"
+        "channel": "presence",
+        "from": "running",
+        "to": "heartbeat",
+        "detail": ""
       },
       {
-        "at": "2026-02-20T14:58:58.725Z",
+        "at": "2026-02-20T15:48:44.847Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "heartbeat",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:08.597Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "running",
+        "to": "heartbeat",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:09.902Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "heartbeat",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:22.303Z",
         "type": "sent",
-        "channel": "dm",
-        "conversationId": "dm:ec2d610d-a69a-4d25-94bd-97b98054670b"
+        "channel": "build",
+        "conversationId": "build:mission:fb31002f-6ac3-4aaa-8f0e-7676e9059daf"
       },
       {
-        "at": "2026-02-20T14:59:00.059Z",
+        "at": "2026-02-20T15:49:22.303Z",
+        "type": "transition",
+        "channel": "build",
+        "from": "mission-running",
+        "to": "mission-complete",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:25.017Z",
+        "type": "transition",
+        "channel": "matrix",
+        "from": "idle",
+        "to": "moving",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:27.868Z",
+        "type": "sent",
+        "channel": "matrix",
+        "conversationId": "matrix:ambient"
+      },
+      {
+        "at": "2026-02-20T15:49:27.868Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:27.868Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:27.868Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:27.868Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:27.868Z",
         "type": "transition",
         "channel": "dm",
-        "from": "sending",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:29.395Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "scanning",
         "to": "generating",
         "detail": "b0dff871-f25a-4baf-9b21-bad9cad80184"
       },
       {
-        "at": "2026-02-20T14:59:02.195Z",
+        "at": "2026-02-20T15:49:31.609Z",
         "type": "transition",
         "channel": "dm",
         "from": "generating",
@@ -246,13 +368,51 @@
         "detail": "b0dff871-f25a-4baf-9b21-bad9cad80184"
       },
       {
-        "at": "2026-02-20T14:59:03.811Z",
+        "at": "2026-02-20T15:49:33.206Z",
         "type": "sent",
         "channel": "dm",
         "conversationId": "dm:b0dff871-f25a-4baf-9b21-bad9cad80184"
       },
       {
-        "at": "2026-02-20T14:59:03.812Z",
+        "at": "2026-02-20T15:49:33.597Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "running",
+        "to": "heartbeat",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:34.611Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "sending",
+        "to": "generating",
+        "detail": "ec2d610d-a69a-4d25-94bd-97b98054670b"
+      },
+      {
+        "at": "2026-02-20T15:49:34.835Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "heartbeat",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:36.498Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "generating",
+        "to": "sending",
+        "detail": "ec2d610d-a69a-4d25-94bd-97b98054670b"
+      },
+      {
+        "at": "2026-02-20T15:49:38.177Z",
+        "type": "sent",
+        "channel": "dm",
+        "conversationId": "dm:ec2d610d-a69a-4d25-94bd-97b98054670b"
+      },
+      {
+        "at": "2026-02-20T15:49:38.177Z",
         "type": "transition",
         "channel": "dm",
         "from": "sending",
@@ -260,7 +420,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:03.812Z",
+        "at": "2026-02-20T15:49:38.177Z",
         "type": "transition",
         "channel": "build",
         "from": "mission-complete",
@@ -268,7 +428,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:05.569Z",
+        "at": "2026-02-20T15:49:42.850Z",
         "type": "transition",
         "channel": "build",
         "from": "scanning",
@@ -276,7 +436,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:05.569Z",
+        "at": "2026-02-20T15:49:42.850Z",
         "type": "transition",
         "channel": "night",
         "from": "idle",
@@ -284,14 +444,14 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:06.755Z",
+        "at": "2026-02-20T15:49:44.033Z",
         "type": "error",
         "channel": "night",
         "message": "night lobbies load failed",
         "context": "night.ops"
       },
       {
-        "at": "2026-02-20T14:59:06.755Z",
+        "at": "2026-02-20T15:49:44.033Z",
         "type": "transition",
         "channel": "night",
         "from": "scanning",
@@ -299,7 +459,29 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:06.755Z",
+        "at": "2026-02-20T15:49:44.033Z",
+        "type": "transition",
+        "channel": "swarm",
+        "from": "idle",
+        "to": "room-ops",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:46.975Z",
+        "type": "sent",
+        "channel": "swarm",
+        "conversationId": "quite-swarm-room"
+      },
+      {
+        "at": "2026-02-20T15:49:46.975Z",
+        "type": "transition",
+        "channel": "swarm",
+        "from": "room-ops",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:46.975Z",
         "type": "transition",
         "channel": "swarm",
         "from": "idle",
@@ -307,7 +489,13 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:06.755Z",
+        "at": "2026-02-20T15:49:49.802Z",
+        "type": "sent",
+        "channel": "swarm",
+        "conversationId": "quite-swarm"
+      },
+      {
+        "at": "2026-02-20T15:49:49.802Z",
         "type": "transition",
         "channel": "swarm",
         "from": "moving",
@@ -315,87 +503,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:06.755Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:07.523Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:09.568Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:09.568Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:09.568Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:09.568Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:09.568Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:11.306Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:11.306Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:13.045Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:13.045Z",
+        "at": "2026-02-20T15:49:49.802Z",
         "type": "transition",
         "channel": "ops",
         "from": "running",
@@ -403,7 +511,71 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:13.670Z",
+        "at": "2026-02-20T15:49:54.807Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:55.702Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:55.702Z",
+        "type": "transition",
+        "channel": "ops",
+        "from": "idle",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:58.281Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:58.281Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:58.281Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:58.281Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:58.281Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:49:58.609Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -411,7 +583,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:14.829Z",
+        "at": "2026-02-20T15:49:59.930Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -419,77 +591,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:18.051Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:18.687Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:18.687Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:22.491Z",
-        "type": "sent",
-        "channel": "matrix",
-        "conversationId": "matrix:ambient"
-      },
-      {
-        "at": "2026-02-20T14:59:22.491Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:22.491Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:22.491Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:22.491Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:22.491Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:24.876Z",
+        "at": "2026-02-20T15:50:01.290Z",
         "type": "transition",
         "channel": "dm",
         "from": "scanning",
@@ -497,7 +599,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:24.876Z",
+        "at": "2026-02-20T15:50:01.290Z",
         "type": "transition",
         "channel": "build",
         "from": "idle",
@@ -505,7 +607,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:28.714Z",
+        "at": "2026-02-20T15:50:06.146Z",
         "type": "transition",
         "channel": "build",
         "from": "scanning",
@@ -513,345 +615,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T14:59:28.714Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "running",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:33.718Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:34.550Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:34.550Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:38.684Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "running",
-        "to": "heartbeat",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:39.906Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "heartbeat",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:40.293Z",
-        "type": "sent",
-        "channel": "matrix",
-        "conversationId": "matrix:ambient"
-      },
-      {
-        "at": "2026-02-20T14:59:40.293Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:40.293Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:40.293Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:40.293Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:40.293Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:42.923Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:42.923Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:45.947Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:45.947Z",
-        "type": "transition",
-        "channel": "swarm",
-        "from": "idle",
-        "to": "moving",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:45.947Z",
-        "type": "transition",
-        "channel": "swarm",
-        "from": "moving",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:45.947Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:46.641Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:49.080Z",
-        "type": "sent",
-        "channel": "matrix",
-        "conversationId": "matrix:ambient"
-      },
-      {
-        "at": "2026-02-20T14:59:49.080Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:49.080Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:49.080Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:49.080Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:49.080Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:51.004Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:51.004Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:52.900Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:52.900Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "running",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:57.901Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:58.811Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T14:59:58.811Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:01.595Z",
-        "type": "sent",
-        "channel": "matrix",
-        "conversationId": "matrix:ambient"
-      },
-      {
-        "at": "2026-02-20T15:00:01.595Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:01.595Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:01.595Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:01.595Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:01.596Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:03.698Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "running",
-        "to": "heartbeat",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:03.806Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:03.806Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:05.110Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "heartbeat",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:09.430Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:09.430Z",
+        "at": "2026-02-20T15:50:06.146Z",
         "type": "transition",
         "channel": "freedom",
         "from": "idle",
@@ -859,7 +623,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:09.431Z",
+        "at": "2026-02-20T15:50:06.146Z",
         "type": "transition",
         "channel": "freedom",
         "from": "planning",
@@ -867,15 +631,124 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:09.431Z",
-        "type": "transition",
+        "at": "2026-02-20T15:50:06.146Z",
+        "type": "skipped",
         "channel": "freedom",
-        "from": "hush",
+        "reason": "hush-start-chance",
+        "conversationId": ""
+      },
+      {
+        "at": "2026-02-20T15:50:06.146Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:06.775Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
         "to": "idle",
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:09.431Z",
+        "at": "2026-02-20T15:50:07.758Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:07.758Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:07.758Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:07.758Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:07.758Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:09.620Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:09.620Z",
+        "type": "transition",
+        "channel": "build",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:11.454Z",
+        "type": "transition",
+        "channel": "build",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:11.454Z",
+        "type": "transition",
+        "channel": "freedom",
+        "from": "hush",
+        "to": "planning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:11.454Z",
+        "type": "transition",
+        "channel": "freedom",
+        "from": "planning",
+        "to": "note",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:15.555Z",
+        "type": "sent",
+        "channel": "my-home-note",
+        "conversationId": "note:32226110-76f7-418f-947e-63ae79b8fc9a"
+      },
+      {
+        "at": "2026-02-20T15:50:15.555Z",
+        "type": "transition",
+        "channel": "freedom",
+        "from": "note",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:15.555Z",
         "type": "transition",
         "channel": "ops",
         "from": "running",
@@ -883,7 +756,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:14.431Z",
+        "at": "2026-02-20T15:50:20.557Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -891,7 +764,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:15.740Z",
+        "at": "2026-02-20T15:50:21.254Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -899,7 +772,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:15.740Z",
+        "at": "2026-02-20T15:50:21.254Z",
         "type": "transition",
         "channel": "ops",
         "from": "idle",
@@ -907,145 +780,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:18.854Z",
-        "type": "sent",
-        "channel": "matrix",
-        "conversationId": "matrix:ambient"
-      },
-      {
-        "at": "2026-02-20T15:00:18.854Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:18.854Z",
-        "type": "transition",
-        "channel": "touch",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:18.854Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:18.854Z",
-        "type": "transition",
-        "channel": "hush",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:18.854Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:20.791Z",
-        "type": "transition",
-        "channel": "dm",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:20.791Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "idle",
-        "to": "scanning",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:22.764Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "scanning",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:22.764Z",
-        "type": "transition",
-        "channel": "play",
-        "from": "idle",
-        "to": "starfall",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:25.847Z",
-        "type": "sent",
-        "channel": "play",
-        "conversationId": "kozmos-play:starfall"
-      },
-      {
-        "at": "2026-02-20T15:00:25.848Z",
-        "type": "transition",
-        "channel": "play",
-        "from": "starfall",
-        "to": "sending",
-        "detail": "starfall-share"
-      },
-      {
-        "at": "2026-02-20T15:00:27.149Z",
-        "type": "sent",
-        "channel": "game-chat",
-        "conversationId": "kozmos-play:starfall"
-      },
-      {
-        "at": "2026-02-20T15:00:27.149Z",
-        "type": "transition",
-        "channel": "play",
-        "from": "sending",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:27.149Z",
-        "type": "transition",
-        "channel": "swarm",
-        "from": "idle",
-        "to": "moving",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:27.149Z",
-        "type": "transition",
-        "channel": "swarm",
-        "from": "moving",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:27.149Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:27.840Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T15:00:28.711Z",
+        "at": "2026-02-20T15:50:23.621Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -1053,7 +788,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:30.655Z",
+        "at": "2026-02-20T15:50:24.936Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -1061,13 +796,13 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:32.189Z",
+        "at": "2026-02-20T15:50:24.955Z",
         "type": "sent",
         "channel": "matrix",
         "conversationId": "matrix:ambient"
       },
       {
-        "at": "2026-02-20T15:00:32.189Z",
+        "at": "2026-02-20T15:50:24.955Z",
         "type": "transition",
         "channel": "touch",
         "from": "idle",
@@ -1075,7 +810,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:32.189Z",
+        "at": "2026-02-20T15:50:24.955Z",
         "type": "transition",
         "channel": "touch",
         "from": "scanning",
@@ -1083,7 +818,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:32.189Z",
+        "at": "2026-02-20T15:50:24.955Z",
         "type": "transition",
         "channel": "hush",
         "from": "idle",
@@ -1091,7 +826,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:32.189Z",
+        "at": "2026-02-20T15:50:24.955Z",
         "type": "transition",
         "channel": "hush",
         "from": "scanning",
@@ -1099,7 +834,249 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T15:00:32.189Z",
+        "at": "2026-02-20T15:50:24.955Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:26.757Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:26.757Z",
+        "type": "transition",
+        "channel": "build",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:28.657Z",
+        "type": "transition",
+        "channel": "build",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:28.657Z",
+        "type": "transition",
+        "channel": "swarm",
+        "from": "idle",
+        "to": "moving",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:30.143Z",
+        "type": "sent",
+        "channel": "swarm",
+        "conversationId": "quite-swarm"
+      },
+      {
+        "at": "2026-02-20T15:50:30.144Z",
+        "type": "transition",
+        "channel": "swarm",
+        "from": "moving",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:30.144Z",
+        "type": "transition",
+        "channel": "ops",
+        "from": "running",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:35.153Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:36.060Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:36.060Z",
+        "type": "transition",
+        "channel": "ops",
+        "from": "idle",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:38.848Z",
+        "type": "sent",
+        "channel": "matrix",
+        "conversationId": "matrix:ambient"
+      },
+      {
+        "at": "2026-02-20T15:50:38.848Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:38.848Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:38.848Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:38.848Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:38.848Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:41.344Z",
+        "type": "transition",
+        "channel": "dm",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:41.344Z",
+        "type": "transition",
+        "channel": "build",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:43.261Z",
+        "type": "transition",
+        "channel": "build",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:43.261Z",
+        "type": "transition",
+        "channel": "ops",
+        "from": "running",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:48.270Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:48.637Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "running",
+        "to": "heartbeat",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:49.049Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:49.049Z",
+        "type": "transition",
+        "channel": "ops",
+        "from": "idle",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:49.966Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "heartbeat",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:52.805Z",
+        "type": "sent",
+        "channel": "matrix",
+        "conversationId": "matrix:ambient"
+      },
+      {
+        "at": "2026-02-20T15:50:52.805Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:52.805Z",
+        "type": "transition",
+        "channel": "touch",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:52.805Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "idle",
+        "to": "scanning",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:52.805Z",
+        "type": "transition",
+        "channel": "hush",
+        "from": "scanning",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-20T15:50:52.805Z",
         "type": "transition",
         "channel": "dm",
         "from": "idle",
@@ -1114,16 +1091,17 @@
     "blockedByReason": {},
     "trackedConversations": 3,
     "recentGlobal": [
-      "Continue to cultivate clarity and alignment in your efforts. This will support ongoing progress.",
-      "Perfection reflects a state of alignment. What elements create that feeling for you.",
-      "starfall single run â€¢ score 268 â€¢ round 2 â€¢ rating 700"
+      "Perfection can embody harmony and balance. What aspects contribute to that state for you.",
+      "Maintain focus on clarity and mutual understanding. This will continue to strengthen your progress.",
+      "I hear you."
     ],
     "sentPerHourByChannel": {
       "dm": 2,
-      "game-chat": 1
+      "my-home-note": 1
     },
     "userActivityByChannel": {
-      "dm": 14
+      "dm": 10,
+      "shared": 1
     }
   }
 }
