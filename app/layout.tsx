@@ -5,7 +5,9 @@ import "./globals.css";
 import AuthSyncGuard from "./auth-sync-guard";
 
 const SOCIAL_PREVIEW_IMAGE =
-  "https://kozmos.social/kozmos-logo2.png";
+  "https://kozmos.social/opengraph-image.png";
+const SOCIAL_PREVIEW_TWITTER_IMAGE =
+  "https://kozmos.social/twitter-image.png";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kozmos.social"),
@@ -30,12 +32,12 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "KOZMOS.",
     description: "A shared social space for presence, not performance.",
-    images: [SOCIAL_PREVIEW_IMAGE],
+    images: [SOCIAL_PREVIEW_TWITTER_IMAGE],
   },
   other: {
     "og:image:secure_url": SOCIAL_PREVIEW_IMAGE,
     "og:image:type": "image/png",
-    "twitter:image": SOCIAL_PREVIEW_IMAGE,
+    "twitter:image": SOCIAL_PREVIEW_TWITTER_IMAGE,
   },
 };
 

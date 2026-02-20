@@ -74,7 +74,7 @@ async function sendDeleteEmail(email: string, code: string) {
   });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
-    throw new Error(`email send failed: ${msg || res.status}`);
+    throw new Error(`email send failed (from=${DELETE_MAIL_FROM}): ${msg || res.status}`);
   }
 }
 
@@ -88,7 +88,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "user email missing" }, { status: 400 });
     }
     if (!RESEND_API_KEY) {
-      return NextResponse.json({ error: "email service not configured" }, { status: 500 });
+      return NextResponse.json(
+        { error: `email service not configured (from=${DELETE_MAIL_FROM})` },
+        { status: 500 }
+      );
     }
     const requestIp = getRequestIp(req) || "unknown";
     const now = Date.now();
