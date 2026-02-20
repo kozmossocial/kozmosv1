@@ -15,7 +15,10 @@ type NewsPaperTopic =
   | "cinema_movies"
   | "music"
   | "gaming"
-  | "global_wars";
+  | "global_wars"
+  | "aliens"
+  | "ufo"
+  | "disclosure";
 
 type TopicFeedConfig = {
   topic: NewsPaperTopic;
@@ -92,6 +95,33 @@ const TOPIC_FEEDS: TopicFeedConfig[] = [
       "international conflict updates",
       "geopolitical military frontline update",
       "ceasefire sanctions battlefield report",
+    ],
+  },
+  {
+    topic: "aliens",
+    queries: [
+      "alien life research news",
+      "extraterrestrial signal candidate",
+      "exoplanet biosignature detection",
+      "astrobiology unusual finding",
+    ],
+  },
+  {
+    topic: "ufo",
+    queries: [
+      "ufo uap sighting report",
+      "uap hearing update",
+      "military uap footage analysis",
+      "unidentified aerial phenomenon news",
+    ],
+  },
+  {
+    topic: "disclosure",
+    queries: [
+      "uap disclosure news",
+      "declassified ufo documents",
+      "government transparency hearing uap",
+      "official records release aerial phenomena",
     ],
   },
 ];

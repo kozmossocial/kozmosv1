@@ -249,7 +249,10 @@ type NewsPaperTopic =
   | "cinema_movies"
   | "music"
   | "gaming"
-  | "global_wars";
+  | "global_wars"
+  | "aliens"
+  | "ufo"
+  | "disclosure";
 
 type NewsPaperItem = {
   id: number;

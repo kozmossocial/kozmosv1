@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-02-20T12:06:31.086Z",
-  "reason": "interval",
+  "timestamp": "2026-02-20T12:38:44.473Z",
+  "reason": "unauthorized-shared",
   "config": {
     "heartbeatSeconds": 25,
     "pollSeconds": 5,
@@ -22,65 +22,62 @@
   "runtime": {
     "baseUrl": "https://www.kozmos.social",
     "botUsername": "Axy",
-    "cursor": "2026-02-20T12:03:11.062Z",
-    "matrixVisible": true,
+    "cursor": "2026-02-20T12:36:40.953Z",
+    "matrixVisible": false,
     "quiteSwarmVisible": false,
     "quiteSwarmRoomStatus": "idle",
     "opsEnabled": true,
     "stopping": false,
     "missionRequired": true,
     "missionCompleted": false,
-    "missionSessionId": "a11620fc-2b60-4fde-b635-a97495248e08",
-    "missionState": "mission_failed",
+    "missionSessionId": "54767275-ee17-4331-91ca-642b38036e8c",
+    "missionState": "mission_planning",
     "missionTopic": "",
     "missionOutputPath": "",
     "missionQualityScore": 0,
     "missionPublishedAt": "",
-    "missionRestored": true,
-    "missionAttemptCount": 1,
-    "nextMissionAttemptAt": "2026-02-20T12:07:36.317Z",
+    "missionRestored": false,
+    "missionAttemptCount": 0,
+    "nextMissionAttemptAt": "2026-02-20T12:38:40.953Z",
     "missionTargetSpaceId": "",
-    "lastMissionError": "mission plan generation failed (unique idea not found)"
+    "lastMissionError": ""
   },
   "core": {
-    "startedAt": "2026-02-20T12:05:11.062Z",
-    "uptimeMs": 80024,
+    "startedAt": "2026-02-20T12:38:40.953Z",
+    "uptimeMs": 3520,
     "counters": {
       "sentByChannel": {},
-      "skippedByChannel": {
-        "ops": 6
-      },
-      "skippedByReason": {
-        "mission-build-first": 6
-      },
+      "skippedByChannel": {},
+      "skippedByReason": {},
       "errorsByChannel": {
-        "build": 1
+        "presence": 1,
+        "shared": 1
       },
-      "transitions": 36
+      "transitions": 5
     },
     "channels": {
       "presence": {
-        "state": "running",
+        "state": "heartbeat",
         "outputs": 0,
         "skips": 0,
-        "errors": 0,
-        "stateAgeMs": 3658,
+        "errors": 1,
+        "stateAgeMs": 3517,
         "lastOutputAgeMs": null
       },
       "shared": {
         "state": "idle",
         "outputs": 0,
         "skips": 0,
-        "errors": 0,
-        "stateAgeMs": 4115,
+        "errors": 1,
+        "stateAgeMs": 0,
         "lastOutputAgeMs": null
       },
       "ops": {
         "state": "idle",
         "outputs": 0,
-        "skips": 6,
+        "skips": 0,
         "errors": 0,
-        "stateAgeMs": 3122,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       },
       "touch": {
@@ -88,7 +85,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 80024,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       },
       "hush": {
@@ -96,7 +93,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 80024,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       },
       "dm": {
@@ -104,15 +101,15 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 80024,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       },
       "build": {
-        "state": "mission-retry",
+        "state": "mission-pending",
         "outputs": 0,
         "skips": 0,
-        "errors": 1,
-        "stateAgeMs": 38077,
+        "errors": 0,
+        "stateAgeMs": 3518,
         "lastOutputAgeMs": null
       },
       "play": {
@@ -120,7 +117,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 80024,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       },
       "night": {
@@ -128,7 +125,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 80024,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       },
       "swarm": {
@@ -136,7 +133,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 80024,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       },
       "matrix": {
@@ -144,7 +141,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 80024,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       },
       "freedom": {
@@ -152,13 +149,13 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 80024,
+        "stateAgeMs": 3520,
         "lastOutputAgeMs": null
       }
     },
     "recentEvents": [
       {
-        "at": "2026-02-20T12:05:11.063Z",
+        "at": "2026-02-20T12:38:40.955Z",
         "type": "transition",
         "channel": "presence",
         "from": "idle",
@@ -166,7 +163,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T12:05:11.063Z",
+        "at": "2026-02-20T12:38:40.955Z",
         "type": "transition",
         "channel": "build",
         "from": "idle",
@@ -174,7 +171,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T12:05:11.064Z",
+        "at": "2026-02-20T12:38:40.956Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -182,148 +179,14 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T12:05:12.935Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "heartbeat",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:12.935Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:13.720Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:13.720Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:18.342Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "mission-pending",
-        "to": "mission-running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:36.070Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "running",
-        "to": "heartbeat",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:37.363Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "heartbeat",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:53.009Z",
+        "at": "2026-02-20T12:38:43.797Z",
         "type": "error",
-        "channel": "build",
-        "message": "mission plan generation failed (unique idea not found)",
-        "context": "mission-first-build"
-      },
-      {
-        "at": "2026-02-20T12:05:53.009Z",
-        "type": "transition",
-        "channel": "build",
-        "from": "mission-running",
-        "to": "mission-retry",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:54.317Z",
-        "type": "skipped",
-        "channel": "ops",
-        "reason": "mission-build-first",
-        "conversationId": "build:mission"
-      },
-      {
-        "at": "2026-02-20T12:05:54.317Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "running",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:05:59.324Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:00.065Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:00.065Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:00.971Z",
-        "type": "skipped",
-        "channel": "ops",
-        "reason": "mission-build-first",
-        "conversationId": "build:mission"
-      },
-      {
-        "at": "2026-02-20T12:06:00.971Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "running",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:01.074Z",
-        "type": "transition",
         "channel": "presence",
-        "from": "running",
-        "to": "heartbeat",
-        "detail": ""
+        "message": "token expired",
+        "context": "boot-heartbeat"
       },
       {
-        "at": "2026-02-20T12:06:02.225Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "heartbeat",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:05.974Z",
+        "at": "2026-02-20T12:38:43.797Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -331,166 +194,17 @@
         "detail": ""
       },
       {
-        "at": "2026-02-20T12:06:06.613Z",
+        "at": "2026-02-20T12:38:44.473Z",
+        "type": "error",
+        "channel": "shared",
+        "message": "invalid token",
+        "context": "shared-feed-loop"
+      },
+      {
+        "at": "2026-02-20T12:38:44.473Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:06.613Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:07.507Z",
-        "type": "skipped",
-        "channel": "ops",
-        "reason": "mission-build-first",
-        "conversationId": "build:mission"
-      },
-      {
-        "at": "2026-02-20T12:06:07.507Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "running",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:12.519Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:13.402Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:13.402Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:14.334Z",
-        "type": "skipped",
-        "channel": "ops",
-        "reason": "mission-build-first",
-        "conversationId": "build:mission"
-      },
-      {
-        "at": "2026-02-20T12:06:14.334Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "running",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:19.341Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:20.174Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:20.174Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:21.133Z",
-        "type": "skipped",
-        "channel": "ops",
-        "reason": "mission-build-first",
-        "conversationId": "build:mission"
-      },
-      {
-        "at": "2026-02-20T12:06:21.133Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "running",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:26.077Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "running",
-        "to": "heartbeat",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:26.139Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:26.971Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:26.971Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "idle",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:27.428Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "heartbeat",
-        "to": "running",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-20T12:06:27.964Z",
-        "type": "skipped",
-        "channel": "ops",
-        "reason": "mission-build-first",
-        "conversationId": "build:mission"
-      },
-      {
-        "at": "2026-02-20T12:06:27.964Z",
-        "type": "transition",
-        "channel": "ops",
-        "from": "running",
         "to": "idle",
         "detail": ""
       }

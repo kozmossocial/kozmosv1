@@ -221,6 +221,7 @@ export default function BuildPage() {
   const [creatingFile, setCreatingFile] = useState(false);
   const [deletingFile, setDeletingFile] = useState(false);
   const [savingFile, setSavingFile] = useState(false);
+  const [exportingZip, setExportingZip] = useState(false);
   const [publishingRoom, setPublishingRoom] = useState(false);
   const [updatingSpaceVisibility, setUpdatingSpaceVisibility] = useState(false);
   const [loadingAccess, setLoadingAccess] = useState(false);
@@ -939,6 +940,59 @@ export default function BuildPage() {
     }
   }
 
+  async function exportSelectedSpaceZip() {
+    if (!selectedSpaceId || !selectedSpace) {
+      setErrorText("select a subspace first");
+      return;
+    }
+
+    setExportingZip(true);
+    setErrorText(null);
+    setInfoText(null);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const headers = new Headers();
+      if (session?.access_token) {
+        headers.set("Authorization", `Bearer ${session.access_token}`);
+      }
+
+      const res = await fetch(
+        `/api/build/export/zip?spaceId=${encodeURIComponent(selectedSpaceId)}`,
+        { method: "GET", headers }
+      );
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErrorText(data?.error || "zip export failed");
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/i);
+      const fallbackName = `${selectedSpace.title || "subspace"}.zip`;
+      const fileName = (match?.[1] || fallbackName).trim();
+      const objectUrl = URL.createObjectURL(blob);
+
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      setInfoText("zip exported");
+    } catch {
+      setErrorText("zip export failed");
+    } finally {
+      setExportingZip(false);
+    }
+  }
+
   function openPreviewInNewTab() {
     const tab = window.open("about:blank", "_blank");
     if (!tab) return;
@@ -1434,6 +1488,22 @@ export default function BuildPage() {
                     }}
                   >
                     {savingFile ? "saving..." : "save file"}
+                  </button>
+                  <button
+                    onClick={exportSelectedSpaceZip}
+                    disabled={exportingZip || !selectedSpaceId}
+                    style={{
+                      border: "1px solid rgba(255,214,123,0.46)",
+                      borderRadius: 8,
+                      background: "rgba(255,214,123,0.14)",
+                      color: "#ffe8b4",
+                      padding: "7px 10px",
+                      cursor:
+                        exportingZip || !selectedSpaceId ? "default" : "pointer",
+                      fontSize: 12,
+                    }}
+                  >
+                    {exportingZip ? "exporting..." : "export zip"}
                   </button>
                   <button
                     onClick={publishRoomToMatrix}
