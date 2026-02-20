@@ -39,6 +39,8 @@ const ACTION_ALIASES: Record<string, string> = {
   "play.starfall.profile": "play.starfall.profile",
   "play.starfall.single": "play.starfall.single",
   "play.starfall.train": "play.starfall.train",
+  "axy.mission.get": "mission.get",
+  "axy.mission.upsert": "mission.upsert",
 };
 
 const KNOWN_ACTIONS = new Set<string>([
@@ -98,6 +100,8 @@ const KNOWN_ACTIONS = new Set<string>([
   "play.starfall.profile",
   "play.starfall.single",
   "play.starfall.train",
+  "mission.get",
+  "mission.upsert",
   "night.lobbies",
   "night.join_by_code",
   "night.join_random_lobby",
@@ -231,6 +235,21 @@ type StarfallSkillRow = {
   updated_at?: string;
 };
 
+type RuntimeAxyMissionRow = {
+  session_id: string;
+  user_id: string;
+  status: string;
+  topic: string | null;
+  output_path: string | null;
+  quality_score: number | null;
+  published: boolean;
+  published_at: string | null;
+  attempt_count: number | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type NightSessionRow = {
   id: string;
   session_code: string;
@@ -272,6 +291,20 @@ function asSafeUuid(value: unknown) {
 
 function asSafeBool(value: unknown, fallback = false) {
   return typeof value === "boolean" ? value : fallback;
+}
+
+const MISSION_STATUS_SET = new Set([
+  "mission_planning",
+  "mission_building",
+  "mission_review",
+  "mission_publish",
+  "mission_failed",
+  "freedom",
+]);
+
+function asMissionStatus(input: unknown, fallback = "mission_planning") {
+  const raw = asTrimmedString(input).toLowerCase();
+  return MISSION_STATUS_SET.has(raw) ? raw : fallback;
 }
 
 function canonicalizeAction(action: string) {
@@ -1425,6 +1458,92 @@ async function buildSpaceSnapshot(userId: string, spaceId: string) {
     is_owner: files.is_owner,
     access: accessEntries,
   };
+}
+
+async function getLatestMission(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("runtime_axy_missions")
+    .select(
+      "session_id, user_id, status, topic, output_path, quality_score, published, published_at, attempt_count, last_error, created_at, updated_at"
+    )
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error("mission load failed");
+  return (data as RuntimeAxyMissionRow | null) || null;
+}
+
+async function upsertMission(
+  userId: string,
+  payload: {
+    sessionId?: unknown;
+    status?: unknown;
+    topic?: unknown;
+    outputPath?: unknown;
+    qualityScore?: unknown;
+    published?: unknown;
+    publishedAt?: unknown;
+    attemptCount?: unknown;
+    error?: unknown;
+  }
+) {
+  const sessionId = asTrimmedString(payload.sessionId);
+  if (!sessionId) throw new Error("session id required");
+
+  const existing = await supabaseAdmin
+    .from("runtime_axy_missions")
+    .select("session_id, user_id")
+    .eq("session_id", sessionId)
+    .maybeSingle();
+  if (existing.error) throw new Error("mission lookup failed");
+  if (existing.data?.user_id && String(existing.data.user_id) !== userId) {
+    throw new Error("forbidden");
+  }
+
+  const status = asMissionStatus(payload.status, "mission_planning");
+  const topic = asTrimmedString(payload.topic) || null;
+  const outputPath = asTrimmedString(payload.outputPath) || null;
+  const qualityScoreRaw = Number(payload.qualityScore);
+  const qualityScore = Number.isFinite(qualityScoreRaw)
+    ? Math.max(0, Math.min(100, qualityScoreRaw))
+    : null;
+  const published = asSafeBool(payload.published, false) || status === "mission_publish";
+  const publishedAtInput = asTrimmedString(payload.publishedAt);
+  const publishedAt = published
+    ? publishedAtInput || new Date().toISOString()
+    : null;
+  const attemptCountRaw = Number(payload.attemptCount);
+  const attemptCount = Number.isFinite(attemptCountRaw)
+    ? Math.max(0, Math.floor(attemptCountRaw))
+    : 0;
+  const lastError = asTrimmedString(payload.error) || null;
+
+  const { data, error } = await supabaseAdmin
+    .from("runtime_axy_missions")
+    .upsert(
+      {
+        session_id: sessionId,
+        user_id: userId,
+        status,
+        topic,
+        output_path: outputPath,
+        quality_score: qualityScore,
+        published,
+        published_at: publishedAt,
+        attempt_count: attemptCount,
+        last_error: lastError,
+      },
+      { onConflict: "session_id" }
+    )
+    .select(
+      "session_id, user_id, status, topic, output_path, quality_score, published, published_at, attempt_count, last_error, created_at, updated_at"
+    )
+    .maybeSingle();
+
+  if (error || !data) throw new Error("mission upsert failed");
+  return data as RuntimeAxyMissionRow;
 }
 
 async function getMatrixProfile(userId: string) {
@@ -3264,28 +3383,33 @@ async function updateDirectChatOrder(userId: string, orderedChatIds: string[]) {
 
 async function buildSnapshot(actor: RuntimeActor) {
   const starfallProfilePromise = getStarfallProfile(actor.userId).catch(() => null);
+  const missionPromise = getLatestMission(actor.userId).catch(() => null);
   const [
     notes,
     touch,
     chats,
     hush,
+    buildSpaces,
     matrix,
     matrixPosition,
     quiteSwarmPosition,
     quiteSwarmRoom,
     present,
     starfallProfile,
+    mission,
   ] = await Promise.all([
     listNotes(actor.userId),
     listTouch(actor.userId),
     listDirectChats(actor.userId),
     listHush(actor.userId),
+    listBuildSpaces(actor.userId),
     getMatrixProfile(actor.userId),
     getMatrixPosition(actor.userId),
     getQuiteSwarmPosition(actor.userId),
     getQuiteSwarmRoom(),
     listPresentRuntimeUsers(),
     starfallProfilePromise,
+    missionPromise,
   ]);
 
   return {
@@ -3297,6 +3421,8 @@ async function buildSnapshot(actor: RuntimeActor) {
     touch,
     chats,
     hush,
+    build_spaces: buildSpaces,
+    mission,
     matrix,
     matrix_position: matrixPosition,
     quite_swarm_position: quiteSwarmPosition,
@@ -3368,6 +3494,29 @@ export async function POST(req: Request) {
     if (action === "context.snapshot") {
       const snapshot = await buildSnapshot(actor);
       return respond(200, { ok: true, action, data: snapshot });
+    }
+
+    if (action === "mission.get") {
+      const sessionId = asTrimmedString((payload as { sessionId?: unknown })?.sessionId);
+      if (sessionId) {
+        const { data, error } = await supabaseAdmin
+          .from("runtime_axy_missions")
+          .select(
+            "session_id, user_id, status, topic, output_path, quality_score, published, published_at, attempt_count, last_error, created_at, updated_at"
+          )
+          .eq("session_id", sessionId)
+          .eq("user_id", actor.userId)
+          .maybeSingle();
+        if (error) throw new Error("mission load failed");
+        return respond(200, { ok: true, action, data: (data as RuntimeAxyMissionRow | null) || null });
+      }
+      const mission = await getLatestMission(actor.userId);
+      return respond(200, { ok: true, action, data: mission });
+    }
+
+    if (action === "mission.upsert") {
+      const row = await upsertMission(actor.userId, payload as Record<string, unknown>);
+      return respond(200, { ok: true, action, data: row });
     }
 
     if (action === "notes.list") {

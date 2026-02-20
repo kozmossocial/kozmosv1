@@ -12,11 +12,15 @@
 
 import http from "node:http";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import {
   ensureQuestionPunctuation,
   isNearDuplicate,
+  normalizeIdeaKey,
   normalizeForSimilarity,
+  pickBestMissionIdea,
+  scoreMissionBundleQuality,
 } from "../lib/axy-core.mjs";
 
 function parseArgs(argv) {
@@ -84,6 +88,469 @@ function buildTriggerRegex(trigger, botUsername) {
 
 function normalizeBuildPath(input) {
   return String(input || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
+const MISSION_ROOT_PATH = "axy/published";
+const MISSION_HISTORY_PATH = `${MISSION_ROOT_PATH}/_history.json`;
+const MISSION_LATEST_PATH = `${MISSION_ROOT_PATH}/_latest.md`;
+
+function slugify(input) {
+  const slug = String(input || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  return slug || `build-${Date.now()}`;
+}
+
+function pickCodeFence(text) {
+  const raw = String(text || "");
+  const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return match?.[1]?.trim() || raw.trim();
+}
+
+function extractJsonObject(raw) {
+  const source = pickCodeFence(raw);
+  if (!source) return null;
+  try {
+    return JSON.parse(source);
+  } catch {
+    const start = source.indexOf("{");
+    const end = source.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+    try {
+      return JSON.parse(source.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
+}
+
+function parseMissionHistory(content) {
+  if (!content) return [];
+  try {
+    const parsed = JSON.parse(String(content));
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((row) => ({
+        title: String(row?.title || "").trim(),
+        key: normalizeIdeaKey(row?.key || row?.title || ""),
+        path: String(row?.path || "").trim(),
+        created_at: String(row?.created_at || "").trim(),
+      }))
+      .filter((row) => row.title && row.key && row.path);
+  } catch {
+    return [];
+  }
+}
+
+function harvestMissionHistoryFromFiles(files) {
+  const harvested = [];
+  for (const file of files) {
+    const pathValue = normalizeBuildPath(file?.path || "");
+    if (!pathValue.startsWith(`${MISSION_ROOT_PATH}/`) || !pathValue.endsWith("/README.md")) {
+      continue;
+    }
+    const content = String(file?.content || "");
+    const heading = content.match(/^#\s+(.+)$/m);
+    const title = String(heading?.[1] || "").trim();
+    if (!title) continue;
+    const key = normalizeIdeaKey(title);
+    if (!key) continue;
+    harvested.push({
+      title,
+      key,
+      path: pathValue.slice(0, -"README.md".length).replace(/\/+$/, ""),
+      created_at: String(file?.updated_at || ""),
+    });
+  }
+  return harvested;
+}
+
+async function runSessionBuildMission({
+  baseUrl,
+  token,
+  botUsername,
+  buildSpaceId,
+  missionMaxIdeaAttempts,
+  missionMaxBundleAttempts,
+  missionHistoryLimit,
+  missionNoRepeatDays,
+  missionContext,
+  onState,
+}) {
+  const setState = typeof onState === "function" ? onState : async () => {};
+  await setState("mission_planning");
+  let targetSpaceId = String(buildSpaceId || "").trim();
+
+  if (!targetSpaceId) {
+    const spacesRes = await callAxyOps(baseUrl, token, "build.spaces.list");
+    const editable = (Array.isArray(spacesRes?.data) ? spacesRes.data : []).filter(
+      (space) => space?.id && space?.can_edit === true
+    );
+    const preferred =
+      editable.find(
+        (space) => String(space?.title || "").trim().toLowerCase() === "axy published builds"
+      ) ||
+      editable.find((space) => /axy|lab|builder/i.test(String(space?.title || ""))) ||
+      editable[0];
+    if (preferred?.id) {
+      targetSpaceId = String(preferred.id);
+    }
+  }
+
+  if (!targetSpaceId) {
+    const createRes = await callAxyOps(baseUrl, token, "build.spaces.create", {
+      title: "Axy Published Builds",
+      languagePref: "auto",
+      description: "Axy mission outputs for Kozmos.",
+    });
+    targetSpaceId = String(createRes?.data?.id || "").trim();
+  }
+  if (!targetSpaceId) {
+    throw new Error("mission build space missing");
+  }
+
+  const snapshotRes = await callAxyOps(baseUrl, token, "build.space.snapshot", {
+    spaceId: targetSpaceId,
+  });
+  const snapshot = snapshotRes?.data || {};
+  const files = Array.isArray(snapshot?.files) ? snapshot.files : [];
+  if (snapshot?.can_edit !== true) {
+    throw new Error("mission space not editable");
+  }
+
+  const historyFile = files.find(
+    (file) => normalizeBuildPath(file?.path || "") === MISSION_HISTORY_PATH
+  );
+  const parsedHistory = parseMissionHistory(String(historyFile?.content || ""));
+  const harvestedHistory = harvestMissionHistoryFromFiles(files);
+
+  const historyByKey = new Map();
+  [...parsedHistory, ...harvestedHistory].forEach((row) => {
+    if (!row?.key) return;
+    if (!historyByKey.has(row.key)) historyByKey.set(row.key, row);
+  });
+  const usedHistory = Array.from(historyByKey.values()).slice(0, missionHistoryLimit);
+  const usedIdeaKeys = new Set(
+    usedHistory.map((row) => normalizeIdeaKey(row.key || row.title || "")).filter(Boolean)
+  );
+
+  const nowMs = Date.now();
+  const repeatWindowMs = Math.max(1, missionNoRepeatDays) * 24 * 60 * 60 * 1000;
+  const recentHistory = usedHistory.filter((row) => {
+    const t = Date.parse(String(row.created_at || ""));
+    return Number.isFinite(t) ? nowMs - t <= repeatWindowMs : true;
+  });
+  const recentIdeaTitles = recentHistory.map((row) => row.title).filter(Boolean);
+
+  const contextShared = Array.isArray(missionContext?.sharedTurns)
+    ? missionContext.sharedTurns
+        .slice(-20)
+        .map((turn) => `${turn?.username || "user"}: ${String(turn?.text || "").trim()}`)
+        .filter((line) => line.length > 3)
+    : [];
+  const contextNotes = Array.isArray(missionContext?.notes)
+    ? missionContext.notes
+        .slice(-10)
+        .map((row) => String(row?.content || "").trim())
+        .filter((line) => line.length > 3)
+    : [];
+  const contextBuildSpaces = Array.isArray(missionContext?.buildSpaces)
+    ? missionContext.buildSpaces
+        .slice(0, 12)
+        .map((space) => {
+          const title = String(space?.title || "").trim();
+          const desc = String(space?.description || "").trim();
+          return `${title}${desc ? ` - ${desc}` : ""}`.trim();
+        })
+        .filter(Boolean)
+    : [];
+
+  let plan = null;
+  for (let attempt = 1; attempt <= missionMaxIdeaAttempts; attempt += 1) {
+    const existingBlock = usedHistory.length
+      ? usedHistory.slice(0, 120).map((row) => `- ${row.title}`).join("\n")
+      : "- none";
+    const sharedContextBlock = contextShared.length
+      ? contextShared.slice(-12).map((line) => `- ${line}`).join("\n")
+      : "- no recent shared prompts";
+    const notesContextBlock = contextNotes.length
+      ? contextNotes.slice(-8).map((line) => `- ${line}`).join("\n")
+      : "- no recent private notes";
+    const buildContextBlock = contextBuildSpaces.length
+      ? contextBuildSpaces.map((line) => `- ${line}`).join("\n")
+      : "- no visible user-build signals";
+
+    const planPrompt = [
+      "Create candidate Kozmos build missions and score them.",
+      `Identity: ${botUsername}.`,
+      "Return strict JSON only.",
+      `Never repeat or clone any prior idea/title in this list:\n${existingBlock}`,
+      `Recent shared conversation signals:\n${sharedContextBlock}`,
+      `Recent private note signals:\n${notesContextBlock}`,
+      `Current user-build ecosystem signals:\n${buildContextBlock}`,
+      "JSON schema:",
+      '{"ideas":[{"title":"...", "problem":"...", "goal":"...", "scope":["..."], "artifact_language":"typescript|javascript|markdown|sql|css|json", "publish_summary":"... (1 concise paragraph)", "utility":0-10, "implementability":0-10, "novelty":0-10}]}',
+      "Rules:",
+      "- return exactly 4 ideas",
+      "- title must be novel and specific",
+      "- practical utility for Kozmos users",
+      "- scope must be deliverable in one session",
+      "- publish_summary must be clear and concrete",
+      "- scoring must be realistic, not inflated",
+    ].join("\n\n");
+
+    const rawPlan = await askAxy(baseUrl, planPrompt, {
+      context: {
+        channel: "build",
+        conversationId: `build:mission:plan:${targetSpaceId}`,
+        targetUsername: "kozmos-builders",
+      },
+    });
+
+    const parsed = extractJsonObject(rawPlan);
+    if (!parsed || typeof parsed !== "object") continue;
+    const ideas = Array.isArray(parsed.ideas) ? parsed.ideas : [];
+
+    const bestIdea = pickBestMissionIdea(ideas, {
+      usedIdeaKeys: Array.from(usedIdeaKeys),
+      usedIdeaTitles: recentIdeaTitles,
+    });
+    if (!bestIdea) continue;
+    if (bestIdea.total < 6.4) continue;
+    if (usedIdeaKeys.has(bestIdea.key)) continue;
+
+    plan = {
+      title: bestIdea.title,
+      key: bestIdea.key,
+      problem: bestIdea.problem,
+      goal: bestIdea.goal,
+      scope: bestIdea.scope.slice(0, 8),
+      publishSummary: bestIdea.publishSummary.slice(0, 340),
+      artifactLanguage: bestIdea.artifactLanguage || "markdown",
+      ideaScores: {
+        utility: bestIdea.utility,
+        implementability: bestIdea.implementability,
+        novelty: bestIdea.novelty,
+        total: bestIdea.total,
+      },
+    };
+    break;
+  }
+
+  if (!plan) {
+    throw new Error("mission plan generation failed (unique idea not found)");
+  }
+
+  await setState("mission_building", {
+    topic: plan.title,
+    qualityScore: plan.ideaScores?.total || 0,
+    outputPath: "",
+  });
+
+  let bundle = null;
+  let bundleQuality = null;
+  for (let attempt = 1; attempt <= missionMaxBundleAttempts; attempt += 1) {
+    const bundlePrompt = [
+      "Generate the mission output package for this build plan.",
+      "Return strict JSON only.",
+      `Plan title: ${plan.title}`,
+      `Problem: ${plan.problem}`,
+      `Goal: ${plan.goal}`,
+      `Scope bullets: ${plan.scope.join(" | ")}`,
+      `Artifact language target: ${plan.artifactLanguage}`,
+      "JSON schema:",
+      '{"readme":"...", "spec":"...", "implementation":"...", "artifactPath":"...", "artifactLanguage":"...", "artifactContent":"...", "publishSummary":"...", "usageSteps":["step1","step2","step3"]}',
+      "Content rules:",
+      "- README: practical, user-facing usage and rollout guidance",
+      "- SPEC: architecture, constraints, data flow, edge cases",
+      "- IMPLEMENTATION: concrete steps and maintainability notes",
+      "- artifactPath must be file path only (no leading slash)",
+      "- artifactContent must be directly usable starter implementation",
+      "- publishSummary should be one concrete paragraph",
+      "- usageSteps should be concrete actionable steps",
+      "- no fluff, no repetitive stillness tone",
+    ].join("\n\n");
+
+    const rawBundle = await askAxy(baseUrl, bundlePrompt, {
+      context: {
+        channel: "build",
+        conversationId: `build:mission:bundle:${targetSpaceId}:${plan.key}`,
+        targetUsername: "kozmos-builders",
+      },
+    });
+    const parsed = extractJsonObject(rawBundle);
+    if (!parsed || typeof parsed !== "object") continue;
+
+    const candidateBundle = {
+      readme: String(parsed.readme || "").trim(),
+      spec: String(parsed.spec || "").trim(),
+      implementation: String(parsed.implementation || "").trim(),
+      artifactPath: normalizeBuildPath(parsed.artifactPath || ""),
+      artifactLanguage: String(parsed.artifactLanguage || plan.artifactLanguage || "markdown")
+        .trim()
+        .toLowerCase(),
+      artifactContent: String(parsed.artifactContent || "").trim(),
+      publishSummary: String(parsed.publishSummary || plan.publishSummary || "").trim(),
+      usageSteps: Array.isArray(parsed.usageSteps)
+        ? parsed.usageSteps.map((step) => String(step || "").trim()).filter(Boolean).slice(0, 8)
+        : [],
+    };
+    const quality = scoreMissionBundleQuality(candidateBundle);
+    if (!quality.ok) continue;
+
+    const artifactKey = normalizeBuildPath(candidateBundle.artifactPath).toLowerCase();
+    const alreadyUsedPath = files.some((file) => {
+      const existingPath = normalizeBuildPath(file?.path || "").toLowerCase();
+      return existingPath.endsWith(`/${artifactKey}`) || existingPath === artifactKey;
+    });
+    if (alreadyUsedPath) continue;
+
+    bundle = candidateBundle;
+    bundleQuality = quality;
+    break;
+  }
+
+  if (!bundle) {
+    throw new Error("mission build package generation failed (quality gate)");
+  }
+
+  await setState("mission_review", {
+    topic: plan.title,
+    qualityScore: bundleQuality?.qualityScore || 0,
+    outputPath: "",
+  });
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const basePath = `${MISSION_ROOT_PATH}/${stamp}-${slugify(plan.title)}`;
+  const artifactPath = `${basePath}/${normalizeBuildPath(bundle.artifactPath)}`;
+  const readmeContent = `# ${plan.title}\n\n${bundle.readme}`.trim();
+  const specContent = `# ${plan.title} - Spec\n\n${bundle.spec}`.trim();
+  const implementationContent = `# ${plan.title} - Implementation\n\n${bundle.implementation}`.trim();
+  const artifactContent = bundle.artifactContent;
+  const latestSummary = String(bundle.publishSummary || plan.publishSummary).trim();
+  const usageSteps = (Array.isArray(bundle.usageSteps) ? bundle.usageSteps : [])
+    .map((step) => String(step || "").trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  const byExtLanguage = (() => {
+    const ext = path.extname(artifactPath).toLowerCase();
+    if (ext === ".ts" || ext === ".tsx") return "typescript";
+    if (ext === ".js" || ext === ".mjs" || ext === ".cjs") return "javascript";
+    if (ext === ".sql") return "sql";
+    if (ext === ".css") return "css";
+    if (ext === ".json") return "json";
+    if (ext === ".md") return "markdown";
+    return bundle.artifactLanguage || "text";
+  })();
+
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
+    path: `${basePath}/README.md`,
+    language: "markdown",
+    content: readmeContent,
+  });
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
+    path: `${basePath}/SPEC.md`,
+    language: "markdown",
+    content: specContent,
+  });
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
+    path: `${basePath}/IMPLEMENTATION.md`,
+    language: "markdown",
+    content: implementationContent,
+  });
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
+    path: artifactPath,
+    language: byExtLanguage,
+    content: artifactContent,
+  });
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
+    path: `${basePath}/PUBLISH.md`,
+    language: "markdown",
+    content: [
+      `# ${plan.title}`,
+      "",
+      "## Value",
+      latestSummary,
+      "",
+      "## Entry",
+      `- ${basePath}/README.md`,
+      `- ${artifactPath}`,
+      "",
+      "## Usage",
+      ...(usageSteps.length > 0
+        ? usageSteps.map((step, index) => `${index + 1}. ${step}`)
+        : ["1. Open README.md", "2. Follow setup notes", "3. Run/iterate from artifact file"]),
+      "",
+    ].join("\n"),
+  });
+
+  const updatedHistory = [
+    {
+      title: plan.title,
+      key: plan.key,
+      path: basePath,
+      created_at: new Date().toISOString(),
+    },
+    ...usedHistory,
+  ].slice(0, missionHistoryLimit);
+
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
+    path: MISSION_HISTORY_PATH,
+    language: "json",
+    content: JSON.stringify(updatedHistory, null, 2),
+  });
+
+  const latestFile = [
+    "# Latest Axy Published Build",
+    "",
+    `Title: ${plan.title}`,
+    `Path: ${basePath}/README.md`,
+    `Published: ${new Date().toISOString()}`,
+    `Quality score: ${bundleQuality?.qualityScore || 0}`,
+    "",
+    latestSummary,
+    "",
+    "Usage:",
+    ...(usageSteps.length > 0
+      ? usageSteps.map((step, index) => `${index + 1}. ${step}`)
+      : ["1. Open README", "2. Follow setup", "3. Iterate"]),
+    "",
+  ].join("\n");
+
+  await callAxyOps(baseUrl, token, "build.files.save", {
+    spaceId: targetSpaceId,
+    path: MISSION_LATEST_PATH,
+    language: "markdown",
+    content: latestFile,
+  });
+
+  await setState("mission_publish", {
+    topic: plan.title,
+    outputPath: `${basePath}/README.md`,
+    qualityScore: bundleQuality?.qualityScore || 0,
+    published: true,
+    publishedAt: new Date().toISOString(),
+  });
+
+  const publishMessage = `Axy published: ${plan.title} • value: ${latestSummary} • path: ${basePath}/README.md • use: open README then follow steps.`;
+  return {
+    ok: true,
+    targetSpaceId,
+    title: plan.title,
+    basePath,
+    qualityScore: bundleQuality?.qualityScore || 0,
+    usageSteps,
+    publishMessage: publishMessage.slice(0, 420),
+  };
 }
 
 function shouldDisableOps(err) {
@@ -1077,6 +1544,69 @@ async function main() {
   const buildOutputPath = normalizeBuildPath(
     args["build-output-path"] || process.env.KOZMOS_BUILD_OUTPUT_PATH || "axy.reply.md"
   );
+  const sessionBuildFirst = toBool(
+    args["session-build-first"] ?? process.env.KOZMOS_SESSION_BUILD_FIRST,
+    true
+  );
+  const missionPublishToShared = toBool(
+    args["mission-publish-to-shared"] ?? process.env.KOZMOS_MISSION_PUBLISH_TO_SHARED,
+    true
+  );
+  const missionRetryMinSeconds = Math.max(
+    15,
+    toInt(
+      args["mission-retry-min-seconds"] ||
+        process.env.KOZMOS_MISSION_RETRY_MIN_SECONDS,
+      45
+    )
+  );
+  const missionRetryMaxSeconds = Math.max(
+    missionRetryMinSeconds,
+    toInt(
+      args["mission-retry-max-seconds"] ||
+        process.env.KOZMOS_MISSION_RETRY_MAX_SECONDS,
+      120
+    )
+  );
+  const missionMaxIdeaAttempts = Math.max(
+    2,
+    Math.min(
+      12,
+      toInt(
+        args["mission-max-idea-attempts"] ||
+          process.env.KOZMOS_MISSION_MAX_IDEA_ATTEMPTS,
+        6
+      )
+    )
+  );
+  const missionMaxBundleAttempts = Math.max(
+    2,
+    Math.min(
+      10,
+      toInt(
+        args["mission-max-bundle-attempts"] ||
+          process.env.KOZMOS_MISSION_MAX_BUNDLE_ATTEMPTS,
+        5
+      )
+    )
+  );
+  const missionHistoryLimit = Math.max(
+    24,
+    Math.min(
+      480,
+      toInt(
+        args["mission-history-limit"] || process.env.KOZMOS_MISSION_HISTORY_LIMIT,
+        240
+      )
+    )
+  );
+  const missionNoRepeatDays = Math.max(
+    7,
+    toInt(
+      args["mission-no-repeat-days"] || process.env.KOZMOS_MISSION_NO_REPEAT_DAYS,
+      120
+    )
+  );
   const evalFile = String(args["eval-file"] || process.env.KOZMOS_EVAL_FILE || "logs/axy-eval.json").trim();
   const evalWriteSeconds = Math.max(
     5,
@@ -1117,6 +1647,19 @@ async function main() {
     Date.now() + randomIntRange(touchRequestMinSeconds, touchRequestMaxSeconds) * 1000;
   let nextBuildFreedomAt =
     Date.now() + randomIntRange(buildFreedomMinSeconds, buildFreedomMaxSeconds) * 1000;
+  const missionRequired = autoBuild && sessionBuildFirst;
+  let missionCompleted = !missionRequired;
+  let missionAttemptCount = 0;
+  let nextMissionAttemptAt = Date.now();
+  let missionSessionId = randomUUID();
+  let missionState = missionRequired ? "mission_planning" : "freedom";
+  let missionTopic = "";
+  let missionOutputPath = "";
+  let missionQualityScore = 0;
+  let missionPublishedAt = "";
+  let missionRestored = false;
+  let missionTargetSpaceId = String(buildSpaceId || "").trim();
+  let lastMissionError = "";
   let nextPlayChatAt =
     Date.now() + randomIntRange(playChatMinGapSeconds, playChatMaxGapSeconds) * 1000;
   let nextStarfallAt =
@@ -1210,6 +1753,7 @@ async function main() {
       autoHush,
       autoDm,
       autoBuild,
+      sessionBuildFirst,
       autoPlay,
       autoStarfall,
       autoNight,
@@ -1227,6 +1771,19 @@ async function main() {
       quiteSwarmRoomStatus,
       opsEnabled,
       stopping,
+      missionRequired,
+      missionCompleted,
+      missionSessionId,
+      missionState,
+      missionTopic,
+      missionOutputPath,
+      missionQualityScore,
+      missionPublishedAt,
+      missionRestored,
+      missionAttemptCount,
+      nextMissionAttemptAt: new Date(nextMissionAttemptAt).toISOString(),
+      missionTargetSpaceId,
+      lastMissionError,
     },
     core: runtimeCore.snapshot(),
     governor: autonomyGovernor.snapshot(),
@@ -1277,6 +1834,82 @@ async function main() {
     return { sent: true, reason: "", content: decision.content };
   };
 
+  const persistMissionState = async (status, patch = {}) => {
+    if (!missionRequired || !user?.id) return;
+    missionState = String(status || missionState || "mission_planning");
+    missionTopic = String(patch.topic ?? missionTopic ?? "").trim();
+    missionOutputPath = String(patch.outputPath ?? missionOutputPath ?? "").trim();
+    lastMissionError = String(patch.error ?? lastMissionError ?? "").trim();
+    missionQualityScore = Number(
+      Number.isFinite(Number(patch.qualityScore)) ? Number(patch.qualityScore) : missionQualityScore
+    );
+    missionPublishedAt = String(patch.publishedAt ?? missionPublishedAt ?? "").trim();
+    const published =
+      Boolean(patch.published) || missionState === "mission_publish" || missionCompleted;
+
+    try {
+      await callAxyOps(baseUrl, token, "mission.upsert", {
+        sessionId: missionSessionId,
+        status: missionState,
+        topic: missionTopic,
+        outputPath: missionOutputPath,
+        qualityScore: missionQualityScore,
+        published,
+        publishedAt: missionPublishedAt || undefined,
+        attemptCount: missionAttemptCount,
+        error: lastMissionError,
+      });
+    } catch (err) {
+      const msg = err?.body?.error || err?.message || "mission state persist failed";
+      runtimeCore.markError("build", err, { context: "mission.persist" });
+      console.log(`[${now()}] mission persist fail: ${msg}`);
+    }
+  };
+
+  const restoreMissionState = async () => {
+    if (!missionRequired || missionRestored || !user?.id) return;
+    try {
+      const res = await callAxyOps(baseUrl, token, "mission.get");
+      const row = res?.data || null;
+      missionRestored = true;
+      if (!row?.session_id) {
+        await persistMissionState("mission_planning");
+        return;
+      }
+
+      const rowStatus = String(row.status || "").trim().toLowerCase();
+      const rowPublished = Boolean(row.published) || rowStatus === "mission_publish" || rowStatus === "freedom";
+      if (rowPublished) {
+        // New runtime boot starts a new mission session when previous one already published.
+        missionSessionId = randomUUID();
+        missionState = "mission_planning";
+        missionTopic = "";
+        missionOutputPath = "";
+        missionQualityScore = 0;
+        missionPublishedAt = "";
+        missionCompleted = false;
+        missionAttemptCount = 0;
+        await persistMissionState("mission_planning");
+        return;
+      }
+
+      missionSessionId = String(row.session_id || missionSessionId);
+      missionState = String(row.status || missionState || "mission_planning");
+      missionTopic = String(row.topic || "");
+      missionOutputPath = String(row.output_path || "");
+      missionQualityScore = Number(row.quality_score || 0);
+      missionPublishedAt = String(row.published_at || "");
+      missionAttemptCount = Math.max(missionAttemptCount, Number(row.attempt_count || 0));
+      missionCompleted = false;
+    } catch (err) {
+      missionRestored = true;
+      const msg = err?.body?.error || err?.message || "mission restore failed";
+      runtimeCore.markError("build", err, { context: "mission.restore" });
+      console.log(`[${now()}] mission restore fail: ${msg}`);
+      await persistMissionState("mission_planning");
+    }
+  };
+
   if (user?.id) {
     console.log(`[${now()}] claimed as ${botUsername} (${user.id})`);
   } else {
@@ -1291,6 +1924,9 @@ async function main() {
   if (autoBuild) {
     console.log(
       `[${now()}] build helper request=${buildRequestPath} output=${buildOutputPath}${buildSpaceId ? ` space=${buildSpaceId}` : ""}`
+    );
+    console.log(
+      `[${now()}] mission-first=${sessionBuildFirst} publish=${missionPublishToShared} retry=${missionRetryMinSeconds}-${missionRetryMaxSeconds}s attempts(idea=${missionMaxIdeaAttempts},bundle=${missionMaxBundleAttempts}) noRepeatDays=${missionNoRepeatDays}`
     );
   }
   if (autoTouchRequest) {
@@ -1365,6 +2001,9 @@ async function main() {
   runtimeCore.transition("swarm", "idle");
   runtimeCore.transition("matrix", "idle");
   runtimeCore.transition("freedom", "idle");
+  if (missionRequired) {
+    runtimeCore.transition("build", "mission-pending");
+  }
   void writeEvalSnapshot("startup");
 
   const heartbeat = setInterval(async () => {
@@ -1504,6 +2143,13 @@ async function main() {
           28
         );
 
+        if (missionRequired && !missionCompleted) {
+          runtimeCore.markSkipped("shared", "mission-build-first", {
+            conversationId: "shared:main",
+          });
+          continue;
+        }
+
         const shouldReply = replyAll || triggerRegex.test(content);
         if (!shouldReply) continue;
 
@@ -1573,6 +2219,9 @@ async function main() {
         if (actor?.user_id && actor?.username) {
           user = { id: actor.user_id };
           botUsername = String(actor.username);
+          if (!missionCompleted) {
+            await restoreMissionState();
+          }
         }
         matrixVisible = Boolean(snapshot?.data?.matrix_position?.updated_at);
         quiteSwarmVisible = Boolean(snapshot?.data?.quite_swarm_position?.active);
@@ -1584,7 +2233,106 @@ async function main() {
           snapshot?.data?.quite_swarm_room?.host_user_id || ""
         ).trim();
 
-        if (autoFreedom && !autoFreedomMatrixBooted && !matrixVisible) {
+        if (missionRequired && !missionCompleted && Date.now() >= nextMissionAttemptAt) {
+          runtimeCore.transition("build", "mission-running");
+          missionAttemptCount += 1;
+          try {
+            const missionRes = await runSessionBuildMission({
+              baseUrl,
+              token,
+              botUsername,
+              buildSpaceId: missionTargetSpaceId || buildSpaceId,
+              missionMaxIdeaAttempts,
+              missionMaxBundleAttempts,
+              missionHistoryLimit,
+              missionNoRepeatDays,
+              missionContext: {
+                sharedTurns: sharedRecentTurns,
+                notes: snapshot?.data?.notes || [],
+                buildSpaces: snapshot?.data?.build_spaces || [],
+              },
+              onState: async (status, patch = {}) => {
+                await persistMissionState(status, patch);
+              },
+            });
+            if (!missionRes?.ok) {
+              throw new Error("mission result invalid");
+            }
+            missionCompleted = true;
+            missionState = "mission_publish";
+            missionTargetSpaceId = String(missionRes.targetSpaceId || missionTargetSpaceId || "");
+            missionTopic = String(missionRes.title || missionTopic || "");
+            missionOutputPath = `${String(missionRes.basePath || "").trim()}/README.md`;
+            missionQualityScore = Number(missionRes.qualityScore || missionQualityScore || 0);
+            missionPublishedAt = new Date().toISOString();
+            lastMissionError = "";
+            runtimeCore.markSent("build", { conversationId: `build:mission:${missionTargetSpaceId}` });
+            runtimeCore.transition("build", "mission-complete");
+            await persistMissionState("mission_publish", {
+              topic: missionTopic,
+              outputPath: missionOutputPath,
+              qualityScore: missionQualityScore,
+              published: true,
+              publishedAt: missionPublishedAt,
+            });
+            console.log(
+              `[${now()}] mission build published title="${missionRes.title}" space=${missionTargetSpaceId}`
+            );
+            if (missionPublishToShared && missionRes.publishMessage) {
+              await sendManagedOutput({
+                channel: "shared",
+                conversationId: "shared:main",
+                content: missionRes.publishMessage,
+                minGapMs: Math.max(5000, pollSeconds * 1000),
+                send: async (safeContent) => {
+                  await postShared(baseUrl, token, safeContent);
+                },
+                logLabel: "mission-publish",
+              });
+            }
+          } catch (missionErr) {
+            lastMissionError = missionErr?.body?.error || missionErr?.message || "mission failed";
+            runtimeCore.markError("build", missionErr, { context: "mission-first-build" });
+            runtimeCore.transition("build", "mission-retry");
+            missionState = "mission_failed";
+            await persistMissionState("mission_failed", {
+              error: lastMissionError,
+              topic: missionTopic,
+              outputPath: missionOutputPath,
+              qualityScore: missionQualityScore,
+            });
+            nextMissionAttemptAt =
+              Date.now() + randomIntRange(missionRetryMinSeconds, missionRetryMaxSeconds) * 1000;
+            console.log(
+              `[${now()}] mission build fail: ${lastMissionError} (retry in ${Math.round(
+                (nextMissionAttemptAt - Date.now()) / 1000
+              )}s)`
+            );
+          }
+        }
+
+        const missionLockedNow = missionRequired && !missionCompleted;
+        if (missionLockedNow) {
+          runtimeCore.markSkipped("ops", "mission-build-first", {
+            conversationId: "build:mission",
+          });
+        }
+        if (
+          missionRequired &&
+          missionCompleted &&
+          missionState === "mission_publish"
+        ) {
+          missionState = "freedom";
+          await persistMissionState("freedom", {
+            topic: missionTopic,
+            outputPath: missionOutputPath,
+            qualityScore: missionQualityScore,
+            published: true,
+            publishedAt: missionPublishedAt || new Date().toISOString(),
+          });
+        }
+
+        if (!missionLockedNow && autoFreedom && !autoFreedomMatrixBooted && !matrixVisible) {
           const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
             x: randomRange(-8, 8),
             z: randomRange(-8, 8),
@@ -1595,11 +2343,16 @@ async function main() {
           console.log(
             `[${now()}] freedom: matrix boot enter x=${Number(pos.x || 0).toFixed(2)} z=${Number(pos.z || 0).toFixed(2)}`
           );
-        } else if (autoFreedom && !autoFreedomMatrixBooted) {
+        } else if (!missionLockedNow && autoFreedom && !autoFreedomMatrixBooted) {
           autoFreedomMatrixBooted = true;
         }
 
-        if (autoFreedom && matrixVisible && Math.random() < freedomMatrixDriftChance) {
+        if (
+          !missionLockedNow &&
+          autoFreedom &&
+          matrixVisible &&
+          Math.random() < freedomMatrixDriftChance
+        ) {
           runtimeCore.transition("matrix", "moving");
           const driftMoves = Math.random() < 0.34 ? 2 : 1;
           let driftPos = null;
@@ -1619,7 +2372,7 @@ async function main() {
         }
 
         const touchData = snapshot?.data?.touch || {};
-        if (autoTouch) {
+        if (!missionLockedNow && autoTouch) {
           runtimeCore.transition("touch", "scanning");
           const incoming = Array.isArray(touchData?.incoming) ? touchData.incoming : [];
           for (const req of incoming) {
@@ -1637,7 +2390,7 @@ async function main() {
           runtimeCore.transition("touch", "idle");
         }
 
-        if (autoTouchRequest && Date.now() >= nextTouchRequestAt) {
+        if (!missionLockedNow && autoTouchRequest && Date.now() >= nextTouchRequestAt) {
           runtimeCore.transition("touch", "requesting");
           try {
             const nowMs = Date.now();
@@ -1686,7 +2439,7 @@ async function main() {
           }
         }
 
-        if (autoHush) {
+        if (!missionLockedNow && autoHush) {
           runtimeCore.transition("hush", "scanning");
           const hushData = snapshot?.data?.hush || {};
           const invitesForMe = Array.isArray(hushData?.invitesForMe) ? hushData.invitesForMe : [];
@@ -1802,7 +2555,7 @@ async function main() {
           runtimeCore.transition("hush", "idle");
         }
 
-        if (autoDm) {
+        if (!missionLockedNow && autoDm) {
           runtimeCore.transition("dm", "scanning");
           const chats = Array.isArray(snapshot?.data?.chats) ? snapshot.data.chats : [];
           for (const chat of chats) {
@@ -1892,7 +2645,7 @@ async function main() {
           runtimeCore.transition("dm", "idle");
         }
 
-        if (autoBuild) {
+        if (!missionLockedNow && autoBuild) {
           runtimeCore.transition("build", "scanning");
           let targetSpaces = [];
 
@@ -1994,7 +2747,7 @@ async function main() {
           runtimeCore.transition("build", "idle");
         }
 
-        if (autoBuild && autoBuildFreedom && Date.now() >= nextBuildFreedomAt) {
+        if (!missionLockedNow && autoBuild && autoBuildFreedom && Date.now() >= nextBuildFreedomAt) {
           runtimeCore.transition("build", "freedom");
           try {
             let targetSpace = String(buildSpaceId || "").trim();
@@ -2074,7 +2827,7 @@ async function main() {
           }
         }
 
-        if (autoMatrix && !autoFreedom) {
+        if (!missionLockedNow && autoMatrix && !autoFreedom) {
           runtimeCore.transition("matrix", "moving");
           if (!matrixVisible) {
             const enterRes = await callAxyOps(baseUrl, token, "matrix.enter", {
@@ -2100,7 +2853,7 @@ async function main() {
           runtimeCore.transition("matrix", "idle");
         }
 
-        if (autoPlay && Date.now() >= nextPlayChatAt) {
+        if (!missionLockedNow && autoPlay && Date.now() >= nextPlayChatAt) {
           let playNextMin = playChatMinGapSeconds;
           let playNextMax = playChatMaxGapSeconds;
           runtimeCore.transition("play", "scanning");
@@ -2195,7 +2948,7 @@ async function main() {
           }
         }
 
-        if (autoStarfall && starfallOpsEnabled && Date.now() >= nextStarfallAt) {
+        if (!missionLockedNow && autoStarfall && starfallOpsEnabled && Date.now() >= nextStarfallAt) {
           runtimeCore.transition("play", "starfall");
           try {
             const focusPool = ["balanced", "aim", "survival", "aggression"];
@@ -2230,10 +2983,10 @@ async function main() {
               score > 0
             ) {
               const line = won
-                ? `starfall single clear • score ${score} • round ${round} • rating ${Math.round(
+                ? `starfall single clear â€¢ score ${score} â€¢ round ${round} â€¢ rating ${Math.round(
                     rating
                   )}`
-                : `starfall single run • score ${score} • round ${round} • rating ${Math.round(
+                : `starfall single run â€¢ score ${score} â€¢ round ${round} â€¢ rating ${Math.round(
                     rating
                   )}`;
               await sendManagedOutput({
@@ -2266,7 +3019,12 @@ async function main() {
           }
         }
 
-        if (autoNight && Date.now() >= nextNightOpsAt && Date.now() >= nightDisabledUntil) {
+        if (
+          !missionLockedNow &&
+          autoNight &&
+          Date.now() >= nextNightOpsAt &&
+          Date.now() >= nightDisabledUntil
+        ) {
           runtimeCore.transition("night", "scanning");
           runtimeCore.transition("night", "scanning");
           try {
@@ -2430,7 +3188,7 @@ async function main() {
           }
         }
 
-        if (quiteSwarmRoomOpsEnabled && Date.now() >= nextQuiteSwarmRoomAt) {
+        if (!missionLockedNow && quiteSwarmRoomOpsEnabled && Date.now() >= nextQuiteSwarmRoomAt) {
           runtimeCore.transition("swarm", "room-ops");
           try {
             const roomRes = await callAxyOps(baseUrl, token, "quite_swarm.room");
@@ -2497,7 +3255,7 @@ async function main() {
           }
         }
 
-        if (autoQuiteSwarm && Date.now() >= nextQuiteSwarmAt) {
+        if (!missionLockedNow && autoQuiteSwarm && Date.now() >= nextQuiteSwarmAt) {
           runtimeCore.transition("swarm", "moving");
           try {
             if (quiteSwarmRoomOpsEnabled && quiteSwarmRoomStatus !== "running") {
@@ -2556,7 +3314,7 @@ async function main() {
           }
         }
 
-        if (autoFreedom && Date.now() >= nextFreedomAt) {
+        if (!missionLockedNow && autoFreedom && Date.now() >= nextFreedomAt) {
           runtimeCore.transition("freedom", "planning");
           const freedomAction = pickWeightedAction({
             matrix: freedomMatrixWeight,

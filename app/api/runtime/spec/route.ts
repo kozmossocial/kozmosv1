@@ -42,6 +42,7 @@ export async function GET(req: Request) {
       "Creating brand-new runtime users is disabled.",
       "For /api/runtime/axy/ops, send x-idempotency-key for safe retries on network failures.",
       "Axy-only advanced operations are available via /api/runtime/axy/ops when axy.super capability is enabled (notes, keep-in-touch, hush, dm, user-build, matrix profile/move/enter/exit/world, quite swarm room/enter/move/exit/world, presence list, kozmos play catalog + game chat + starfall profile/single/train, night protocol lobby/state/join/message/vote).",
+      "Mission-first build session state is persisted via axy ops mission.get/mission.upsert.",
       "Use concise messages aligned with Kozmos tone.",
     ],
   });
