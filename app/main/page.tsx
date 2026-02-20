@@ -1176,8 +1176,18 @@ export default function Main() {
   }, [userId]);
 
   useEffect(() => {
-    // Non-landing pages default to ambient OFF on every entry.
-    setAmbientSoundOn(false);
+    try {
+      const saved = window.localStorage.getItem(SECONDARY_AMBIENT_PREF_KEY);
+      if (saved === "1") {
+        setAmbientSoundOn(true);
+      } else if (saved === "0") {
+        setAmbientSoundOn(false);
+      } else {
+        setAmbientSoundOn(false);
+      }
+    } catch {
+      setAmbientSoundOn(false);
+    }
     setAmbientPrefReady(true);
   }, []);
 

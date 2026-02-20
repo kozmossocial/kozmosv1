@@ -11,7 +11,7 @@ const MATRIX_BASE_CHARS =
   '狼ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍｦｲｸｺｿﾁﾄﾉﾌﾔﾖﾙﾚﾛﾝ:・."=*+-<>¦｜çöşğıü:."=*+-¦|_kozmos';
 const MATRIX_DIGITS = "012345678";
 const HOME_AMBIENT_SRC = "/ambient-main.mp3";
-const AMBIENT_PREF_KEY = "kozmos:ambient-sound-on";
+const AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
 const MANIFESTO_LINES = [
   "Kozmos is a social space designed for presence, not performance.",
   "Users are not treated as products.",
@@ -457,16 +457,21 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Landing boots muted; auth state decides default after load.
-    setAmbientSoundOn(false);
+    // Global ambient preference shared across all pages.
+    try {
+      const saved = window.localStorage.getItem(AMBIENT_PREF_KEY);
+      if (saved === "1") {
+        setAmbientSoundOn(true);
+      } else if (saved === "0") {
+        setAmbientSoundOn(false);
+      } else {
+        setAmbientSoundOn(false);
+      }
+    } catch {
+      setAmbientSoundOn(false);
+    }
     setAmbientPrefReady(true);
   }, []);
-
-  useEffect(() => {
-    if (!ambientPrefReady || !authReady) return;
-    // Logged-in users land unmuted; visitors stay muted.
-    setAmbientSoundOn(Boolean(user));
-  }, [ambientPrefReady, authReady, user]);
 
   useEffect(() => {
     if (!ambientPrefReady) return;
