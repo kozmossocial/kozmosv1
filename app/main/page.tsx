@@ -2629,8 +2629,8 @@ export default function Main() {
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "main_messages" },
         (payload) => {
-          const id = payload.old.id;
-          setMessages((prev) => prev.filter((m) => m.id !== id));
+          const id = String(payload.old.id);
+          setMessages((prev) => prev.filter((m) => String(m.id) !== id));
         }
       )
       .subscribe();
@@ -2657,8 +2657,8 @@ export default function Main() {
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "game_chat_messages" },
         (payload) => {
-          const id = payload.old.id;
-          setGameMessages((prev) => prev.filter((m) => m.id !== id));
+          const id = String(payload.old.id);
+          setGameMessages((prev) => prev.filter((m) => String(m.id) !== id));
         }
       )
       .subscribe();
@@ -2685,8 +2685,8 @@ export default function Main() {
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "build_chat_messages" },
         (payload) => {
-          const id = payload.old.id;
-          setBuildMessages((prev) => prev.filter((m) => m.id !== id));
+          const id = String(payload.old.id);
+          setBuildMessages((prev) => prev.filter((m) => String(m.id) !== id));
         }
       )
       .subscribe();
@@ -2991,15 +2991,102 @@ export default function Main() {
 
   /*  delete */
   async function deleteMessage(id: string) {
-    await supabase.from("main_messages").delete().eq("id", id);
+    if (!userId) return;
+    const idKey = String(id);
+    const { data, error } = await supabase
+      .from("main_messages")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select("id");
+
+    if (error) {
+      console.error("main chat delete failed", error);
+      return;
+    }
+
+    if (Array.isArray(data) && data.length > 0) {
+      setMessages((prev) => prev.filter((m) => String(m.id) !== idKey));
+      return;
+    }
+
+    const { data: rows, error: reloadError } = await supabase
+      .from("main_messages")
+      .select("id, user_id, username, content")
+      .order("created_at", { ascending: true });
+    if (reloadError) {
+      console.error("main chat delete sync failed", reloadError);
+      return;
+    }
+    if (rows) {
+      setMessages(rows);
+    }
   }
 
   async function deleteGameMessage(id: string) {
-    await supabase.from("game_chat_messages").delete().eq("id", id);
+    if (!userId) return;
+    const idKey = String(id);
+    const { data, error } = await supabase
+      .from("game_chat_messages")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select("id");
+
+    if (error) {
+      console.error("game chat delete failed", error);
+      return;
+    }
+
+    if (Array.isArray(data) && data.length > 0) {
+      setGameMessages((prev) => prev.filter((m) => String(m.id) !== idKey));
+      return;
+    }
+
+    const { data: rows, error: reloadError } = await supabase
+      .from("game_chat_messages")
+      .select("id, user_id, username, content")
+      .order("created_at", { ascending: true });
+    if (reloadError) {
+      console.error("game chat delete sync failed", reloadError);
+      return;
+    }
+    if (rows) {
+      setGameMessages(rows);
+    }
   }
 
   async function deleteBuildMessage(id: string) {
-    await supabase.from("build_chat_messages").delete().eq("id", id);
+    if (!userId) return;
+    const idKey = String(id);
+    const { data, error } = await supabase
+      .from("build_chat_messages")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select("id");
+
+    if (error) {
+      console.error("build chat delete failed", error);
+      return;
+    }
+
+    if (Array.isArray(data) && data.length > 0) {
+      setBuildMessages((prev) => prev.filter((m) => String(m.id) !== idKey));
+      return;
+    }
+
+    const { data: rows, error: reloadError } = await supabase
+      .from("build_chat_messages")
+      .select("id, user_id, username, content")
+      .order("created_at", { ascending: true });
+    if (reloadError) {
+      console.error("build chat delete sync failed", reloadError);
+      return;
+    }
+    if (rows) {
+      setBuildMessages(rows);
+    }
   }
 
   /* AXY reflect (message) */

@@ -172,17 +172,24 @@ async function runSessionBuildMission({
   token,
   botUsername,
   buildSpaceId,
+  missionSessionId,
   missionMaxIdeaAttempts,
   missionMaxBundleAttempts,
   missionHistoryLimit,
   missionNoRepeatDays,
   missionNotesToBuildChat,
+  missionNoteSentKeys,
   missionContext,
   onState,
 }) {
   const setState = typeof onState === "function" ? onState : async () => {};
+  const noteSentKeys = missionNoteSentKeys instanceof Set ? missionNoteSentKeys : new Set();
+  const noteSessionKey = String(missionSessionId || "default").trim();
   const pushBuildNote = async (title, bodyLines = []) => {
     if (!missionNotesToBuildChat) return;
+    const noteType = String(title || "").trim().toLowerCase();
+    const dedupeKey = `${noteSessionKey}:${noteType}`;
+    if (noteSentKeys.has(dedupeKey)) return;
     const lines = [
       `[Axy Build Note] ${String(title || "").trim()}`.trim(),
       ...bodyLines.map((line) => String(line || "").trim()).filter(Boolean),
@@ -190,6 +197,7 @@ async function runSessionBuildMission({
     const content = lines.join("\n").slice(0, 5000);
     if (!content) return;
     await callAxyOps(baseUrl, token, "build.chat.send", { content });
+    noteSentKeys.add(dedupeKey);
   };
   await setState("mission_planning");
   let targetSpaceId = String(buildSpaceId || "").trim();
@@ -199,12 +207,9 @@ async function runSessionBuildMission({
     const editable = (Array.isArray(spacesRes?.data) ? spacesRes.data : []).filter(
       (space) => space?.id && space?.can_edit === true
     );
-    const preferred =
-      editable.find(
-        (space) => String(space?.title || "").trim().toLowerCase() === "axy published builds"
-      ) ||
-      editable.find((space) => /axy|lab|builder/i.test(String(space?.title || ""))) ||
-      editable[0];
+    const preferred = editable.find(
+      (space) => String(space?.title || "").trim().toLowerCase() === "axy published builds"
+    );
     if (preferred?.id) {
       targetSpaceId = String(preferred.id);
     }
@@ -1921,6 +1926,7 @@ async function main() {
   let missionRestored = false;
   let missionTargetSpaceId = String(buildSpaceId || "").trim();
   let lastMissionError = "";
+  const missionNoteSentKeys = new Set();
   let nextPlayChatAt =
     Date.now() + randomIntRange(playChatMinGapSeconds, playChatMaxGapSeconds) * 1000;
   let nextStarfallAt =
@@ -2144,6 +2150,7 @@ async function main() {
       if (rowPublished) {
         // New runtime boot starts a new mission session when previous one already published.
         missionSessionId = randomUUID();
+        missionNoteSentKeys.clear();
         missionState = "mission_planning";
         missionTopic = "";
         missionOutputPath = "";
@@ -2155,7 +2162,11 @@ async function main() {
         return;
       }
 
-      missionSessionId = String(row.session_id || missionSessionId);
+      const restoredSessionId = String(row.session_id || missionSessionId);
+      if (restoredSessionId !== missionSessionId) {
+        missionNoteSentKeys.clear();
+      }
+      missionSessionId = restoredSessionId;
       missionState = String(row.status || missionState || "mission_planning");
       missionTopic = String(row.topic || "");
       missionOutputPath = String(row.output_path || "");
@@ -2163,6 +2174,15 @@ async function main() {
       missionPublishedAt = String(row.published_at || "");
       missionAttemptCount = Math.max(missionAttemptCount, Number(row.attempt_count || 0));
       missionCompleted = false;
+      if (missionTopic || missionAttemptCount > 0) {
+        missionNoteSentKeys.add(`${missionSessionId}:plan`);
+      }
+      if (missionState === "mission_review" || missionState === "mission_publish") {
+        missionNoteSentKeys.add(`${missionSessionId}:review`);
+      }
+      if (Boolean(row.published) || missionState === "mission_publish" || missionState === "freedom") {
+        missionNoteSentKeys.add(`${missionSessionId}:report`);
+      }
     } catch (err) {
       missionRestored = true;
       const msg = err?.body?.error || err?.message || "mission restore failed";
@@ -2504,11 +2524,13 @@ async function main() {
               token,
               botUsername,
               buildSpaceId: missionTargetSpaceId || buildSpaceId,
+              missionSessionId,
               missionMaxIdeaAttempts,
               missionMaxBundleAttempts,
               missionHistoryLimit,
               missionNoRepeatDays,
               missionNotesToBuildChat,
+              missionNoteSentKeys,
               missionContext: {
                 sharedTurns: sharedRecentTurns,
                 notes: snapshot?.data?.notes || [],
