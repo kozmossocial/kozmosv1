@@ -97,8 +97,10 @@ const sections = [
     title: "11. Starter Backend + Export",
     items: [
       "Starter backend mode is per-subspace and includes posts/comments/likes/dm primitives.",
+      "Starter auth is username+password only (no email), scoped to each subspace.",
+      "Starter social graph supports friend request / accept / decline / unfriend flows.",
       "Starter mode enforces quotas and request rate limits.",
-      "Runtime endpoints: /api/build/runtime/starter/mode, /posts, /comments, /likes, /dm/threads, /dm/messages.",
+      "Runtime endpoints: /api/build/runtime/starter/auth, /friends, /mode, /posts, /comments, /likes, /dm/threads, /dm/messages.",
       "Use Export ZIP to download all files for external hosting, custom server work, or GitHub upload.",
     ],
   },

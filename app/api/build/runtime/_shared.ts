@@ -90,7 +90,7 @@ export async function getStarterMode(spaceId: string) {
   const { data, error } = await supabaseAdmin
     .from("user_build_backend_modes")
     .select(
-      "space_id, enabled, posts_quota, comments_quota, likes_quota, dm_threads_quota, dm_messages_quota, updated_at"
+      "space_id, enabled, posts_quota, comments_quota, likes_quota, dm_threads_quota, dm_messages_quota, starter_users_quota, friend_requests_quota, friendships_quota, updated_at"
     )
     .eq("space_id", spaceId)
     .maybeSingle();
@@ -105,6 +105,9 @@ export async function getStarterMode(spaceId: string) {
         likes_quota: 40000,
         dm_threads_quota: 500,
         dm_messages_quota: 60000,
+        starter_users_quota: 3000,
+        friend_requests_quota: 12000,
+        friendships_quota: 12000,
       },
     error: null,
   };

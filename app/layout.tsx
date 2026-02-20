@@ -4,6 +4,9 @@ import type { Viewport } from "next";
 import "./globals.css";
 import AuthSyncGuard from "./auth-sync-guard";
 
+const SOCIAL_PREVIEW_IMAGE =
+  "https://www.kozmos.social/kozmos-logo2.png?v=20260220-2";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.kozmos.social"),
   title: "KOZMOS.",
@@ -16,7 +19,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/kozmos-logo2.png",
+        url: SOCIAL_PREVIEW_IMAGE,
         width: 1200,
         height: 630,
         alt: "KOZMOS logo",
@@ -27,7 +30,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "KOZMOS.",
     description: "A shared social space for presence, not performance.",
-    images: ["/kozmos-logo2.png"],
+    images: [SOCIAL_PREVIEW_IMAGE],
   },
 };
 

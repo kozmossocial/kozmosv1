@@ -88,6 +88,9 @@ export async function PUT(req: Request) {
       likes_quota: clampQuota(body?.likesQuota, 40000, 500, 200000),
       dm_threads_quota: clampQuota(body?.dmThreadsQuota, 500, 20, 5000),
       dm_messages_quota: clampQuota(body?.dmMessagesQuota, 60000, 500, 400000),
+      starter_users_quota: clampQuota(body?.starterUsersQuota, 3000, 10, 50000),
+      friend_requests_quota: clampQuota(body?.friendRequestsQuota, 12000, 50, 200000),
+      friendships_quota: clampQuota(body?.friendshipsQuota, 12000, 50, 200000),
       updated_by: user.id,
     };
 
@@ -95,7 +98,7 @@ export async function PUT(req: Request) {
       .from("user_build_backend_modes")
       .upsert(payload, { onConflict: "space_id" })
       .select(
-        "space_id, enabled, posts_quota, comments_quota, likes_quota, dm_threads_quota, dm_messages_quota, updated_at"
+        "space_id, enabled, posts_quota, comments_quota, likes_quota, dm_threads_quota, dm_messages_quota, starter_users_quota, friend_requests_quota, friendships_quota, updated_at"
       )
       .single();
 
