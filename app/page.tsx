@@ -456,15 +456,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(AMBIENT_PREF_KEY);
-      if (saved === "0") setAmbientSoundOn(false);
-      if (saved === "1") setAmbientSoundOn(true);
-    } catch {
-      // ignore localStorage failures
-    } finally {
-      setAmbientPrefReady(true);
-    }
+    // Landing page always starts unmuted by default.
+    setAmbientSoundOn(true);
+    setAmbientPrefReady(true);
   }, []);
 
   useEffect(() => {
