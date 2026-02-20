@@ -15,6 +15,7 @@ export default function ResetPasswordPage() {
   const [resendLoading, setResendLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  const [resetCompleted, setResetCompleted] = useState(false);
   const [pendingRecoveryEmail, setPendingRecoveryEmail] = useState<string | null>(
     null
   );
@@ -231,6 +232,7 @@ export default function ResetPasswordPage() {
     await supabase.auth.signOut({ scope: "local" });
 
     setLoading(false);
+    setResetCompleted(true);
     setMessage("password updated. please login again.");
     setTimeout(() => {
       router.replace("/login?reset=1");
@@ -295,7 +297,7 @@ export default function ResetPasswordPage() {
           style={inputStyle}
         />
 
-        {!hasSession ? (
+        {!hasSession && !resetCompleted ? (
           <>
             <div style={{ marginBottom: 12, fontSize: 12, opacity: 0.64 }}>
               open this page from the reset mail link.
