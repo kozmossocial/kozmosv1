@@ -479,12 +479,20 @@ export default function Home() {
     audio.loop = true;
 
     if (ambientSoundOn) {
-      void audio.play().catch(() => {
+      audio.muted = false;
+      void audio.play().then(() => {
+        ambientAutoplayBlockedRef.current = false;
+      }).catch(() => {
         ambientAutoplayBlockedRef.current = true;
-        setAmbientSoundOn(false);
+        // Warm up silently so first user interaction can unmute instantly.
+        audio.muted = true;
+        void audio.play().catch(() => {
+          // still blocked
+        });
       });
     } else {
       audio.pause();
+      audio.muted = false;
     }
 
     return () => {
@@ -497,13 +505,16 @@ export default function Home() {
     const audio = ambientAudioRef.current;
     if (!audio || !ambientPrefReady) return;
     if (ambientSoundOn) {
-      void audio.play().catch(() => {
+      audio.muted = false;
+      void audio.play().then(() => {
+        ambientAutoplayBlockedRef.current = false;
+      }).catch(() => {
         ambientAutoplayBlockedRef.current = true;
-        setAmbientSoundOn(false);
       });
       return;
     }
     audio.pause();
+    audio.muted = false;
   }, [ambientPrefReady, ambientSoundOn]);
 
   useEffect(() => {
@@ -514,6 +525,7 @@ export default function Home() {
       if (!audio) return;
       if (!audio.paused && !ambientAutoplayBlockedRef.current) return;
       if (!ambientSoundOn && !ambientAutoplayBlockedRef.current) return;
+      audio.muted = false;
       void audio
         .play()
         .then(() => {
@@ -700,12 +712,19 @@ export default function Home() {
 
     if (ambientSoundOn) {
       audio.pause();
+      audio.muted = false;
       setAmbientSoundOn(false);
       return;
     }
 
-    void audio.play().then(() => setAmbientSoundOn(true)).catch(() => {
-      setAmbientSoundOn(false);
+    audio.muted = false;
+    void audio.play().then(() => {
+      ambientAutoplayBlockedRef.current = false;
+      setAmbientSoundOn(true);
+    }).catch(() => {
+      ambientAutoplayBlockedRef.current = true;
+      // Keep preferred state; next interaction retry will unlock.
+      setAmbientSoundOn(true);
     });
   }
 
