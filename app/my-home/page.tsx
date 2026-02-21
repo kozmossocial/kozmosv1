@@ -808,13 +808,9 @@ useEffect(() => {
   useEffect(() => {
     const sync = () => {
       const narrowViewport = window.innerWidth <= 1080;
-      const mobileUserAgent =
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Windows Phone/i.test(
-          navigator.userAgent
-        );
-      const nextIsMobileLayout = narrowViewport && mobileUserAgent;
-      setIsMobileLayout(nextIsMobileLayout);
-      setIsNarrowDesktopLayout(!nextIsMobileLayout && window.innerWidth <= 1320);
+      const coarsePointer = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+      setIsMobileLayout(narrowViewport && coarsePointer);
+      setIsNarrowDesktopLayout(!coarsePointer && window.innerWidth <= 1320);
     };
     sync();
     window.addEventListener("resize", sync);
@@ -1418,9 +1414,7 @@ useEffect(() => {
     };
   }, [isMobileLayout, notesBootstrapping]);
 
-  function renderDesktopHolo() {
-    if (isMobileLayout) return null;
-
+  function renderTouchPanel() {
     const holoPhaseClassName =
       holoFlightPhase === "idle"
         ? undefined
@@ -1439,8 +1433,8 @@ useEffect(() => {
       holoFlightPhase === "idle"
         ? {
             ...touchHoloShipStyle,
-            ...(isNarrowDesktopLayout
-              ? {
+                ...(isNarrowDesktopLayout
+                  ? {
                   position: "fixed",
                   left: "calc(50% - 230px)",
                   top: 68,
@@ -1448,11 +1442,8 @@ useEffect(() => {
                   zIndex: 3,
                 }
               : {
-                  position: "fixed",
-                  left: 62,
-                  top: 86,
-                  transform: "none",
-                  zIndex: 3,
+                  left: holoDockLeft,
+                  top: holoDockTop,
                 }),
             width: holoShipWidth,
             opacity: touchHoloShipStyle.opacity,
@@ -1466,50 +1457,47 @@ useEffect(() => {
           };
 
     return (
-      <div
-        ref={holoShipRef}
-        className={holoWrapperClassName}
-        onClick={() => {
-          if (!isMobileLayout) launchHoloFlight();
-        }}
-        style={holoWrapperStyle}
-        aria-hidden
-      >
-        <img
-          src={LUMI_SHIP_SRC}
-          alt=""
-          aria-hidden
-          draggable={false}
-          className="lumi-ship-float"
-          style={touchHoloShipImageStyle}
-        />
-        <span
-          className="lumi-ship-label lumi-ship-label-follow"
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "calc(100% - 16px)",
-            fontSize: 11,
-            letterSpacing: "0.14em",
-            color: "rgba(196, 236, 255, 0.9)",
-            textShadow:
-              "0 0 6px rgba(160,220,255,0.55), 0 0 14px rgba(112,196,255,0.34)",
-            opacity: 0,
-            transition: "opacity 280ms ease",
-            pointerEvents: "none",
-            userSelect: "none",
-          }}
-        >
-          Lumi
-        </span>
-      </div>
-    );
-  }
-
-  function renderTouchPanel() {
-    return (
       <div ref={touchPanelRef} style={touchPanelStyle}>
+        {!isMobileLayout ? (
+          <div
+            ref={holoShipRef}
+            className={holoWrapperClassName}
+            onClick={() => {
+              if (!isMobileLayout) launchHoloFlight();
+            }}
+            style={holoWrapperStyle}
+            aria-hidden
+          >
+            <img
+              src={LUMI_SHIP_SRC}
+              alt=""
+              aria-hidden
+              draggable={false}
+              className="lumi-ship-float"
+              style={touchHoloShipImageStyle}
+            />
+            <span
+              className="lumi-ship-label lumi-ship-label-follow"
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "calc(100% - 16px)",
+                fontSize: 11,
+                letterSpacing: "0.14em",
+                color: "rgba(196, 236, 255, 0.9)",
+                textShadow:
+                  "0 0 6px rgba(160,220,255,0.55), 0 0 14px rgba(112,196,255,0.34)",
+                opacity: 0,
+                transition: "opacity 280ms ease",
+                pointerEvents: "none",
+                userSelect: "none",
+              }}
+            >
+              Lumi
+            </span>
+          </div>
+        ) : null}
         <div style={touchPanelContentLayerStyle}>
         <div style={touchPanelHeadStyle}>
           <div style={{ ...labelStyle, marginBottom: 0 }}>users in touch</div>
@@ -1957,7 +1945,7 @@ useEffect(() => {
             }, 900);
           }}
           style={{
-            position: "fixed",
+            position: "absolute",
             left: 44,
             top: 71,
             width: holoShipWidth,
@@ -2013,8 +2001,6 @@ useEffect(() => {
           logout
         </span>
       </div>
-
-      {renderDesktopHolo()}
 
       {!shouldStackSidePanels ? <div style={touchDockStyle}>{renderTouchPanel()}</div> : null}
       {!shouldStackSidePanels ? <div style={directChatDockStyle}>{renderDirectChatPanel()}</div> : null}
