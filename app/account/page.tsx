@@ -934,7 +934,7 @@ export default function AccountPage() {
           flexDirection: "column",
           gap: 40,
           maxWidth: 420,
-          width: "100%",
+          width: "min(420px, calc(100% - 24px))",
           margin: "0 auto",
         }}
         className="account-content-grid"
