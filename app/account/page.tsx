@@ -30,6 +30,14 @@ export default function AccountPage() {
   const [passwordChangeVerificationCode, setPasswordChangeVerificationCode] = useState("");
   const [passwordChangeCodeBusy, setPasswordChangeCodeBusy] = useState(false);
   const [passwordChangeCodeSent, setPasswordChangeCodeSent] = useState(false);
+  const [inTouchUsers, setInTouchUsers] = useState<Array<{ id: string; username: string }>>(
+    []
+  );
+  const [showTransferSection, setShowTransferSection] = useState(false);
+  const [transferTargetUserId, setTransferTargetUserId] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferMessage, setTransferMessage] = useState<string | null>(null);
   const [deleteEmailConfirm, setDeleteEmailConfirm] = useState("");
   const [deleteVerificationCode, setDeleteVerificationCode] = useState("");
   const [deleteCodeBusy, setDeleteCodeBusy] = useState(false);
@@ -95,11 +103,52 @@ export default function AccountPage() {
       const parsedBalance =
         typeof rawBalance === "number" ? rawBalance : Number(rawBalance ?? 0);
       setSpiceBalance(Number.isFinite(parsedBalance) ? parsedBalance : 0);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        const touchRes = await fetch("/api/keep-in-touch", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        const touchBody = (await touchRes.json().catch(() => ({}))) as {
+          inTouch?: Array<{ id?: string; username?: string }>;
+        };
+
+        if (touchRes.ok) {
+          const nextUsers = (touchBody.inTouch || [])
+            .map((row) => ({
+              id: String(row.id || "").trim(),
+              username: String(row.username || "").trim(),
+            }))
+            .filter((row) => row.id && row.username);
+
+          setInTouchUsers(nextUsers);
+        }
+      }
+
       setLoading(false);
     };
 
     loadAccount();
   }, [router]);
+
+  useEffect(() => {
+    if (inTouchUsers.length === 0) {
+      setTransferTargetUserId("");
+      return;
+    }
+
+    setTransferTargetUserId((prev) => {
+      if (prev && inTouchUsers.some((row) => row.id === prev)) {
+        return prev;
+      }
+      return inTouchUsers[0].id;
+    });
+  }, [inTouchUsers]);
 
   useEffect(() => {
     if (!userId) return;
@@ -503,6 +552,74 @@ export default function AccountPage() {
     router.replace("/login");
   }
 
+  async function handleTransferSpc() {
+    if (transferBusy) return;
+
+    const amountValue = Number(transferAmount);
+    if (!transferTargetUserId) {
+      setTransferMessage("select an in touch user");
+      return;
+    }
+    if (!Number.isInteger(amountValue) || amountValue <= 0) {
+      setTransferMessage("enter a positive SPC amount");
+      return;
+    }
+    if (amountValue > spiceBalance) {
+      setTransferMessage("insufficient SPC balance");
+      return;
+    }
+
+    setTransferBusy(true);
+    setTransferMessage(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      setTransferMessage("session missing, please login again");
+      setTransferBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/spice/transfer", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        targetUserId: transferTargetUserId,
+        amount: amountValue,
+      }),
+    });
+
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      ok?: boolean;
+      balance?: number;
+    };
+
+    if (!res.ok || !body.ok) {
+      setTransferMessage(body.error || "SPC transfer failed");
+      setTransferBusy(false);
+      return;
+    }
+
+    const targetUsername =
+      inTouchUsers.find((row) => row.id === transferTargetUserId)?.username || "user";
+
+    if (typeof body.balance === "number" && Number.isFinite(body.balance)) {
+      setSpiceBalance(body.balance);
+    } else {
+      setSpiceBalance((prev) => Math.max(0, prev - amountValue));
+    }
+
+    setTransferAmount("");
+    setTransferMessage(`sent ${amountValue.toLocaleString("en-US")} SPC to ${targetUsername}`);
+    setTransferBusy(false);
+  }
+
   async function handleSendDeleteCode() {
     if (deleteCodeBusy || deleteBusy) return;
     setDeleteCodeBusy(true);
@@ -786,6 +903,89 @@ export default function AccountPage() {
         <div style={{ marginBottom: 2 }}>
           <div style={label}>spice</div>
           <div>{spiceBalance.toLocaleString("en-US")} SPC</div>
+        </div>
+
+        <div style={{ marginBottom: 2 }}>
+          <div
+            style={{
+              ...label,
+              cursor: "pointer",
+              opacity: 0.7,
+              userSelect: "none",
+              transition: "none",
+            }}
+            onClick={() => setShowTransferSection((prev) => !prev)}
+          >
+            send spice
+          </div>
+          {showTransferSection ? (
+            <>
+              {inTouchUsers.length === 0 ? (
+                <div style={{ fontSize: 12, opacity: 0.66 }}>no in touch users</div>
+              ) : (
+                <>
+                  <select
+                    value={transferTargetUserId}
+                    onChange={(event) => setTransferTargetUserId(event.target.value)}
+                    style={{ ...passwordInput, background: "#0b0b0b" }}
+                    disabled={transferBusy}
+                  >
+                    {inTouchUsers.map((row) => (
+                      <option
+                        key={row.id}
+                        value={row.id}
+                        style={{ background: "#0b0b0b", color: "#eaeaea" }}
+                      >
+                        {row.username}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={transferAmount}
+                    onChange={(event) =>
+                      setTransferAmount(
+                        event.target.value.replace(/[^0-9]/g, "").slice(0, 12)
+                      )
+                    }
+                    placeholder="SPC amount"
+                    style={{ ...passwordInput, marginTop: 10 }}
+                    disabled={transferBusy}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTransferSpc}
+                    disabled={transferBusy}
+                    style={{
+                      ...avatarActionButton,
+                      marginTop: 10,
+                      minWidth: 130,
+                      opacity: transferBusy ? 0.5 : 0.9,
+                      cursor: transferBusy ? "default" : "pointer",
+                    }}
+                  >
+                    {transferBusy ? "sending..." : "send"}
+                  </button>
+                </>
+              )}
+
+              {transferMessage ? (
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    opacity: 0.72,
+                    color: transferMessage.startsWith("sent")
+                      ? "#b8ffd1"
+                      : "#ff9d9d",
+                  }}
+                >
+                  {transferMessage}
+                </div>
+              ) : null}
+            </>
+          ) : null}
         </div>
 
         <div style={{ marginBottom: 2 }}>
