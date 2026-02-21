@@ -4020,13 +4020,7 @@ export default function Main() {
 {/* LOGO */}
 <div
   className="mother-logo-anchor"
-  style={{
-    position: "absolute",
-    top: 30,
-    left: "50%",
-    transform: "translateX(-54%)",
-    zIndex: 5,
-  }}
+  style={{}}
 >
   <Image
     src="/kozmos-logomother.png"

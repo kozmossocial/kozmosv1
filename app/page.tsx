@@ -1113,13 +1113,6 @@ export default function Home() {
           {/* LOGO */}
           <div
             className="home-hero-logo-wrap mother-logo-anchor"
-            style={{
-              position: "absolute",
-              top: 30,
-              left: "50%",
-              transform: "translateX(-27%)",
-              zIndex: 50,
-            }}
           >
             <a href="https://kozmos.social" target="_self" aria-label="Kozmos">
               <Image

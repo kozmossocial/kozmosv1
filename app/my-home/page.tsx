@@ -1891,14 +1891,9 @@ useEffect(() => {
 <div
   className="mother-logo-anchor"
   style={{
-    position: "absolute",
-    top: 32,
-    left: "50%",
-    transform: "translateX(-50%)",
     cursor: "pointer",
-    zIndex: 10,
   }}
-  onClick={() => router.push("/")}
+  onClick={() => router.push("/")}  
 >
   <Image
     src="/kozmos-logomother.png"

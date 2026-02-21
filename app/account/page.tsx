@@ -33,6 +33,8 @@ export default function AccountPage() {
   const [deleteCodeSent, setDeleteCodeSent] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [showDeleteSection, setShowDeleteSection] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
@@ -567,23 +569,21 @@ export default function AccountPage() {
         minHeight: "100vh",
         background: "#0b0b0b",
         color: "#eaeaea",
+        padding: "200px 40px 80px 40px",
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
-        padding: 40,
-        position: "relative",
       }}
     >
       {/* KOZMOS LOGO - TOP CENTER */}
       <div
         className="mother-logo-anchor"
         style={{
-          position: "absolute",
-          top: 32,
+          position: "fixed",
+          top: "32px",
           left: "50%",
-          transform: "translateX(-50%)",
+          transform: "translate3d(-50%, 0, 0)",
+          zIndex: 50,
           cursor: "pointer",
-          zIndex: 10,
         }}
         onClick={() => router.push("/")}
       >
@@ -632,8 +632,43 @@ export default function AccountPage() {
         </span>
       </div>
 
+      {/* TOP RIGHT NAV */}
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          fontSize: 12,
+          opacity: 0.6,
+          letterSpacing: "0.12em",
+          cursor: "default",
+          userSelect: "none",
+        }}
+      >
+        <span style={{ opacity: 0.8 }}>{username}</span>
+        {" "}
+        /
+        {" "}
+        <span
+          style={{ cursor: "pointer", opacity: 0.6 }}
+          onClick={handleLogout}
+        >
+          logout
+        </span>
+      </div>
+
       {/* CONTENT */}
-      <div style={{ maxWidth: 420 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 40,
+          maxWidth: 420,
+          width: "100%",
+          margin: "0 auto",
+        }}
+        className="account-content-grid"
+      >
         <div style={{ marginBottom: 36 }}>
           <div style={label}>profile picture</div>
           <div style={avatarRow}>
@@ -682,153 +717,177 @@ export default function AccountPage() {
           ) : null}
         </div>
 
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={label}>username</div>
           <div>{username}</div>
         </div>
 
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={label}>email</div>
           <div>{email}</div>
         </div>
 
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 20 }}>
           <div style={label}>spice</div>
           <div>{spiceBalance.toLocaleString("en-US")} SPICE</div>
         </div>
 
-        <div style={{ marginBottom: 28 }}>
-          <div style={label}>change password</div>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            placeholder="new password"
-            style={passwordInput}
-          />
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            placeholder="confirm new password"
-            style={{ ...passwordInput, marginTop: 10 }}
-          />
-          <button
-            type="button"
-            onClick={handleChangePassword}
-            disabled={passwordBusy}
+        <div style={{ marginBottom: 0 }}>
+          <div
             style={{
-              ...avatarActionButton,
-              marginTop: 10,
-              opacity: passwordBusy ? 0.5 : 0.9,
-              cursor: passwordBusy ? "default" : "pointer",
-              minWidth: 140,
+              ...label,
+              cursor: "pointer",
+              opacity: 0.7,
+              userSelect: "none",
+              transition: "none",
             }}
+            onClick={() => setShowPasswordSection(!showPasswordSection)}
           >
-            {passwordBusy ? "saving..." : "save password"}
-          </button>
-          {passwordMessage ? (
-            <div
-              style={{
-                marginTop: 8,
-                fontSize: 12,
-                opacity: 0.72,
-                color: passwordMessage.includes("updated")
-                  ? "#b8ffd1"
-                  : "#ff9d9d",
-              }}
-            >
-              {passwordMessage}
-            </div>
-          ) : null}
+            change password
+          </div>
+          {showPasswordSection && (
+            <>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="new password"
+                style={passwordInput}
+              />
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="confirm new password"
+                style={{ ...passwordInput, marginTop: 10 }}
+              />
+              <button
+                type="button"
+                onClick={handleChangePassword}
+                disabled={passwordBusy}
+                style={{
+                  ...avatarActionButton,
+                  marginTop: 10,
+                  opacity: passwordBusy ? 0.5 : 0.9,
+                  cursor: passwordBusy ? "default" : "pointer",
+                  minWidth: 140,
+                }}
+              >
+                {passwordBusy ? "saving..." : "save password"}
+              </button>
+              {passwordMessage ? (
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    opacity: 0.72,
+                    color: passwordMessage.includes("updated")
+                      ? "#b8ffd1"
+                      : "#ff9d9d",
+                  }}
+                >
+                  {passwordMessage}
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
 
         <div
           style={{
-            marginBottom: 28,
+            marginBottom: 8,
             borderTop: "1px solid rgba(255,255,255,0.16)",
-            paddingTop: 18,
+            paddingTop: 10,
           }}
         >
-          <div style={{ ...label, color: "#ffb3b3", opacity: 0.86 }}>delete account</div>
-          <div style={{ fontSize: 12, opacity: 0.66, marginBottom: 8 }}>
-            confirm by typing your email and verification code
-          </div>
-          <input
-            type="email"
-            value={deleteEmailConfirm}
-            onChange={(event) => setDeleteEmailConfirm(event.target.value)}
-            placeholder="type your email"
-            autoComplete="off"
-            style={passwordInput}
-            disabled={deleteBusy}
-          />
-          <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              type="button"
-              onClick={handleSendDeleteCode}
-              disabled={deleteCodeBusy || deleteBusy}
-              style={{
-                ...avatarActionButton,
-                minWidth: 140,
-                opacity: deleteCodeBusy || deleteBusy ? 0.5 : 0.9,
-                cursor: deleteCodeBusy || deleteBusy ? "default" : "pointer",
-              }}
-            >
-              {deleteCodeBusy ? "sending..." : "send code"}
-            </button>
-            {deleteCodeSent ? (
-              <span style={{ fontSize: 12, opacity: 0.66 }}>code sent</span>
-            ) : null}
-          </div>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={deleteVerificationCode}
-            onChange={(event) =>
-              setDeleteVerificationCode(
-                event.target.value.replace(/[^0-9]/g, "").slice(0, 6)
-              )
-            }
-            placeholder="6-digit verification code"
-            style={{ ...passwordInput, marginTop: 10, letterSpacing: "0.24em" }}
-            disabled={deleteBusy}
-          />
-          <button
-            type="button"
-            onClick={handleDeleteAccount}
-            disabled={deleteBusy}
+          <div
             style={{
-              ...avatarActionButton,
-              marginTop: 10,
-              minWidth: 170,
-              border: "1px solid rgba(255,120,120,0.46)",
-              color: "#ffd2d2",
-              opacity: deleteBusy ? 0.5 : 0.92,
-              cursor: deleteBusy ? "default" : "pointer",
+              ...label,
+              color: "#ffb3b3",
+              opacity: 0.86,
+              cursor: "pointer",
+              userSelect: "none",
+              transition: "none",
             }}
+            onClick={() => setShowDeleteSection(!showDeleteSection)}
           >
-            {deleteBusy ? "deleting..." : "delete account"}
-          </button>
-          {deleteMessage ? (
-            <div
-              style={{
-                marginTop: 8,
-                fontSize: 12,
-                opacity: 0.74,
-                color: "#ffb3b3",
-              }}
-            >
-              {deleteMessage}
-            </div>
-          ) : null}
-        </div>
-
-        <div
-          style={{ ...action, marginTop: 24, opacity: 0.5 }}
-          onClick={handleLogout}
-        >
-          logout
+            delete account
+          </div>
+          {showDeleteSection && (
+            <>
+              <div style={{ fontSize: 12, opacity: 0.66, marginBottom: 8 }}>
+                confirm by typing your email and verification code
+              </div>
+              <input
+                type="email"
+                value={deleteEmailConfirm}
+                onChange={(event) => setDeleteEmailConfirm(event.target.value)}
+                placeholder="type your email"
+                autoComplete="off"
+                style={passwordInput}
+                disabled={deleteBusy}
+              />
+              <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={handleSendDeleteCode}
+                  disabled={deleteCodeBusy || deleteBusy}
+                  style={{
+                    ...avatarActionButton,
+                    minWidth: 140,
+                    opacity: deleteCodeBusy || deleteBusy ? 0.5 : 0.9,
+                    cursor: deleteCodeBusy || deleteBusy ? "default" : "pointer",
+                  }}
+                >
+                  {deleteCodeBusy ? "sending..." : "send code"}
+                </button>
+                {deleteCodeSent ? (
+                  <span style={{ fontSize: 12, opacity: 0.66 }}>code sent</span>
+                ) : null}
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={deleteVerificationCode}
+                onChange={(event) =>
+                  setDeleteVerificationCode(
+                    event.target.value.replace(/[^0-9]/g, "").slice(0, 6)
+                  )
+                }
+                placeholder="6-digit verification code"
+                style={{ ...passwordInput, marginTop: 10, letterSpacing: "0.24em" }}
+                disabled={deleteBusy}
+              />
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleteBusy}
+                style={{
+                  ...avatarActionButton,
+                  marginTop: 10,
+                  minWidth: 170,
+                  border: "1px solid rgba(255,120,120,0.46)",
+                  color: "#ffd2d2",
+                  opacity: deleteBusy ? 0.5 : 0.92,
+                  cursor: deleteBusy ? "default" : "pointer",
+                }}
+              >
+                {deleteBusy ? "deleting..." : "delete account"}
+              </button>
+              {deleteMessage ? (
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    opacity: 0.74,
+                    color: "#ffb3b3",
+                  }}
+                >
+                  {deleteMessage}
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
 

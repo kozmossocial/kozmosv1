@@ -61,19 +61,18 @@ export default function Register() {
         alignItems: "center",
         justifyContent: "center",
         padding: 40,
-        position: "relative",
       }}
     >
       {/* KOZMOS LOGO - STABIL */}
       <div
         className="mother-logo-anchor"
         style={{
-          position: "absolute",
-          top: 32,
+          position: "fixed",
+          top: "32px",
           left: "50%",
-          transform: "translateX(-50%)",
+          transform: "translate3d(-50%, 0, 0)",
+          zIndex: 50,
           cursor: "pointer",
-          zIndex: 10,
         }}
         onClick={() => router.push("/")}
       >
