@@ -1935,6 +1935,12 @@ body {
 
 /* Main layout responsive */
 @media (max-width: 900px) {
+  .account-page-shell {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    overflow-x: hidden;
+  }
+
   .main-page-shell {
     padding-left: 16px !important;
     padding-right: 16px !important;

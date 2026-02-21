@@ -838,6 +838,7 @@ export default function AccountPage() {
 
   return (
     <main
+      className="account-page-shell"
       style={{
         minHeight: "100vh",
         background: "#0b0b0b",
