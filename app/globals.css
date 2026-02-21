@@ -3,6 +3,10 @@
 :root {
   background: #0b0b0b;
   color-scheme: dark;
+  --mother-logo-top-desktop: 32px;
+  --mother-logo-top-mobile: 46px;
+  --mother-logo-size-desktop: 80px;
+  --mother-logo-size-mobile: 60px;
 }
 
 html,
@@ -120,6 +124,21 @@ body {
   box-shadow: none !important;
 }
 
+.mother-logo-anchor {
+  position: absolute !important;
+  top: var(--mother-logo-top-desktop) !important;
+  left: 50% !important;
+  transform: translate3d(-50%, 0, 0) !important;
+  width: max-content;
+}
+
+.mother-logo-anchor .mother-logo-static {
+  width: var(--mother-logo-size-desktop) !important;
+  max-width: none !important;
+  height: auto !important;
+  display: block;
+}
+
 @keyframes motherLogoGlowMobile {
   0% {
     filter:
@@ -193,7 +212,7 @@ body {
   }
 
   .mother-logo-anchor .mother-logo-static {
-    width: min(15vw, 60px) !important;
+    width: var(--mother-logo-size-mobile) !important;
     max-width: none !important;
     height: auto !important;
     margin-top: 0 !important;
@@ -2118,9 +2137,9 @@ body {
 
   .mother-logo-anchor {
     position: absolute !important;
-    top: 46px !important;
+    top: var(--mother-logo-top-mobile) !important;
     left: 50% !important;
-    transform: translateX(-50%) !important;
+    transform: translate3d(-50%, 0, 0) !important;
   }
 
   .home-hero-logo-wrap {
