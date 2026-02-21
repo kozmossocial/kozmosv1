@@ -1096,8 +1096,12 @@ useEffect(() => {
   function clearHoloInlineMotion() {
     const ship = holoShipRef.current;
     if (!ship) return;
+    const dockOpacity =
+      typeof touchHoloShipStyle.opacity === "number"
+        ? touchHoloShipStyle.opacity
+        : 0.72;
     ship.style.transform = "";
-    ship.style.opacity = "";
+    ship.style.opacity = String(dockOpacity);
   }
 
   function scheduleClearHoloInlineMotion() {
