@@ -124,10 +124,12 @@ export async function POST(req: Request) {
       })
       .eq("id", codeRow.id);
 
-    const authClient = createClient(supabaseUrl, supabaseAnonKey);
-    const { error: updateErr } = await authClient.auth.updateUser({
-      password: newPassword,
-    });
+    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(
+      user.id,
+      {
+        password: newPassword,
+      }
+    );
 
     if (updateErr) {
       return NextResponse.json(
