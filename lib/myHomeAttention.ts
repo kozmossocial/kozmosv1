@@ -35,6 +35,11 @@ export function getMyHomeAttentionPending(userId: string) {
   return window.localStorage.getItem(pendingKey(userId)) === "1";
 }
 
+export function getMyHomeLastVisitMs(userId: string) {
+  if (!userId || typeof window === "undefined") return 0;
+  return parseMs(window.localStorage.getItem(lastVisitKey(userId)));
+}
+
 export function markMyHomeVisited(userId: string) {
   if (!userId || typeof window === "undefined") return;
   window.localStorage.setItem(lastVisitKey(userId), String(Date.now()));

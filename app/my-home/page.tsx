@@ -4,7 +4,11 @@ import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { markMyHomeVisited } from "@/lib/myHomeAttention";
+import {
+  getMyHomeAttentionPending,
+  getMyHomeLastVisitMs,
+  markMyHomeVisited,
+} from "@/lib/myHomeAttention";
 
 type Note = {
   id: string;
@@ -114,6 +118,8 @@ export default function MyHome() {
   const directChatSeenAtRef = useRef<Record<string, string>>({});
   const selectedDirectChatIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
+  const myHomeEntryAttentionPendingRef = useRef(false);
+  const myHomeLastVisitBeforeEntryMsRef = useRef(0);
 
   //  AXY STATES
   const [axyReflection, setAxyReflection] = useState<Record<string, string>>({});
@@ -246,10 +252,45 @@ export default function MyHome() {
       if (!res.ok) return;
       const nextChats = Array.isArray(body.chats) ? body.chats : [];
       const seenMap = directChatSeenAtRef.current;
+      const selectedChatId = selectedDirectChatIdRef.current;
+      const activeUserId = userIdRef.current;
 
       const isFirstLoad = !directChatsInitializedRef.current;
       if (isFirstLoad) {
         directChatsInitializedRef.current = true;
+        const nextUnread: Record<string, true> = {};
+        nextChats.forEach((chat) => {
+          if (chat.chat_id === selectedChatId) return;
+          if (chat.last_message_sender_id && chat.last_message_sender_id === activeUserId) {
+            return;
+          }
+
+          const nextSignalAt = chat.last_message_created_at || chat.updated_at || "";
+          const nextTs = Date.parse(nextSignalAt);
+          if (!Number.isFinite(nextTs)) return;
+
+          const seenTs = Date.parse(seenMap[chat.chat_id] || "");
+          if (Number.isFinite(seenTs) && nextTs > seenTs) {
+            nextUnread[chat.chat_id] = true;
+            return;
+          }
+
+          if (!Number.isFinite(seenTs)) {
+            const entryVisitMs = myHomeLastVisitBeforeEntryMsRef.current;
+            if (entryVisitMs > 0 && nextTs > entryVisitMs) {
+              nextUnread[chat.chat_id] = true;
+              return;
+            }
+            if (myHomeEntryAttentionPendingRef.current) {
+              nextUnread[chat.chat_id] = true;
+            }
+          }
+        });
+
+        if (Object.keys(nextUnread).length > 0) {
+          setDirectUnreadChatIds((prev) => ({ ...prev, ...nextUnread }));
+        }
+
         directChatUpdatedAtRef.current = nextChats.reduce<Record<string, string>>(
           (acc, chat) => {
             acc[chat.chat_id] = chat.last_message_created_at || chat.updated_at || "";
@@ -265,8 +306,6 @@ export default function MyHome() {
         }, {});
 
         const nextUnread: Record<string, true> = {};
-        const selectedChatId = selectedDirectChatIdRef.current;
-        const activeUserId = userIdRef.current;
         nextChats.forEach((chat) => {
           if (chat.chat_id === selectedChatId) return;
           if (chat.last_message_sender_id && chat.last_message_sender_id === activeUserId) {
@@ -634,6 +673,8 @@ export default function MyHome() {
         }
 
         setUserId(user.id);
+        myHomeEntryAttentionPendingRef.current = getMyHomeAttentionPending(user.id);
+        myHomeLastVisitBeforeEntryMsRef.current = getMyHomeLastVisitMs(user.id);
         try {
           const raw = window.localStorage.getItem(
             `${DIRECT_CHAT_SEEN_STORAGE_PREFIX}${user.id}`
