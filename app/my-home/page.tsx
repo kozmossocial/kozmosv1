@@ -55,6 +55,7 @@ const SECONDARY_AMBIENT_SRC = "/ambient-main.mp3";
 const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
 const AXY_SHIP_SRC = "/ufo.png";
 const LUMI_SHIP_SRC = "/ufoholo.png";
+const HOLO_DOCK_OPACITY = 0.8;
 
 function formatTimestampUtc(value: string | null | undefined) {
   if (!value) return "unknown time";
@@ -1099,7 +1100,7 @@ useEffect(() => {
     const dockOpacity =
       typeof touchHoloShipStyle.opacity === "number"
         ? touchHoloShipStyle.opacity
-        : 0.72;
+        : HOLO_DOCK_OPACITY;
     ship.style.transform = "";
     ship.style.opacity = String(dockOpacity);
   }
@@ -1364,7 +1365,7 @@ useEffect(() => {
     const dockOpacity =
       typeof touchHoloShipStyle.opacity === "number"
         ? touchHoloShipStyle.opacity
-        : 0.72;
+        : HOLO_DOCK_OPACITY;
 
     setHoloFlightMotionStyle({
       transform: "translate(-50%, -50%) translate(0px, 0px) rotate(-2deg) scale(1)",
@@ -2578,7 +2579,7 @@ const touchHoloShipStyle: React.CSSProperties = {
   top: -128,
   width: 140,
   height: "auto",
-  opacity: 0.72,
+  opacity: HOLO_DOCK_OPACITY,
   pointerEvents: "auto",
   userSelect: "none",
   cursor: "pointer",
