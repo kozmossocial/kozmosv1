@@ -1357,14 +1357,18 @@ useEffect(() => {
       window.cancelAnimationFrame(holoDockRafRef.current);
       holoDockRafRef.current = null;
     }
+    const dockOpacity =
+      typeof touchHoloShipStyle.opacity === "number"
+        ? touchHoloShipStyle.opacity
+        : 0.72;
 
     setHoloFlightMotionStyle({
       transform: "translate(-50%, -50%) translate(0px, 0px) rotate(-2deg) scale(1)",
-      opacity: 0.78,
+      opacity: dockOpacity,
     });
     applyHoloInlineMotion({
       transform: "translate(-50%, -50%) translate(0px, 0px) rotate(-2deg) scale(1)",
-      opacity: 0.78,
+      opacity: dockOpacity,
     });
 
     holoDockRafRef.current = window.requestAnimationFrame(() => {
@@ -1379,6 +1383,23 @@ useEffect(() => {
   useEffect(() => {
     holoFlightPhaseRef.current = holoFlightPhase;
   }, [holoFlightPhase]);
+
+  useEffect(() => {
+    if (isMobileLayout || holoFlightPhase === "idle") return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, [holoFlightPhase, isMobileLayout]);
 
   useEffect(() => {
     return () => {
@@ -2553,7 +2574,7 @@ const touchHoloShipStyle: React.CSSProperties = {
   top: -128,
   width: 140,
   height: "auto",
-  opacity: 0.78,
+  opacity: 0.72,
   pointerEvents: "auto",
   userSelect: "none",
   cursor: "pointer",

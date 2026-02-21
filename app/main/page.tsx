@@ -717,8 +717,6 @@ export default function Main() {
   const [realtimePresencePrimed, setRealtimePresencePrimed] = useState(false);
   const [realtimePresentUserIdsByName, setRealtimePresentUserIdsByName] =
     useState<Record<string, string>>({});
-  const [runtimePresentUsers, setRuntimePresentUsers] = useState<string[]>([]);
-  const [runtimePresencePrimed, setRuntimePresencePrimed] = useState(false);
   const [showPresenceEmptyState, setShowPresenceEmptyState] = useState(false);
   const [presentUsersDisplay, setPresentUsersDisplay] = useState<string[]>([]);
   const [presentUsersSearchOpen, setPresentUsersSearchOpen] = useState(false);
@@ -741,6 +739,9 @@ export default function Main() {
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
   const [authEpoch, setAuthEpoch] = useState(0);
   const chatBootstrappedOnceRef = useRef(false);
+  const presenceEmptyDelayRef = useRef<number | null>(null);
+  const realtimeEmptySyncStreakRef = useRef(0);
+  const realtimeEmptyCommitTimerRef = useRef<number | null>(null);
 
   const resolveActiveUser = useCallback(async () => {
     // Session lookup is local-first and usually instant; try it before network calls.
@@ -905,9 +906,7 @@ export default function Main() {
         merged.set(key, trimmed);
       }
     });
-    return Array.from(merged.values()).sort((a, b) =>
-      a.localeCompare(b, "en", { sensitivity: "base" })
-    );
+    return Array.from(merged.values());
   }, [realtimePresentUsers]);
   const normalizedPresentUsersSearch = presentUsersSearch.trim().toLowerCase();
   const filteredPresentUsersDisplay = useMemo(() => {
@@ -1183,23 +1182,29 @@ export default function Main() {
   useEffect(() => {
     if (!userId) {
       setRealtimePresencePrimed(false);
-      setRuntimePresencePrimed(false);
       setShowPresenceEmptyState(false);
       setPresenceVisualReady(false);
       setPresentUsersDisplay([]);
+      realtimeEmptySyncStreakRef.current = 0;
+      if (realtimeEmptyCommitTimerRef.current !== null) {
+        window.clearTimeout(realtimeEmptyCommitTimerRef.current);
+        realtimeEmptyCommitTimerRef.current = null;
+      }
+      if (presenceEmptyDelayRef.current !== null) {
+        window.clearTimeout(presenceEmptyDelayRef.current);
+        presenceEmptyDelayRef.current = null;
+      }
       return;
     }
     setRealtimePresencePrimed(false);
-    setRuntimePresencePrimed(false);
     setShowPresenceEmptyState(false);
     setPresenceVisualReady(false);
     setPresentUsersDisplay([]);
-    const timer = window.setTimeout(() => {
-      setShowPresenceEmptyState(true);
-    }, 900);
-    return () => {
-      window.clearTimeout(timer);
-    };
+    realtimeEmptySyncStreakRef.current = 0;
+    if (realtimeEmptyCommitTimerRef.current !== null) {
+      window.clearTimeout(realtimeEmptyCommitTimerRef.current);
+      realtimeEmptyCommitTimerRef.current = null;
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -1264,7 +1269,31 @@ export default function Main() {
         window.clearTimeout(timer);
       };
     }
-    setPresentUsersDisplay(presentUsers);
+    if (presentUsers.length > 0) {
+      if (presenceEmptyDelayRef.current !== null) {
+        window.clearTimeout(presenceEmptyDelayRef.current);
+        presenceEmptyDelayRef.current = null;
+      }
+      setShowPresenceEmptyState(false);
+      setPresentUsersDisplay(presentUsers);
+      return;
+    }
+
+    if (presenceEmptyDelayRef.current !== null) {
+      window.clearTimeout(presenceEmptyDelayRef.current);
+    }
+    presenceEmptyDelayRef.current = window.setTimeout(() => {
+      setPresentUsersDisplay([]);
+      setShowPresenceEmptyState(true);
+      presenceEmptyDelayRef.current = null;
+    }, 900);
+
+    return () => {
+      if (presenceEmptyDelayRef.current !== null) {
+        window.clearTimeout(presenceEmptyDelayRef.current);
+        presenceEmptyDelayRef.current = null;
+      }
+    };
   }, [presenceReady, presenceVisualReady, presentUsers]);
 
   useEffect(() => {
@@ -1639,34 +1668,6 @@ export default function Main() {
       .order("created_at", { ascending: true });
 
     setHushMessages(data || []);
-  }, []);
-
-  const loadRuntimePresentUsers = useCallback(async () => {
-    try {
-      const thresholdIso = new Date(Date.now() - 35 * 1000).toISOString();
-
-      const { data: runtimeRows, error: runtimeErr } = await supabase
-        .from("runtime_presence")
-        .select("username,last_seen_at")
-        .gte("last_seen_at", thresholdIso);
-
-      if (runtimeErr || !runtimeRows || runtimeRows.length === 0) {
-        setRuntimePresentUsers([]);
-        setRuntimePresencePrimed(true);
-        return;
-      }
-
-      const names = runtimeRows
-        .map((row) => row.username)
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
-
-      setRuntimePresentUsers(names);
-      setRuntimePresencePrimed(true);
-    } catch {
-      setRuntimePresentUsers([]);
-      setRuntimePresencePrimed(true);
-    }
   }, []);
 
   async function fetchQuiteSwarmJson(
@@ -2811,10 +2812,53 @@ export default function Main() {
         });
       });
 
-      const names = Array.from(map.values()).sort((a, b) =>
-        a.localeCompare(b, "en", { sensitivity: "base" })
-      );
-      setRealtimePresentUsers(names);
+      const nextNames = Array.from(map.values())
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+
+      if (nextNames.length === 0) {
+        realtimeEmptySyncStreakRef.current += 1;
+
+        if (realtimeEmptyCommitTimerRef.current === null) {
+          realtimeEmptyCommitTimerRef.current = window.setTimeout(() => {
+            setRealtimePresentUsers([]);
+            setRealtimePresentUserIdsByName({});
+            realtimeEmptySyncStreakRef.current = 0;
+            realtimeEmptyCommitTimerRef.current = null;
+          }, 1200);
+        }
+
+        if (realtimeEmptySyncStreakRef.current < 2) {
+          setRealtimePresencePrimed(true);
+          return;
+        }
+      } else {
+        realtimeEmptySyncStreakRef.current = 0;
+        if (realtimeEmptyCommitTimerRef.current !== null) {
+          window.clearTimeout(realtimeEmptyCommitTimerRef.current);
+          realtimeEmptyCommitTimerRef.current = null;
+        }
+      }
+
+      setRealtimePresentUsers((prev) => {
+        const normalize = (value: string) => value.trim().toLowerCase();
+        const nextByKey = new Map<string, string>();
+        nextNames.forEach((name) => {
+          const key = normalize(name);
+          if (!nextByKey.has(key)) {
+            nextByKey.set(key, name);
+          }
+        });
+
+        const nextKeys = new Set(nextByKey.keys());
+        const kept = prev.filter((name) => nextKeys.has(normalize(name)));
+        const keptKeys = new Set(kept.map(normalize));
+        const added = Array.from(nextByKey.entries())
+          .filter(([key]) => !keptKeys.has(key))
+          .map(([, name]) => name);
+
+        return [...kept, ...added];
+      });
       setRealtimePresentUserIdsByName(idsByName);
       setRealtimePresencePrimed(true);
     };
@@ -2836,43 +2880,13 @@ export default function Main() {
     return () => {
       channel.untrack();
       supabase.removeChannel(channel);
+      realtimeEmptySyncStreakRef.current = 0;
+      if (realtimeEmptyCommitTimerRef.current !== null) {
+        window.clearTimeout(realtimeEmptyCommitTimerRef.current);
+        realtimeEmptyCommitTimerRef.current = null;
+      }
     };
   }, [currentUsername, userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-
-    const run = () => {
-      void loadRuntimePresentUsers();
-    };
-
-    const first = window.setTimeout(run, 0);
-    const poll = window.setInterval(run, 2000);
-
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(poll);
-    };
-  }, [loadRuntimePresentUsers, userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-
-    const channel = supabase
-      .channel("runtime-presence-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "runtime_presence" },
-        () => {
-          void loadRuntimePresentUsers();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [loadRuntimePresentUsers, userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -5405,7 +5419,7 @@ export default function Main() {
                     touchPromptUser === name && !isSelf && !alreadyInTouch;
                   return (
                     <div
-                      key={`present-${name}`}
+                      key={`present-${normalizedName}`}
                       style={{ position: "relative" }}
                       data-present-user-item="1"
                       onMouseLeave={() => setPresentUserHover(null)}
