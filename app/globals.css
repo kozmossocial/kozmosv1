@@ -81,6 +81,10 @@ body {
 }
 
 @media (max-width: 900px) {
+  .mother-logo-simple-anchor {
+    top: 40px !important;
+  }
+
   .mother-logo-simple-image {
     width: 56px !important;
   }

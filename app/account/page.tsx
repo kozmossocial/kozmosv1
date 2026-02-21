@@ -577,6 +577,7 @@ export default function AccountPage() {
       <a
         href="/"
         aria-label="Kozmos"
+        className="mother-logo-simple-anchor"
         style={{
           position: "absolute",
           top: 32,
