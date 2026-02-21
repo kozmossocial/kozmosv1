@@ -4017,35 +4017,6 @@ export default function Main() {
         playsInline
         style={{ display: "none" }}
       />
-{/* LOGO */}
-<div
-  className="mother-logo-anchor"
-  style={{}}
->
-  <Image
-    src="/kozmos-logomother.png"
-    alt="Kozmos"
-    width={131}
-    height={98}
-    className="kozmos-logo mother-logo-static"
-    style={{
-      maxWidth: 80, // ana sayfadakiyle uyumlu
-      height: "auto",
-      opacity: 0.9,
-      cursor: "pointer",
-      transition:
-        "opacity 0.25s ease, transform 0.08s ease",
-    }}
-    onClick={() => window.location.href = "https://kozmos.social"}
-    onMouseDown={(e) => {
-      e.currentTarget.style.transform = "scale(0.97)";
-    }}
-    onMouseUp={(e) => {
-      e.currentTarget.style.transform = "scale(1)";
-    }}
-  />
-</div>
-
       {/* TOP LEFT */}
       <div
         style={{

@@ -1887,37 +1887,6 @@ useEffect(() => {
         playsInline
         style={{ display: "none" }}
       />
-{/*  KOZMOS LOGO */}
-<div
-  className="mother-logo-anchor"
-  style={{
-    cursor: "pointer",
-  }}
-  onClick={() => router.push("/")}  
->
-  <Image
-    src="/kozmos-logomother.png"
-    alt="Kozmos"
-    width={131}
-    height={98}
-    className="kozmos-logo mother-logo-static"
-    style={{
-      width: 80,
-      height: "auto",
-      opacity: 0.85,
-      borderRadius: 6,
-      transition:
-        "opacity 0.25s ease, transform 0.08s ease",
-    }}
-    onMouseDown={(e) => {
-      e.currentTarget.style.transform = "scale(0.97)";
-    }}
-    onMouseUp={(e) => {
-      e.currentTarget.style.transform = "scale(1)";
-    }}
-  />
-</div>
-
       {/* TOP LEFT */}
       <div style={topLeftStyle}>
         <span style={{ cursor: "pointer" }} onClick={() => router.push("/main")}>

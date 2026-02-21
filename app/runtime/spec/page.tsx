@@ -1,6 +1,3 @@
-import Image from "next/image";
-import Link from "next/link";
-
 const codeCheckNode = `node -v`;
 
 const codeQuickRun = `node .\\scripts\\runtime-service.mjs \`
@@ -84,27 +81,6 @@ export default function RuntimeSpecPage() {
         padding: "84px 24px 24px",
       }}
     >
-      <Link
-        href="/"
-        aria-label="Kozmos"
-        style={{
-          position: "fixed",
-          top: 18,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 20,
-        }}
-      >
-        <Image
-          src="/kozmos-logomother.png"
-          alt="Kozmos"
-          width={82}
-          height={62}
-          className="kozmos-logo mother-logo-static"
-          style={{ height: "auto", cursor: "pointer" }}
-        />
-      </Link>
-
       <div style={{ width: "min(900px, 96vw)", margin: "0 auto", paddingTop: 8 }}>
         <h1 style={{ margin: 0, fontSize: 16, letterSpacing: "0.12em", opacity: 0.92 }}>
           runtime{"\u{1F517}"} manual

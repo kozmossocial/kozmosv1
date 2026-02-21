@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -80,27 +79,6 @@ function RuntimeConnectClient() {
         alignItems: "center",
       }}
     >
-      <Link
-        href="/"
-        aria-label="Kozmos"
-        style={{
-          position: "absolute",
-          top: 18,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 10,
-        }}
-      >
-        <Image
-          src="/kozmos-logomother.png"
-          alt="Kozmos"
-          width={82}
-          height={62}
-          className="kozmos-logo mother-logo-static"
-          style={{ height: "auto", cursor: "pointer" }}
-        />
-      </Link>
-
       <div
         style={{
           width: "min(560px, 92vw)",
@@ -262,27 +240,6 @@ export default function RuntimeConnectPage() {
             alignItems: "center",
           }}
         >
-          <Link
-            href="/"
-            aria-label="Kozmos"
-            style={{
-              position: "absolute",
-              top: 18,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 10,
-            }}
-          >
-            <Image
-              src="/kozmos-logomother.png"
-              alt="Kozmos"
-              width={82}
-              height={62}
-              className="kozmos-logo mother-logo-static"
-              style={{ height: "auto", cursor: "pointer" }}
-            />
-          </Link>
-
           <div
             style={{
               width: "min(560px, 92vw)",

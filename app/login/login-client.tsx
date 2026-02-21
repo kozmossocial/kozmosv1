@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -172,35 +171,6 @@ export default function LoginClient() {
         padding: 40,
       }}
     >
-      {/* KOZMOS LOGO */}
-      <div
-        className="mother-logo-anchor"
-        style={{
-          position: "fixed",
-          top: "32px",
-          left: "50%",
-          transform: "translate3d(-50%, 0, 0)",
-          zIndex: 50,
-          cursor: "pointer",
-        }}
-        onClick={() => router.push("/")}
-      >
-        <Image
-          src="/kozmos-logomother.png"
-          alt="Kozmos"
-          width={131}
-          height={98}
-          className="kozmos-logo mother-logo-static"
-          style={{
-            width: 80,
-            height: "auto",
-            opacity: 0.85,
-            borderRadius: 6,
-            transition: "opacity 0.25s ease, transform 0.08s ease",
-          }}
-        />
-      </div>
-
       {/* go back */}
       <div
         className="kozmos-text-glow"

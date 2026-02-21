@@ -1076,7 +1076,7 @@ export default function Home() {
                 style={{ cursor: "pointer" }}
                 onClick={() => router.push("/register")}
               >
-                signup
+                register
               </span>{" "}
               /{" "}
               <span style={{ cursor: "pointer" }} onClick={handleLoginClick}>
@@ -1110,22 +1110,6 @@ export default function Home() {
             marginTop: "180px",
           }}
         >
-          {/* LOGO */}
-          <div
-            className="home-hero-logo-wrap mother-logo-anchor"
-          >
-            <a href="https://kozmos.social" target="_self" aria-label="Kozmos">
-              <Image
-                src="/kozmos-logomother.png"
-                alt="Kozmos"
-                width={131}
-                height={98}
-                className="kozmos-logo home-hero-logo-image mother-logo-static"
-                style={{ cursor: "pointer", height: "auto" }}
-              />
-            </a>
-          </div>
-
           <div className="home-hero-copy">
           <h1
             className="home-hero-title"

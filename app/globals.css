@@ -3,10 +3,6 @@
 :root {
   background: #0b0b0b;
   color-scheme: dark;
-  --mother-logo-top-desktop: 32px;
-  --mother-logo-top-mobile: 46px;
-  --mother-logo-size-desktop: 80px;
-  --mother-logo-size-mobile: 60px;
 }
 
 html,
@@ -78,82 +74,6 @@ body {
   filter: drop-shadow(0 0 12px rgba(0, 255, 170, 0.35));
 }
 
-@keyframes motherLogoGlow {
-  0% {
-    filter:
-      drop-shadow(0 0 9px rgba(255, 255, 255, 0.3))
-      drop-shadow(0 0 22px rgba(255, 255, 255, 0.2))
-      drop-shadow(0 0 42px rgba(255, 255, 255, 0.13));
-  }
-  50% {
-    filter:
-      drop-shadow(0 0 15px rgba(255, 255, 255, 0.5))
-      drop-shadow(0 0 36px rgba(255, 255, 255, 0.32))
-      drop-shadow(0 0 68px rgba(255, 255, 255, 0.22));
-  }
-  100% {
-    filter:
-      drop-shadow(0 0 9px rgba(255, 255, 255, 0.3))
-      drop-shadow(0 0 22px rgba(255, 255, 255, 0.2))
-      drop-shadow(0 0 42px rgba(255, 255, 255, 0.13));
-  }
-}
-
-/* Mother logo variant: shape-based glow (no box frame) */
-.mother-logo-static {
-  animation: motherLogoGlow 4.5s ease-in-out infinite !important;
-  box-shadow: none !important;
-  transition:
-    filter 0.25s ease,
-    opacity 0.25s ease,
-    transform 0.12s ease !important;
-}
-
-.mother-logo-static:hover {
-  transform: scale(1.02);
-  filter:
-    drop-shadow(0 0 20px rgba(255, 255, 255, 0.62))
-    drop-shadow(0 0 46px rgba(255, 255, 255, 0.4))
-    drop-shadow(0 0 82px rgba(255, 255, 255, 0.3)) !important;
-  box-shadow: none !important;
-}
-
-.mother-logo-static:active {
-  filter:
-    drop-shadow(0 0 14px rgba(255, 255, 255, 0.46))
-    drop-shadow(0 0 30px rgba(255, 255, 255, 0.3))
-    drop-shadow(0 0 58px rgba(255, 255, 255, 0.2)) !important;
-  box-shadow: none !important;
-}
-
-.mother-logo-static {
-  width: var(--mother-logo-size-desktop) !important;
-  max-width: none !important;
-  height: auto !important;
-  display: block;
-}
-
-@keyframes motherLogoGlowMobile {
-  0% {
-    filter:
-      drop-shadow(0 0 6px rgba(255, 255, 255, 0.2))
-      drop-shadow(0 0 14px rgba(255, 255, 255, 0.12))
-      drop-shadow(0 0 28px rgba(255, 255, 255, 0.08));
-  }
-  50% {
-    filter:
-      drop-shadow(0 0 9px rgba(255, 255, 255, 0.3))
-      drop-shadow(0 0 20px rgba(255, 255, 255, 0.18))
-      drop-shadow(0 0 38px rgba(255, 255, 255, 0.12));
-  }
-  100% {
-    filter:
-      drop-shadow(0 0 6px rgba(255, 255, 255, 0.2))
-      drop-shadow(0 0 14px rgba(255, 255, 255, 0.12))
-      drop-shadow(0 0 28px rgba(255, 255, 255, 0.08));
-  }
-}
-
 @media (max-width: 900px) {
   .main-page-shell .ufo-ambient-faint {
     animation: none !important;
@@ -182,35 +102,6 @@ body {
     backdrop-filter: none !important;
   }
 
-  .mother-logo-static {
-    animation: none !important;
-    filter:
-      drop-shadow(0 0 5px rgba(255, 255, 255, 0.15))
-      drop-shadow(0 0 12px rgba(255, 255, 255, 0.09))
-      drop-shadow(0 0 22px rgba(255, 255, 255, 0.06)) !important;
-  }
-
-  .mother-logo-static:hover {
-    transform: scale(1.01);
-    filter:
-      drop-shadow(0 0 8px rgba(255, 255, 255, 0.28))
-      drop-shadow(0 0 18px rgba(255, 255, 255, 0.16))
-      drop-shadow(0 0 34px rgba(255, 255, 255, 0.1)) !important;
-  }
-
-  .mother-logo-static:active {
-    filter:
-      drop-shadow(0 0 7px rgba(255, 255, 255, 0.22))
-      drop-shadow(0 0 15px rgba(255, 255, 255, 0.12))
-      drop-shadow(0 0 28px rgba(255, 255, 255, 0.08)) !important;
-  }
-
-  .mother-logo-anchor .mother-logo-static {
-    width: var(--mother-logo-size-mobile) !important;
-    max-width: none !important;
-    height: auto !important;
-    margin-top: 0 !important;
-  }
 }
 
 /* =========================
@@ -2314,28 +2205,3 @@ body {
   }
 }
 
-/* ⭐⭐⭐ MOTHER LOGO - UNIVERSAL FIXED ANCHOR ⭐⭐⭐ */
-.mother-logo-anchor {
-  position: fixed !important;
-  top: var(--mother-logo-top-desktop) !important;
-  left: 50% !important;
-  transform: translate3d(-50%, 0, 0) !important;
-  width: max-content !important;
-  z-index: 50 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  display: block !important;
-}
-
-@media (max-width: 900px) {
-  .mother-logo-anchor {
-    position: fixed !important;
-    top: var(--mother-logo-top-mobile) !important;
-    left: 50% !important;
-    transform: translate3d(-50%, 0, 0) !important;
-    z-index: 50 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    display: block !important;
-  }
-}
