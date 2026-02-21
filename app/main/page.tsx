@@ -727,7 +727,6 @@ export default function Main() {
     number | null
   >(null);
   const [presenceVisualReady, setPresenceVisualReady] = useState(false);
-  const [presentUserGlow, setPresentUserGlow] = useState<string | null>(null);
   const [presentUserOpen, setPresentUserOpen] = useState<string | null>(null);
   const [presentUserAvatars, setPresentUserAvatars] = useState<
     Record<string, string | null>
@@ -5345,7 +5344,6 @@ export default function Main() {
               marginTop: 10,
               minHeight: 42,
               borderRadius: 9999,
-              clipPath: "ellipse(50% 50% at 50% 50%)",
               border: "1px solid rgba(255,255,255,0.14)",
               background: "rgba(255,255,255,0.03)",
               padding: "7px 18px",
@@ -5353,6 +5351,7 @@ export default function Main() {
               flexWrap: "wrap",
               gap: 8,
               alignItems: "center",
+              overflow: "visible",
             }}
           >
             {!presenceReady || !presenceVisualReady ? (
@@ -5380,8 +5379,12 @@ export default function Main() {
                       ? `${presentUsersListMaxHeight}px`
                       : undefined,
                   overflowY:
-                    filteredPresentUsersDisplay.length > 33 ? "auto" : "visible",
-                  overflowX: "hidden",
+                    presentUserOpen
+                      ? "visible"
+                      : filteredPresentUsersDisplay.length > 33
+                        ? "auto"
+                        : "visible",
+                  overflowX: presentUserOpen ? "visible" : "hidden",
                   paddingRight: filteredPresentUsersDisplay.length > 33 ? 4 : 0,
                   scrollbarWidth:
                     filteredPresentUsersDisplay.length > 33 ? "thin" : "auto",
@@ -5407,11 +5410,7 @@ export default function Main() {
                       <span
                         className="present-user-chip"
                         onClick={() => {
-                          setPresentUserGlow(name);
                           setPresentUserOpen((prev) => (prev === name ? null : name));
-                          setTimeout(() => {
-                            setPresentUserGlow((prev) => (prev === name ? null : prev));
-                          }, 220);
                         }}
                         style={{
                           fontSize: 11,
@@ -5421,10 +5420,6 @@ export default function Main() {
                           padding: "2px 8px",
                           cursor: "pointer",
                           userSelect: "none",
-                          textShadow:
-                            presentUserGlow === name
-                              ? "0 0 6px rgba(255,255,255,0.95), 0 0 14px rgba(255,255,255,0.45)"
-                              : "none",
                         }}
                       >
                         {name}
@@ -5445,7 +5440,7 @@ export default function Main() {
                             overflow: "hidden",
                             boxShadow:
                               "0 0 12px rgba(255,255,255,0.28), 0 0 24px rgba(255,255,255,0.14)",
-                            zIndex: 24,
+                            zIndex: 80,
                             display: "grid",
                             placeItems: "center",
                           }}

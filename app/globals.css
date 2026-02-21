@@ -403,16 +403,12 @@ body {
 .present-user-chip {
   display: inline-block;
   transition:
-    box-shadow 0.15s ease,
     border-color 0.15s ease,
     opacity 0.15s ease;
 }
 
 .present-user-chip:active {
   border-color: rgba(255, 255, 255, 0.45);
-  box-shadow:
-    0 0 10px rgba(255, 255, 255, 0.55),
-    0 0 20px rgba(255, 255, 255, 0.3);
 }
 
 .axy-name-glow {
