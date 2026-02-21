@@ -5398,8 +5398,9 @@ export default function Main() {
                     (isSelf ? selfAvatarUrl : null);
                   const isOpen = presentUserOpen === name;
                   const isHoveringAvatar = presentUserHover === name;
-                  const showTouchPrompt = touchPromptUser === name && !isSelf;
                   const alreadyInTouch = inTouchByName[normalizedName] === true;
+                  const showTouchPrompt =
+                    touchPromptUser === name && !isSelf && !alreadyInTouch;
                   return (
                     <div
                       key={`present-${name}`}
@@ -5447,7 +5448,7 @@ export default function Main() {
                           onMouseEnter={() => setPresentUserHover(name)}
                           onMouseLeave={() => setPresentUserHover(null)}
                           onClick={() => {
-                            if (!isSelf) {
+                            if (!isSelf && !alreadyInTouch) {
                               setTouchPromptUser(name);
                             }
                           }}
@@ -5469,7 +5470,7 @@ export default function Main() {
                             </span>
                           )}
 
-                          {!isSelf ? (
+                          {!isSelf && !alreadyInTouch ? (
                             <div
                               style={{
                                 position: "absolute",
@@ -5488,10 +5489,10 @@ export default function Main() {
                             >
                               <span
                                 style={{
-                                  fontSize: 28,
+                                  fontSize: 42,
                                   lineHeight: 1,
-                                  fontWeight: 500,
-                                  opacity: 0.9,
+                                  fontWeight: 300,
+                                  opacity: 0.72,
                                   textShadow:
                                     "0 0 8px rgba(255,255,255,0.45), 0 0 18px rgba(255,255,255,0.28)",
                                 }}
