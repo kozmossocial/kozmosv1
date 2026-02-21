@@ -106,10 +106,19 @@ function classTone(buildClass: string, selected: boolean) {
   return { border: tone.border, bg: tone.bg };
 }
 
+type FileAction = {
+  action: "create" | "update";
+  path: string;
+  content: string;
+  language?: string;
+  applied?: boolean;
+};
+
 type AxyTurn = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  fileActions?: FileAction[];
 };
 
 const ROOM_MANIFEST_PATH = "space.room.json";
@@ -1219,12 +1228,18 @@ export default function BuildPage() {
           ? `error: ${data.error}`
           : "error";
 
+      // Extract file actions from response
+      const fileActions: FileAction[] = Array.isArray(data?.fileActions) 
+        ? data.fileActions.map((fa: FileAction) => ({ ...fa, applied: false }))
+        : [];
+
       setAxyTurns((prev) => [
         ...prev,
         {
           id: `${Date.now()}-a`,
           role: "assistant",
           content,
+          fileActions: fileActions.length > 0 ? fileActions : undefined,
         },
       ]);
     } catch {
@@ -1238,6 +1253,52 @@ export default function BuildPage() {
       ]);
     } finally {
       setAxyLoading(false);
+    }
+  }
+
+  async function applyFileAction(turnId: string, actionIndex: number) {
+    const turn = axyTurns.find((t) => t.id === turnId);
+    if (!turn?.fileActions?.[actionIndex]) return;
+    
+    const action = turn.fileActions[actionIndex];
+    if (action.applied || !selectedSpaceId) return;
+
+    try {
+      const { res } = await fetchAuthedJson("/api/build/files", {
+        method: "POST",
+        body: JSON.stringify({
+          spaceId: selectedSpaceId,
+          path: action.path,
+          language: action.language || "text",
+          content: action.content,
+        }),
+      });
+
+      if (res.ok) {
+        // Mark as applied
+        setAxyTurns((prev) =>
+          prev.map((t) => {
+            if (t.id !== turnId || !t.fileActions) return t;
+            return {
+              ...t,
+              fileActions: t.fileActions.map((fa, idx) =>
+                idx === actionIndex ? { ...fa, applied: true } : fa
+              ),
+            };
+          })
+        );
+        // Refresh files list
+        await loadSpaceFiles(selectedSpaceId);
+        // Select the file
+        setSelectedFilePath(action.path);
+        setEditorContent(action.content);
+        setEditorLanguage(action.language || "text");
+        setInfoText(`Applied: ${action.path}`);
+      } else {
+        setErrorText(`Failed to apply: ${action.path}`);
+      }
+    } catch {
+      setErrorText(`Error applying: ${action.path}`);
     }
   }
 
@@ -1295,11 +1356,20 @@ export default function BuildPage() {
   }
 
   function openPreviewInNewTab() {
-    const tab = window.open("about:blank", "_blank");
-    if (!tab) return;
-    tab.document.open();
-    tab.document.write(previewDoc);
-    tab.document.close();
+    // Use blob URL so the new tab has proper origin for fetch/localStorage
+    const blob = new Blob([previewDoc], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const tab = window.open(url, "_blank");
+    // Revoke after a short delay to allow the tab to fully load
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    if (!tab) {
+      // Fallback to about:blank method
+      const fallbackTab = window.open("about:blank", "_blank");
+      if (!fallbackTab) return;
+      fallbackTab.document.open();
+      fallbackTab.document.write(previewDoc);
+      fallbackTab.document.close();
+    }
   }
 
   if (bootLoading) {
@@ -2017,9 +2087,6 @@ export default function BuildPage() {
                 }}
               />
 
-              <div style={{ marginTop: 10, fontSize: 11, opacity: 0.65 }}>
-                mode: {canEditSelectedSpace ? "editable" : "read-only"}
-              </div>
               {infoText ? (
                 <div style={{ marginTop: 8, fontSize: 12, color: "#b8ffd1" }}>{infoText}</div>
               ) : null}
@@ -2150,6 +2217,33 @@ export default function BuildPage() {
                       {turn.role === "assistant" ? "Axy:" : "you:"}
                     </span>
                     {turn.content}
+                    {/* File Actions with Apply buttons */}
+                    {turn.fileActions && turn.fileActions.length > 0 && (
+                      <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {turn.fileActions.map((fa, idx) => (
+                          <button
+                            key={`${fa.path}-${idx}`}
+                            onClick={() => applyFileAction(turn.id, idx)}
+                            disabled={fa.applied || !canEditSelectedSpace}
+                            style={{
+                              border: fa.applied 
+                                ? "1px solid rgba(107,255,142,0.3)"
+                                : "1px solid rgba(107,255,142,0.6)",
+                              borderRadius: 6,
+                              background: fa.applied 
+                                ? "rgba(107,255,142,0.08)"
+                                : "rgba(107,255,142,0.22)",
+                              color: fa.applied ? "#8fcea0" : "#b8ffd1",
+                              padding: "4px 8px",
+                              fontSize: 11,
+                              cursor: fa.applied || !canEditSelectedSpace ? "default" : "pointer",
+                            }}
+                          >
+                            {fa.applied ? "✓ " : "▶ "}{fa.action} {fa.path}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {axyLoading ? <div style={{ fontSize: 12, opacity: 0.6 }}>Axy is thinking...</div> : null}
