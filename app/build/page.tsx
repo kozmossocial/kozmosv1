@@ -1288,7 +1288,7 @@ export default function BuildPage() {
           })
         );
         // Refresh files list
-        await loadSpaceFiles(selectedSpaceId);
+        await loadFiles(selectedSpaceId);
         // Select the file
         setSelectedFilePath(action.path);
         setEditorContent(action.content);
