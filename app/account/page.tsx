@@ -579,7 +579,7 @@ export default function AccountPage() {
         aria-label="Kozmos"
         style={{
           position: "absolute",
-          top: 24,
+          top: 32,
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 30,
@@ -591,9 +591,8 @@ export default function AccountPage() {
           alt="Kozmos"
           width={80}
           height={60}
+          className="mother-logo-simple-image"
           style={{
-            width: 80,
-            height: "auto",
             display: "block",
           }}
         />

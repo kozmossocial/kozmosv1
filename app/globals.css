@@ -74,7 +74,17 @@ body {
   filter: drop-shadow(0 0 12px rgba(0, 255, 170, 0.35));
 }
 
+.mother-logo-simple-image {
+  width: 80px !important;
+  height: auto !important;
+  display: block;
+}
+
 @media (max-width: 900px) {
+  .mother-logo-simple-image {
+    width: 56px !important;
+  }
+
   .main-page-shell .ufo-ambient-faint {
     animation: none !important;
     filter: none !important;
