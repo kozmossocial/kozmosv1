@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -56,6 +56,7 @@ const SECONDARY_AMBIENT_PREF_KEY = "kozmos:ambient-sound-secondary";
 const AXY_SHIP_SRC = "/ufo.png";
 const LUMI_SHIP_SRC = "/ufoholo.png";
 const HOLO_DOCK_OPACITY = 0.8;
+const HOLO_DOCK_Y_NUDGE_PX = -2;
 
 function formatTimestampUtc(value: string | null | undefined) {
   if (!value) return "unknown time";
@@ -157,7 +158,6 @@ export default function MyHome() {
   const holoLaunchRafRef = useRef<number | null>(null);
   const holoDockRafRef = useRef<number | null>(null);
   const holoSpecialRafRef = useRef<number | null>(null);
-  const holoInlineClearRafRef = useRef<number | null>(null);
   const holoSpecialLaunchTimerRef = useRef<number | null>(null);
   const lumiMobileTapHintTimerRef = useRef<number | null>(null);
   const holoDockLeft = isMobileLayout ? 12 : 18;
@@ -1070,10 +1070,6 @@ useEffect(() => {
       window.cancelAnimationFrame(holoSpecialRafRef.current);
       holoSpecialRafRef.current = null;
     }
-    if (holoInlineClearRafRef.current !== null) {
-      window.cancelAnimationFrame(holoInlineClearRafRef.current);
-      holoInlineClearRafRef.current = null;
-    }
   }
 
   function clearHoloSpecialSchedule() {
@@ -1103,21 +1099,6 @@ useEffect(() => {
         : HOLO_DOCK_OPACITY;
     ship.style.transform = "";
     ship.style.opacity = String(dockOpacity);
-  }
-
-  function scheduleClearHoloInlineMotion() {
-    if (holoInlineClearRafRef.current !== null) {
-      window.cancelAnimationFrame(holoInlineClearRafRef.current);
-      holoInlineClearRafRef.current = null;
-    }
-    // Wait for idle render commit, then clear inline override so dock hover resumes
-    // without a one-frame jump.
-    holoInlineClearRafRef.current = window.requestAnimationFrame(() => {
-      holoInlineClearRafRef.current = window.requestAnimationFrame(() => {
-        holoInlineClearRafRef.current = null;
-        clearHoloInlineMotion();
-      });
-    });
   }
 
   function launchHoloFlight() {
@@ -1151,7 +1132,7 @@ useEffect(() => {
     const dockTop = holoDockTop;
     const rect = {
       x: panelRect.left + dockLeft + shipWidth * 0.5,
-      y: panelRect.top + dockTop + shipHeight * 0.5,
+      y: panelRect.top + dockTop + shipHeight * 0.5 + HOLO_DOCK_Y_NUDGE_PX,
     };
     const viewportMidX = window.innerWidth * 0.5;
     const inwardSign = rect.x <= viewportMidX ? 1 : -1;
@@ -1247,7 +1228,8 @@ useEffect(() => {
     const dockLeft = holoDockLeft;
     const dockTop = holoDockTop;
     const originX = panelRect.left + dockLeft + shipWidth * 0.5;
-    const originY = panelRect.top + dockTop + shipHeight * 0.5;
+    const originY =
+      panelRect.top + dockTop + shipHeight * 0.5 + HOLO_DOCK_Y_NUDGE_PX;
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
     const centerX = viewportW * (isMobileLayout ? 0.5 : 0.52);
@@ -1381,12 +1363,16 @@ useEffect(() => {
       setHoloFlightPhase("idle");
       setHoloFlightOrigin(null);
       setHoloFlightMotionStyle({});
-      scheduleClearHoloInlineMotion();
     });
   }
 
   useEffect(() => {
     holoFlightPhaseRef.current = holoFlightPhase;
+  }, [holoFlightPhase]);
+
+  useLayoutEffect(() => {
+    if (holoFlightPhase !== "idle") return;
+    clearHoloInlineMotion();
   }, [holoFlightPhase]);
 
   useEffect(() => {
@@ -1463,13 +1449,13 @@ useEffect(() => {
                   ? {
                   position: "fixed",
                   left: "calc(50% - 230px)",
-                  top: 68,
+                  top: 68 + HOLO_DOCK_Y_NUDGE_PX,
                   transform: "none",
                   zIndex: 3,
                 }
               : {
                   left: holoDockLeft,
-                  top: holoDockTop,
+                  top: holoDockTop + HOLO_DOCK_Y_NUDGE_PX,
                 }),
             width: holoShipWidth,
             opacity: touchHoloShipStyle.opacity,
