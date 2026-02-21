@@ -785,7 +785,7 @@ export default function AccountPage() {
 
         <div style={{ marginBottom: 2 }}>
           <div style={label}>spice</div>
-          <div>{spiceBalance.toLocaleString("en-US")} SPICE</div>
+          <div>{spiceBalance.toLocaleString("en-US")} SPC</div>
         </div>
 
         <div style={{ marginBottom: 2 }}>

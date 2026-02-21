@@ -57,6 +57,36 @@ function sanitizeMetadata(value: unknown) {
   return out;
 }
 
+function resolveRefKey(
+  event: SpiceEvent,
+  body: Record<string, unknown>,
+  metadata: Record<string, unknown>
+) {
+  const refKeyRaw =
+    typeof body?.refKey === "string" ? body.refKey.trim() : "";
+  if (refKeyRaw) {
+    return refKeyRaw.slice(0, 180);
+  }
+
+  if (event === "news_click") {
+    const newsItemId = metadata.newsItemId;
+    if (typeof newsItemId === "number" || typeof newsItemId === "string") {
+      return `news_click:${String(newsItemId).slice(0, 80)}`;
+    }
+  }
+
+  if (event === "game_play") {
+    const game =
+      typeof metadata.game === "string" && metadata.game.trim()
+        ? metadata.game.trim().slice(0, 80)
+        : "unknown";
+    const minuteBucket = Math.floor(Date.now() / 60_000);
+    return `game_play:${game}:${minuteBucket}`;
+  }
+
+  return null;
+}
+
 export async function POST(req: Request) {
   try {
     const user = await authenticateUser(req);
@@ -64,7 +94,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const event = String(body?.event || "").trim().toLowerCase() as SpiceEvent;
     const config = SPICE_EVENT_CONFIG[event];
 
@@ -72,11 +102,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "invalid event" }, { status: 400 });
     }
 
-    const refKeyRaw =
-      typeof body?.refKey === "string" ? body.refKey.trim() : "";
-    const refKey = refKeyRaw ? refKeyRaw.slice(0, 180) : null;
-
     const metadata = sanitizeMetadata(body?.metadata);
+    const refKey = resolveRefKey(event, body, metadata);
 
     const { data, error } = await supabaseAdmin.rpc("spice_credit", {
       p_user_id: user.id,

@@ -2960,7 +2960,7 @@ export default function Main() {
     async (
       event: SpiceEventName,
       metadata: Record<string, unknown>,
-      options?: { keepalive?: boolean }
+      options?: { keepalive?: boolean; refKey?: string }
     ) => {
       const {
         data: { session },
@@ -2974,7 +2974,7 @@ export default function Main() {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ event, metadata }),
+        body: JSON.stringify({ event, metadata, refKey: options?.refKey }),
         keepalive: options?.keepalive === true,
       }).catch(() => {});
     },
@@ -3243,7 +3243,8 @@ export default function Main() {
       | typeof QUITE_SWARM_MODE
       | typeof NIGHT_PROTOCOL_MODE
   ) {
-    void emitSpiceEvent("game_play", { game });
+    const minuteBucket = Math.floor(Date.now() / 60_000);
+    void emitSpiceEvent("game_play", { game }, { refKey: `game_play:${game}:${minuteBucket}` });
     setActivePlay(game);
     if (game === "signal-drift") {
       setDriftRunning(false);
@@ -3966,6 +3967,7 @@ export default function Main() {
                     target="_blank"
                     rel="noreferrer noopener"
                     onClick={() => {
+                      const refKey = `news_click:${item.id}`;
                       void emitSpiceEvent(
                         "news_click",
                         {
@@ -3973,7 +3975,7 @@ export default function Main() {
                           topic: item.topic,
                           sourceName: item.sourceName,
                         },
-                        { keepalive: true }
+                        { keepalive: true, refKey }
                       );
                     }}
                     style={{
