@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -62,6 +63,31 @@ export default function Register() {
         padding: 40,
       }}
     >
+      <a
+        href="/"
+        aria-label="Kozmos"
+        style={{
+          position: "absolute",
+          top: 24,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 30,
+          display: "block",
+        }}
+      >
+        <Image
+          src="/kozmos-logomother.png"
+          alt="Kozmos"
+          width={80}
+          height={60}
+          style={{
+            width: 80,
+            height: "auto",
+            display: "block",
+          }}
+        />
+      </a>
+
       {/* GO BACK */}
       <div
         style={{
