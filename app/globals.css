@@ -766,10 +766,10 @@ body {
   -webkit-user-select: none;
   color: rgba(232, 236, 242, 0.98);
   text-shadow:
-    0 0 7px rgba(236, 242, 250, 0.9),
-    0 0 16px rgba(186, 196, 214, 0.48),
-    0 0 30px rgba(126, 138, 160, 0.34);
-  animation: homeTitleSilverPulse 4.6s ease-in-out infinite;
+    0 0 5px rgba(236, 242, 250, 0.82),
+    0 0 12px rgba(186, 196, 214, 0.36),
+    0 0 22px rgba(126, 138, 160, 0.24);
+  animation: homeTitleSilverPulse 6.2s ease-in-out infinite;
 }
 
 .home-hero-title::before {
@@ -797,9 +797,8 @@ body {
   pointer-events: none;
   z-index: -1;
   filter:
-    drop-shadow(0 -1px 8px rgba(236, 242, 250, 0.8))
-    drop-shadow(0 -1px 18px rgba(188, 198, 216, 0.58))
-    drop-shadow(0 -1px 30px rgba(152, 164, 186, 0.38));
+    drop-shadow(0 -1px 5px rgba(236, 242, 250, 0.64))
+    drop-shadow(0 -1px 12px rgba(188, 198, 216, 0.4));
 }
 
 .home-hero-title::after {
@@ -958,10 +957,10 @@ body {
       rgba(170, 116, 255, 0.12),
       rgba(255, 90, 170, 0.1)
     );
-  filter: blur(16px);
-  opacity: 0.78;
+  filter: blur(10px);
+  opacity: 0.58;
   z-index: 0;
-  animation: runtimePanelShimmer 7.2s linear infinite;
+  animation: runtimePanelShimmer 10s linear infinite;
 }
 
 .runtime-connect-panel::after {
@@ -972,9 +971,9 @@ body {
   pointer-events: none;
   background: linear-gradient(105deg, rgba(255, 255, 255, 0) 16%, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0) 84%);
   transform: translateX(-120%);
-  opacity: 0.5;
+  opacity: 0.38;
   z-index: 1;
-  animation: runtimePanelScan 3.8s ease-in-out infinite;
+  animation: runtimePanelScan 5.4s ease-in-out infinite;
 }
 
 .runtime-page-ambient {
@@ -982,8 +981,8 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 1;
-  opacity: 0.3;
-  mix-blend-mode: screen;
+  opacity: 0.24;
+  mix-blend-mode: normal;
   background:
     radial-gradient(circle at 18% 28%, rgba(255, 90, 170, 0.22), transparent 52%),
     radial-gradient(circle at 78% 34%, rgba(70, 160, 255, 0.24), transparent 56%),
@@ -995,9 +994,9 @@ body {
       rgba(68, 240, 190, 0.11) 66%,
       rgba(170, 116, 255, 0.11) 100%
     );
-  background-size: 200% 200%;
-  filter: blur(18px);
-  animation: runtimePanelBgFlow 16s ease-in-out infinite;
+  background-size: 165% 165%;
+  filter: blur(12px);
+  animation: runtimePanelBgFlow 22s ease-in-out infinite;
   transition: opacity 420ms ease, filter 420ms ease;
 }
 
@@ -1013,15 +1012,15 @@ body {
     rgba(170, 116, 255, 0.12),
     rgba(255, 90, 170, 0.1)
   );
-  filter: blur(44px);
-  opacity: 0.5;
-  animation: runtimePanelShimmer 18s linear infinite;
+  filter: blur(26px);
+  opacity: 0.34;
+  animation: runtimePanelShimmer 24s linear infinite;
   transition: opacity 420ms ease;
 }
 
 .runtime-page-ambient.runtime-page-ambient-soft {
   opacity: 0.09;
-  filter: blur(22px);
+  filter: blur(14px);
 }
 
 .runtime-page-ambient.runtime-page-ambient-soft::before {
@@ -1065,6 +1064,51 @@ body {
 .main-page-shell > * {
   position: relative;
   z-index: 1;
+}
+
+/* Main page performance tuning (code-rain untouched) */
+.main-page-shell::before {
+  opacity: 0.12;
+  mix-blend-mode: normal;
+  filter: blur(12px);
+  animation-duration: 24s;
+}
+
+.main-page-shell .hush-panel,
+.main-page-shell .chat-panel,
+.main-page-shell .play-panel,
+.main-page-shell .space-tv-panel,
+.main-page-shell .space-radio-panel,
+.main-page-shell .news-paper-panel {
+  backdrop-filter: none;
+}
+
+.main-page-shell .ufo-boot-glow,
+.main-page-shell .ufo-boot-glow-main,
+.main-page-shell .ufo-boot-glow-soft,
+.main-page-shell .ufo-ambient-faint {
+  animation-duration: 7.2s;
+  filter: none;
+}
+
+.main-page-shell .ufo-ambient-beam::before {
+  filter: blur(10px) saturate(1.08) brightness(1.12);
+}
+
+.main-page-shell .ufo-ambient-beam::after {
+  filter: blur(1.8px) saturate(1.12) contrast(1.04) brightness(1.08);
+}
+
+.main-page-shell .ufo-ambient-beam.ufo-beam-on::before {
+  animation:
+    ufoBeamEnterHalo 240ms cubic-bezier(0.18, 0.78, 0.22, 1) both,
+    ufoBeamPhotonHalo 5.8s ease-in-out 240ms infinite;
+}
+
+.main-page-shell .ufo-ambient-beam.ufo-beam-on::after {
+  animation:
+    ufoBeamEnterCore 210ms cubic-bezier(0.18, 0.78, 0.22, 1) both,
+    ufoBeamPhotonCore 3.6s linear 210ms infinite;
 }
 
 .build-shell {

@@ -171,12 +171,23 @@ export default function Home() {
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);
   const [ambientPrefReady, setAmbientPrefReady] = useState(false);
   const [lowPerfMotion, setLowPerfMotion] = useState(false);
+  const [matrixBootReady, setMatrixBootReady] = useState(false);
+  const [matrixDetailReady, setMatrixDetailReady] = useState(false);
 
   const matrixColumns = useMemo(() => {
+    if (!matrixBootReady) {
+      return [];
+    }
+
+    const countScale = matrixDetailReady ? 1 : 0.42;
+    const streamScale = matrixDetailReady ? 1 : 0.7;
+    const lengthScale = matrixDetailReady ? 1 : 0.58;
     const sessionOffset = lowPerfMotion ? 77157 : 77123;
-    const doubleCount = lowPerfMotion ? 34 : 62;
-    const singleCount = lowPerfMotion ? 26 : 58;
+    const baseDoubleCount = lowPerfMotion ? 24 : 62;
+    const baseSingleCount = lowPerfMotion ? 16 : 58;
     const quadCount = lowPerfMotion ? 0 : 20;
+    const doubleCount = Math.max(10, Math.floor(baseDoubleCount * countScale));
+    const singleCount = Math.max(8, Math.floor(baseSingleCount * countScale));
     const globalFlowSlowdown = lowPerfMotion ? 1.14 : 1.22;
     const rand = (rng: () => number, min: number, max: number) =>
       min + rng() * (max - min);
@@ -204,11 +215,14 @@ export default function Home() {
             : lowPerfMotion
             ? 1
             : 2;
-      const streamCount = baseCount + extraStreams;
+      const streamCount = Math.max(
+        1,
+        Math.floor((baseCount + extraStreams) * streamScale)
+      );
       const opacityBoost = kind === "single" ? 0.72 : kind === "quad" ? 0.64 : 1;
       const streams = Array.from({ length: streamCount }, (_, idx) => {
         const isLong = rng() > (kind === "double" ? 0.72 : kind === "quad" ? 0.7 : 0.62);
-        const length = isLong
+        const rawLength = isLong
           ? randInt(
               rng,
               kind === "double"
@@ -235,6 +249,7 @@ export default function Home() {
                   : 62,
               kind === "quad" ? 118 : lowPerfMotion ? 118 : 160
             );
+        const length = Math.max(42, Math.floor(rawLength * lengthScale));
         const baseDuration = lowPerfMotion
           ? rand(rng, 8.2, 14.4) + (isLong ? rand(rng, 1.1, 2.1) : 0)
           : kind === "quad"
@@ -329,7 +344,45 @@ export default function Home() {
     }
 
     return mixed;
-  }, [lowPerfMotion]);
+  }, [lowPerfMotion, matrixDetailReady, matrixBootReady]);
+
+  useEffect(() => {
+    if (matrixBootReady) return;
+
+    let cancelled = false;
+    let idleId: number | null = null;
+    const onIdle = () => {
+      if (!cancelled) {
+        setMatrixBootReady(true);
+      }
+    };
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(onIdle, { timeout: 5000 });
+    }
+
+    const timeoutId = window.setTimeout(onIdle, 6500);
+
+    return () => {
+      cancelled = true;
+      if (idleId !== null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+      window.clearTimeout(timeoutId);
+    };
+  }, [matrixBootReady]);
+
+  useEffect(() => {
+    if (matrixDetailReady) return;
+
+    const timer = window.setTimeout(() => {
+      setMatrixDetailReady(true);
+    }, 5200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [matrixDetailReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -444,6 +497,10 @@ export default function Home() {
         const entry = entries[0];
         if (!entry) return;
         setMatrixMotionActive(entry.isIntersecting);
+        if (entry.isIntersecting) {
+          setMatrixBootReady(true);
+          setMatrixDetailReady(true);
+        }
       },
       {
         root: null,
@@ -1104,9 +1161,16 @@ export default function Home() {
             alt="Kozmos"
             width={80}
             height={60}
-            className="mother-logo-simple-image"
+            priority
+            sizes="(max-width: 900px) 56px, 80px"
             style={{
               display: "block",
+              width: "clamp(56px, 7vw, 80px)",
+              height: "auto",
+              minWidth: 56,
+              maxWidth: 80,
+              transform: "translateZ(0)",
+              backfaceVisibility: "hidden",
             }}
           />
         </a>
@@ -1235,12 +1299,12 @@ export default function Home() {
         <div className="matrix-logo-ambient" aria-hidden />
         <div
           className={`matrix-rain${matrixMotionActive ? "" : " matrix-rain-paused"}${
-            lowPerfMotion ? " matrix-rain-low-perf" : ""
+            lowPerfMotion || !matrixDetailReady ? " matrix-rain-low-perf" : ""
           }`}
           aria-hidden="true"
           style={
             {
-              "--matrix-cols": matrixColumns.length,
+              "--matrix-cols": Math.max(1, matrixColumns.length),
             } as React.CSSProperties
           }
         >
