@@ -717,6 +717,9 @@ export default function Main() {
   const [realtimePresencePrimed, setRealtimePresencePrimed] = useState(false);
   const [realtimePresentUserIdsByName, setRealtimePresentUserIdsByName] =
     useState<Record<string, string>>({});
+  const [runtimePresentUsers, setRuntimePresentUsers] = useState<string[]>([]);
+  const [runtimePresentUserIdsByName, setRuntimePresentUserIdsByName] =
+    useState<Record<string, string>>({});
   const [showPresenceEmptyState, setShowPresenceEmptyState] = useState(false);
   const [presentUsersDisplay, setPresentUsersDisplay] = useState<string[]>([]);
   const [presentUsersSearchOpen, setPresentUsersSearchOpen] = useState(false);
@@ -906,8 +909,23 @@ export default function Main() {
         merged.set(key, trimmed);
       }
     });
+    runtimePresentUsers.forEach((name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!merged.has(key)) {
+        merged.set(key, trimmed);
+      }
+    });
     return Array.from(merged.values());
-  }, [realtimePresentUsers]);
+  }, [realtimePresentUsers, runtimePresentUsers]);
+  const presentUserIdsByName = useMemo(() => {
+    const merged: Record<string, string> = { ...runtimePresentUserIdsByName };
+    Object.entries(realtimePresentUserIdsByName).forEach(([key, value]) => {
+      merged[key] = value;
+    });
+    return merged;
+  }, [realtimePresentUserIdsByName, runtimePresentUserIdsByName]);
   const normalizedPresentUsersSearch = presentUsersSearch.trim().toLowerCase();
   const filteredPresentUsersDisplay = useMemo(() => {
     if (!normalizedPresentUsersSearch) return presentUsersDisplay;
@@ -1182,6 +1200,8 @@ export default function Main() {
   useEffect(() => {
     if (!userId) {
       setRealtimePresencePrimed(false);
+      setRuntimePresentUsers([]);
+      setRuntimePresentUserIdsByName({});
       setShowPresenceEmptyState(false);
       setPresenceVisualReady(false);
       setPresentUsersDisplay([]);
@@ -1197,6 +1217,8 @@ export default function Main() {
       return;
     }
     setRealtimePresencePrimed(false);
+    setRuntimePresentUsers([]);
+    setRuntimePresentUserIdsByName({});
     setShowPresenceEmptyState(false);
     setPresenceVisualReady(false);
     setPresentUsersDisplay([]);
@@ -1205,6 +1227,76 @@ export default function Main() {
       window.clearTimeout(realtimeEmptyCommitTimerRef.current);
       realtimeEmptyCommitTimerRef.current = null;
     }
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    let cancelled = false;
+    let inFlight = false;
+
+    const loadRuntimePresenceUsers = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.access_token) return;
+
+        const res = await fetch("/api/runtime/presence", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          cache: "no-store",
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          users?: Array<Record<string, unknown>>;
+        };
+        if (!res.ok) return;
+
+        const users = Array.isArray(body.users) ? body.users : [];
+        const nextNames: string[] = [];
+        const nextIdsByName: Record<string, string> = {};
+        const seen = new Set<string>();
+
+        users.forEach((row) => {
+          const username = String(row.username || "").trim();
+          const userId = String(row.userId || "").trim();
+          if (!username) return;
+          const key = username.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          nextNames.push(username);
+          if (userId) {
+            nextIdsByName[key] = userId;
+          }
+        });
+
+        if (cancelled) return;
+        setRuntimePresentUsers(nextNames);
+        setRuntimePresentUserIdsByName(nextIdsByName);
+      } catch {
+        if (!cancelled) {
+          setRuntimePresentUsers([]);
+          setRuntimePresentUserIdsByName({});
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void loadRuntimePresenceUsers();
+    const timer = window.setInterval(() => {
+      void loadRuntimePresenceUsers();
+    }, 4000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -3815,7 +3907,7 @@ export default function Main() {
   const hushCreatablePresentUsers = useMemo(() => {
     const byId = new Map<string, string>();
     presentUsers.forEach((username) => {
-      const mappedUserId = realtimePresentUserIdsByName[username.trim().toLowerCase()];
+      const mappedUserId = presentUserIdsByName[username.trim().toLowerCase()];
       if (!mappedUserId || mappedUserId === userId) return;
       if (!byId.has(mappedUserId)) {
         byId.set(mappedUserId, username);
@@ -3825,7 +3917,7 @@ export default function Main() {
       userId: id,
       username,
     }));
-  }, [presentUsers, realtimePresentUserIdsByName, userId]);
+  }, [presentUserIdsByName, presentUsers, userId]);
 
   const selectedHushMembers = selectedHushChatId
     ? hushMembers.filter(
@@ -3849,8 +3941,7 @@ export default function Main() {
 
     return presentUsers
       .map((username) => {
-        const mappedUserId =
-          realtimePresentUserIdsByName[username.trim().toLowerCase()];
+        const mappedUserId = presentUserIdsByName[username.trim().toLowerCase()];
         return { userId: mappedUserId, username };
       })
       .filter(
@@ -3861,8 +3952,8 @@ export default function Main() {
       );
   }, [
     isSelectedHushOwner,
+    presentUserIdsByName,
     presentUsers,
-    realtimePresentUserIdsByName,
     selectedHushChatId,
     selectedHushMembers,
     userId,
