@@ -749,7 +749,7 @@ export default function MainSpacePage() {
       }
       setEnteringPortal({ id: room.id, title: room.title, kind: "room" });
       enterTimerRef.current = window.setTimeout(() => {
-        router.push(`/build?spaceId=${encodeURIComponent(room.id)}`);
+        router.push(`/build/view/${encodeURIComponent(room.id)}`);
       }, ENTER_TRANSITION_MS);
     },
     [enteringPortal, router]

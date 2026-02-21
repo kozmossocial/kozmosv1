@@ -312,7 +312,7 @@ export default function SpaceHomePage() {
       }
       setEnteringSpace({ id: space.id, title: space.title });
       enterTimerRef.current = window.setTimeout(() => {
-        router.push(`/build?spaceId=${encodeURIComponent(space.id)}`);
+        router.push(`/build/view/${encodeURIComponent(space.id)}`);
       }, ENTER_TRANSITION_MS);
     },
     [enteringSpace, mobileControls, router]

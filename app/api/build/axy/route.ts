@@ -370,6 +370,8 @@ ${activeFileContent ? compact(activeFileContent, 4000) : "none"}
     // Process tool calls if any
     if (assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0) {
       for (const toolCall of assistantMessage.tool_calls) {
+        // Type guard for function tool calls
+        if (toolCall.type !== "function") continue;
         const funcName = toolCall.function.name;
         let args: Record<string, unknown> = {};
         try {
