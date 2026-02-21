@@ -82,7 +82,7 @@ body {
 
 @media (max-width: 900px) {
   .mother-logo-simple-anchor {
-    top: 40px !important;
+    top: calc(48px + env(safe-area-inset-top)) !important;
   }
 
   .mother-logo-simple-image {
