@@ -30,6 +30,13 @@ export default function AccountPage() {
   const [passwordChangeVerificationCode, setPasswordChangeVerificationCode] = useState("");
   const [passwordChangeCodeBusy, setPasswordChangeCodeBusy] = useState(false);
   const [passwordChangeCodeSent, setPasswordChangeCodeSent] = useState(false);
+  const [showUsernameSection, setShowUsernameSection] = useState(false);
+  const [nextUsername, setNextUsername] = useState("");
+  const [usernameChangeVerificationCode, setUsernameChangeVerificationCode] = useState("");
+  const [usernameBusy, setUsernameBusy] = useState(false);
+  const [usernameCodeBusy, setUsernameCodeBusy] = useState(false);
+  const [usernameCodeSent, setUsernameCodeSent] = useState(false);
+  const [usernameMessage, setUsernameMessage] = useState<string | null>(null);
   const [inTouchUsers, setInTouchUsers] = useState<Array<{ id: string; username: string }>>(
     []
   );
@@ -426,6 +433,95 @@ export default function AccountPage() {
     setPasswordChangeCodeSent(true);
     setPasswordMessage("verification code sent to your email");
     setPasswordChangeCodeBusy(false);
+  }
+
+  async function handleSendUsernameChangeCode() {
+    if (usernameCodeBusy || usernameBusy) return;
+    setUsernameCodeBusy(true);
+    setUsernameMessage(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setUsernameMessage("session missing, please login again");
+      setUsernameCodeBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/account/username/code", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+    if (!res.ok || !body.ok) {
+      setUsernameMessage(body.error || "code send failed");
+      setUsernameCodeBusy(false);
+      return;
+    }
+
+    setUsernameCodeSent(true);
+    setUsernameMessage("verification code sent to your email");
+    setUsernameCodeBusy(false);
+  }
+
+  async function handleChangeUsername() {
+    const candidate = nextUsername.trim();
+    if (usernameBusy) return;
+
+    if (!candidate) {
+      setUsernameMessage("enter new username");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(usernameChangeVerificationCode.trim())) {
+      setUsernameMessage("enter 6-digit verification code");
+      return;
+    }
+
+    setUsernameBusy(true);
+    setUsernameMessage(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setUsernameMessage("session missing, please login again");
+      setUsernameBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/account/username", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: candidate,
+        verificationCode: usernameChangeVerificationCode.trim(),
+      }),
+    });
+
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      ok?: boolean;
+      username?: string;
+    };
+    if (!res.ok || !body.ok || !body.username) {
+      setUsernameMessage(body.error || "username change failed");
+      setUsernameBusy(false);
+      return;
+    }
+
+    setUsername(body.username);
+    setNextUsername("");
+    setUsernameChangeVerificationCode("");
+    setUsernameCodeSent(false);
+    setUsernameMessage("username updated");
+    setUsernameBusy(false);
   }
 
   async function handleChangePassword() {
@@ -988,7 +1084,97 @@ export default function AccountPage() {
           ) : null}
         </div>
 
-        <div style={{ marginBottom: 2 }}>
+        <div style={{ display: "grid", gap: 4, marginTop: -2 }}>
+        <div style={{ marginBottom: 0 }}>
+          <div
+            style={{
+              ...label,
+              cursor: "pointer",
+              opacity: 0.7,
+              userSelect: "none",
+              transition: "none",
+            }}
+            onClick={() => setShowUsernameSection((prev) => !prev)}
+          >
+            change username
+          </div>
+          {showUsernameSection ? (
+            <>
+              <div style={{ fontSize: 12, opacity: 0.66, marginBottom: 8 }}>
+                confirm with a verification code sent to your email
+              </div>
+              <input
+                type="text"
+                value={nextUsername}
+                onChange={(event) => setNextUsername(event.target.value)}
+                placeholder="new username"
+                style={passwordInput}
+                disabled={usernameBusy}
+              />
+              <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={handleSendUsernameChangeCode}
+                  disabled={usernameCodeBusy || usernameBusy}
+                  style={{
+                    ...avatarActionButton,
+                    minWidth: 140,
+                    opacity: usernameCodeBusy || usernameBusy ? 0.5 : 0.9,
+                    cursor: usernameCodeBusy || usernameBusy ? "default" : "pointer",
+                  }}
+                >
+                  {usernameCodeBusy ? "sending..." : "send code"}
+                </button>
+                {usernameCodeSent ? (
+                  <span style={{ fontSize: 12, opacity: 0.66 }}>code sent</span>
+                ) : null}
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={usernameChangeVerificationCode}
+                onChange={(event) =>
+                  setUsernameChangeVerificationCode(
+                    event.target.value.replace(/[^0-9]/g, "").slice(0, 6)
+                  )
+                }
+                placeholder="6-digit verification code"
+                style={{ ...passwordInput, marginTop: 10, letterSpacing: "0.24em" }}
+                disabled={usernameBusy}
+              />
+              <button
+                type="button"
+                onClick={handleChangeUsername}
+                disabled={usernameBusy}
+                style={{
+                  ...avatarActionButton,
+                  marginTop: 10,
+                  opacity: usernameBusy ? 0.5 : 0.9,
+                  cursor: usernameBusy ? "default" : "pointer",
+                  minWidth: 140,
+                }}
+              >
+                {usernameBusy ? "saving..." : "save username"}
+              </button>
+              {usernameMessage ? (
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    opacity: 0.72,
+                    color: usernameMessage.includes("updated")
+                      ? "#b8ffd1"
+                      : "#ff9d9d",
+                  }}
+                >
+                  {usernameMessage}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        <div style={{ marginBottom: 0 }}>
           <div
             style={{
               ...label,
@@ -1085,12 +1271,7 @@ export default function AccountPage() {
           )}
         </div>
 
-        <div
-          style={{
-            marginBottom: -16,
-            paddingTop: 0,
-          }}
-        >
+        <div style={{ marginBottom: 0, paddingTop: 0 }}>
           <div
             style={{
               ...label,
@@ -1102,7 +1283,7 @@ export default function AccountPage() {
             }}
             onClick={() => setShowDeleteSection(!showDeleteSection)}
           >
-            delete account
+            delete user
           </div>
           {showDeleteSection && (
             <>
@@ -1163,7 +1344,7 @@ export default function AccountPage() {
                   cursor: deleteBusy ? "default" : "pointer",
                 }}
               >
-                {deleteBusy ? "deleting..." : "delete account"}
+                {deleteBusy ? "deleting..." : "delete user"}
               </button>
               {deleteMessage ? (
                 <div
@@ -1179,6 +1360,7 @@ export default function AccountPage() {
               ) : null}
             </>
           )}
+        </div>
         </div>
       </div>
 
