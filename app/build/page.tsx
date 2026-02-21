@@ -1057,6 +1057,15 @@ export default function BuildPage() {
       const manifestFile = findRoomManifestFile(files);
       const manifest = buildRoomManifest(selectedSpace, manifestFile?.content);
 
+      // Enable starter mode in database
+      const modeRes = await fetchAuthedJson("/api/build/runtime/starter/mode", {
+        method: "PUT",
+        body: JSON.stringify({ spaceId: selectedSpaceId, enabled: true }),
+      });
+      if (!modeRes.res.ok) {
+        console.warn("starter mode enable failed:", modeRes.data?.error);
+      }
+
       const { res, data } = await writeRoomManifest(selectedSpaceId, manifest);
       if (!res.ok) {
         setErrorText(data?.error || "publish failed");
@@ -1064,7 +1073,7 @@ export default function BuildPage() {
       }
 
       await loadFiles(selectedSpaceId, selectedFilePath);
-      setInfoText("room published to space");
+      setInfoText("room published to space (starter mode enabled)");
     } finally {
       setPublishingRoom(false);
     }
@@ -1529,7 +1538,15 @@ export default function BuildPage() {
                       : "make public"}
                 </button>
               </div>
-              <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
+              <div
+                style={{
+                  marginTop: 10,
+                  display: "grid",
+                  gap: 6,
+                  maxHeight: "calc(58px * 6 + 6px * 5)",
+                  overflowY: "auto",
+                }}
+              >
                 {loadingSpaces ? (
                   <div style={{ fontSize: 11, opacity: 0.56 }}>loading...</div>
                 ) : spaces.length === 0 ? (
