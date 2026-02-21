@@ -498,6 +498,9 @@ export default function BuildPage() {
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const [requestedSpaceId, setRequestedSpaceId] = useState<string | null>(null);
   const [previewApiBase, setPreviewApiBase] = useState("");
+  const [editorSearch, setEditorSearch] = useState("");
+  const [editorSearchIndex, setEditorSearchIndex] = useState(0);
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
 
   const selectedSpace = useMemo(
     () => spaces.find((space) => space.id === selectedSpaceId) ?? null,
@@ -1817,6 +1820,128 @@ export default function BuildPage() {
                       </option>
                     ))}
                   </select>
+                  
+                  {/* Editor Search */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 8 }}>
+                    <input
+                      type="text"
+                      value={editorSearch}
+                      onChange={(e) => {
+                        setEditorSearch(e.target.value);
+                        setEditorSearchIndex(0);
+                      }}
+                      placeholder="search..."
+                      style={{
+                        border: "1px solid rgba(125,255,160,0.22)",
+                        background: "rgba(10,28,16,0.48)",
+                        color: "#eaeaea",
+                        borderRadius: 6,
+                        padding: "5px 8px",
+                        fontSize: 11,
+                        width: 100,
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (!editorSearch) return;
+                          const content = editorContent.toLowerCase();
+                          const search = editorSearch.toLowerCase();
+                          const matches: number[] = [];
+                          let idx = content.indexOf(search);
+                          while (idx !== -1) {
+                            matches.push(idx);
+                            idx = content.indexOf(search, idx + 1);
+                          }
+                          if (matches.length === 0) return;
+                          const nextIndex = (editorSearchIndex + 1) % matches.length;
+                          setEditorSearchIndex(nextIndex);
+                          const textarea = editorRef.current;
+                          if (textarea) {
+                            textarea.focus();
+                            textarea.setSelectionRange(matches[nextIndex], matches[nextIndex] + editorSearch.length);
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        if (!editorSearch) return;
+                        const content = editorContent.toLowerCase();
+                        const search = editorSearch.toLowerCase();
+                        const matches: number[] = [];
+                        let idx = content.indexOf(search);
+                        while (idx !== -1) {
+                          matches.push(idx);
+                          idx = content.indexOf(search, idx + 1);
+                        }
+                        if (matches.length === 0) return;
+                        const prevIndex = (editorSearchIndex - 1 + matches.length) % matches.length;
+                        setEditorSearchIndex(prevIndex);
+                        const textarea = editorRef.current;
+                        if (textarea) {
+                          textarea.focus();
+                          textarea.setSelectionRange(matches[prevIndex], matches[prevIndex] + editorSearch.length);
+                        }
+                      }}
+                      style={{
+                        border: "1px solid rgba(125,255,160,0.22)",
+                        background: "rgba(10,28,16,0.48)",
+                        color: "#9eff9e",
+                        borderRadius: 4,
+                        padding: "3px 6px",
+                        cursor: "pointer",
+                        fontSize: 10,
+                      }}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!editorSearch) return;
+                        const content = editorContent.toLowerCase();
+                        const search = editorSearch.toLowerCase();
+                        const matches: number[] = [];
+                        let idx = content.indexOf(search);
+                        while (idx !== -1) {
+                          matches.push(idx);
+                          idx = content.indexOf(search, idx + 1);
+                        }
+                        if (matches.length === 0) return;
+                        const nextIndex = (editorSearchIndex + 1) % matches.length;
+                        setEditorSearchIndex(nextIndex);
+                        const textarea = editorRef.current;
+                        if (textarea) {
+                          textarea.focus();
+                          textarea.setSelectionRange(matches[nextIndex], matches[nextIndex] + editorSearch.length);
+                        }
+                      }}
+                      style={{
+                        border: "1px solid rgba(125,255,160,0.22)",
+                        background: "rgba(10,28,16,0.48)",
+                        color: "#9eff9e",
+                        borderRadius: 4,
+                        padding: "3px 6px",
+                        cursor: "pointer",
+                        fontSize: 10,
+                      }}
+                    >
+                      ▼
+                    </button>
+                    <span style={{ fontSize: 10, opacity: 0.6, minWidth: 24 }}>
+                      {editorSearch ? (() => {
+                        const content = editorContent.toLowerCase();
+                        const search = editorSearch.toLowerCase();
+                        let count = 0;
+                        let idx = content.indexOf(search);
+                        while (idx !== -1) {
+                          count++;
+                          idx = content.indexOf(search, idx + 1);
+                        }
+                        return count > 0 ? `${editorSearchIndex + 1}/${count}` : "0";
+                      })() : ""}
+                    </span>
+                  </div>
+                  
                   <button
                     onClick={saveFile}
                     disabled={savingFile}
@@ -1870,6 +1995,7 @@ export default function BuildPage() {
               </div>
 
               <textarea
+                ref={editorRef}
                 value={editorContent}
                 onChange={(e) => setEditorContent(e.target.value)}
                 placeholder="build anything here..."
