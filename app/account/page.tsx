@@ -27,6 +27,9 @@ export default function AccountPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordChangeVerificationCode, setPasswordChangeVerificationCode] = useState("");
+  const [passwordChangeCodeBusy, setPasswordChangeCodeBusy] = useState(false);
+  const [passwordChangeCodeSent, setPasswordChangeCodeSent] = useState(false);
   const [deleteEmailConfirm, setDeleteEmailConfirm] = useState("");
   const [deleteVerificationCode, setDeleteVerificationCode] = useState("");
   const [deleteCodeBusy, setDeleteCodeBusy] = useState(false);
@@ -344,6 +347,38 @@ export default function AccountPage() {
     setAvatarBusy(false);
   }
 
+  async function handleSendPasswordChangeCode() {
+    if (passwordChangeCodeBusy || passwordBusy) return;
+    setPasswordChangeCodeBusy(true);
+    setPasswordMessage(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setPasswordMessage("session missing, please login again");
+      setPasswordChangeCodeBusy(false);
+      return;
+    }
+
+    const res = await fetch("/api/account/password/code", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+    if (!res.ok || !body.ok) {
+      setPasswordMessage(body.error || "code send failed");
+      setPasswordChangeCodeBusy(false);
+      return;
+    }
+
+    setPasswordChangeCodeSent(true);
+    setPasswordMessage("verification code sent to your email");
+    setPasswordChangeCodeBusy(false);
+  }
+
   async function handleChangePassword() {
     const nextPassword = newPassword.trim();
     if (passwordBusy) return;
@@ -363,21 +398,46 @@ export default function AccountPage() {
       return;
     }
 
+    if (!/^\d{6}$/.test(passwordChangeVerificationCode.trim())) {
+      setPasswordMessage("enter 6-digit verification code");
+      return;
+    }
+
     setPasswordBusy(true);
     setPasswordMessage(null);
 
-    const { error } = await supabase.auth.updateUser({
-      password: nextPassword,
-    });
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setPasswordMessage("session missing, please login again");
+      setPasswordBusy(false);
+      return;
+    }
 
-    if (error) {
-      setPasswordMessage(error.message);
+    const res = await fetch("/api/account/password", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        newPassword: nextPassword,
+        verificationCode: passwordChangeVerificationCode.trim(),
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+
+    if (!res.ok || !body.ok) {
+      setPasswordMessage(body.error || "password change failed");
       setPasswordBusy(false);
       return;
     }
 
     setNewPassword("");
     setConfirmPassword("");
+    setPasswordChangeVerificationCode("");
+    setPasswordChangeCodeSent(false);
     setPasswordMessage("password updated");
     setPasswordBusy(false);
   }
@@ -743,12 +803,16 @@ export default function AccountPage() {
           </div>
           {showPasswordSection && (
             <>
+              <div style={{ fontSize: 12, opacity: 0.66, marginBottom: 8 }}>
+                confirm with a verification code sent to your email
+              </div>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 placeholder="new password"
                 style={passwordInput}
+                disabled={passwordBusy}
               />
               <input
                 type="password"
@@ -756,6 +820,38 @@ export default function AccountPage() {
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 placeholder="confirm new password"
                 style={{ ...passwordInput, marginTop: 10 }}
+                disabled={passwordBusy}
+              />
+              <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={handleSendPasswordChangeCode}
+                  disabled={passwordChangeCodeBusy || passwordBusy}
+                  style={{
+                    ...avatarActionButton,
+                    minWidth: 140,
+                    opacity: passwordChangeCodeBusy || passwordBusy ? 0.5 : 0.9,
+                    cursor: passwordChangeCodeBusy || passwordBusy ? "default" : "pointer",
+                  }}
+                >
+                  {passwordChangeCodeBusy ? "sending..." : "send code"}
+                </button>
+                {passwordChangeCodeSent ? (
+                  <span style={{ fontSize: 12, opacity: 0.66 }}>code sent</span>
+                ) : null}
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={passwordChangeVerificationCode}
+                onChange={(event) =>
+                  setPasswordChangeVerificationCode(
+                    event.target.value.replace(/[^0-9]/g, "").slice(0, 6)
+                  )
+                }
+                placeholder="6-digit verification code"
+                style={{ ...passwordInput, marginTop: 10, letterSpacing: "0.24em" }}
+                disabled={passwordBusy}
               />
               <button
                 type="button"
