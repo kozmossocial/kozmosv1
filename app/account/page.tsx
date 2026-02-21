@@ -569,7 +569,7 @@ export default function AccountPage() {
         minHeight: "100vh",
         background: "#0b0b0b",
         color: "#eaeaea",
-        padding: "200px 40px 80px 40px",
+        padding: "200px 40px 80px 300px",
         display: "flex",
         justifyContent: "center",
       }}
@@ -717,22 +717,22 @@ export default function AccountPage() {
           ) : null}
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 2 }}>
           <div style={label}>username</div>
           <div>{username}</div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 2 }}>
           <div style={label}>email</div>
           <div>{email}</div>
         </div>
 
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 2 }}>
           <div style={label}>spice</div>
           <div>{spiceBalance.toLocaleString("en-US")} SPICE</div>
         </div>
 
-        <div style={{ marginBottom: 0 }}>
+        <div style={{ marginBottom: 2 }}>
           <div
             style={{
               ...label,
@@ -795,9 +795,8 @@ export default function AccountPage() {
 
         <div
           style={{
-            marginBottom: 8,
-            borderTop: "1px solid rgba(255,255,255,0.16)",
-            paddingTop: 10,
+            marginBottom: -16,
+            paddingTop: 0,
           }}
         >
           <div
