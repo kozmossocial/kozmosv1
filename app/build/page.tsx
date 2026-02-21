@@ -364,10 +364,12 @@ function injectPreviewRuntimeBridge(
     "          const q = new URLSearchParams({ spaceId: __SPACE_ID__ });",
     "          if (Number.isFinite(Number(payload.limit))) q.set('limit', String(Math.round(Number(payload.limit))));",
     "          if (Number.isFinite(Number(payload.beforeId))) q.set('beforeId', String(Math.round(Number(payload.beforeId))));",
-    "          return req('/api/build/runtime/starter/posts?' + q.toString(), { method: 'GET' });",
+    "          const token = window.KozmosRuntime.starter._getToken();",
+    "          return req('/api/build/runtime/starter/posts?' + q.toString(), { method: 'GET', headers: token ? { 'x-kozmos-starter-token': token } : {} });",
     "        },",
     "        create: async function (body, meta) {",
-    "          return req('/api/build/runtime/starter/posts', { method: 'POST', body: JSON.stringify({ spaceId: __SPACE_ID__, body: String(body || ''), meta: (meta && typeof meta === 'object') ? meta : {} }) });",
+    "          const token = window.KozmosRuntime.starter._getToken();",
+    "          return req('/api/build/runtime/starter/posts', { method: 'POST', headers: token ? { 'x-kozmos-starter-token': token } : {}, body: JSON.stringify({ spaceId: __SPACE_ID__, body: String(body || ''), meta: (meta && typeof meta === 'object') ? meta : {} }) });",
     "        }",
     "      },",
     "      comments: {",
@@ -375,24 +377,29 @@ function injectPreviewRuntimeBridge(
     "          const payload = (input && typeof input === 'object') ? input : {};",
     "          const q = new URLSearchParams({ spaceId: __SPACE_ID__, postId: String(postId || '') });",
     "          if (Number.isFinite(Number(payload.limit))) q.set('limit', String(Math.round(Number(payload.limit))));",
-    "          return req('/api/build/runtime/starter/comments?' + q.toString(), { method: 'GET' });",
+    "          const token = window.KozmosRuntime.starter._getToken();",
+    "          return req('/api/build/runtime/starter/comments?' + q.toString(), { method: 'GET', headers: token ? { 'x-kozmos-starter-token': token } : {} });",
     "        },",
     "        create: async function (postId, body, meta) {",
-    "          return req('/api/build/runtime/starter/comments', { method: 'POST', body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0), body: String(body || ''), meta: (meta && typeof meta === 'object') ? meta : {} }) });",
+    "          const token = window.KozmosRuntime.starter._getToken();",
+    "          return req('/api/build/runtime/starter/comments', { method: 'POST', headers: token ? { 'x-kozmos-starter-token': token } : {}, body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0), body: String(body || ''), meta: (meta && typeof meta === 'object') ? meta : {} }) });",
     "        }",
-    "      },",
+    "      },",,
     "      likes: {",
     "        get: async function (postId) {",
     "          const q = new URLSearchParams({ spaceId: __SPACE_ID__, postId: String(postId || '') });",
-    "          return req('/api/build/runtime/starter/likes?' + q.toString(), { method: 'GET' });",
+    "          const token = window.KozmosRuntime.starter._getToken();",
+    "          return req('/api/build/runtime/starter/likes?' + q.toString(), { method: 'GET', headers: token ? { 'x-kozmos-starter-token': token } : {} });",
     "        },",
     "        like: async function (postId) {",
-    "          return req('/api/build/runtime/starter/likes', { method: 'PUT', body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0) }) });",
+    "          const token = window.KozmosRuntime.starter._getToken();",
+    "          return req('/api/build/runtime/starter/likes', { method: 'PUT', headers: token ? { 'x-kozmos-starter-token': token } : {}, body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0) }) });",
     "        },",
     "        unlike: async function (postId) {",
-    "          return req('/api/build/runtime/starter/likes', { method: 'DELETE', body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0) }) });",
+    "          const token = window.KozmosRuntime.starter._getToken();",
+    "          return req('/api/build/runtime/starter/likes', { method: 'DELETE', headers: token ? { 'x-kozmos-starter-token': token } : {}, body: JSON.stringify({ spaceId: __SPACE_ID__, postId: Number(postId || 0) }) });",
     "        }",
-    "      },",
+    "      },",,
     "      dm: {",
     "        threadsList: async function (input) {",
     "          const payload = (input && typeof input === 'object') ? input : {};",
@@ -488,6 +495,7 @@ export default function BuildPage() {
   const axyScrollRef = useRef<HTMLDivElement | null>(null);
   const [previewAutoRefresh, setPreviewAutoRefresh] = useState(true);
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
+  const [previewExpanded, setPreviewExpanded] = useState(false);
   const [requestedSpaceId, setRequestedSpaceId] = useState<string | null>(null);
   const [previewApiBase, setPreviewApiBase] = useState("");
 
@@ -1918,6 +1926,20 @@ export default function BuildPage() {
                   <span>outcome preview</span>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <button
+                      onClick={() => setPreviewExpanded((prev) => !prev)}
+                      style={{
+                        border: "1px solid rgba(121,193,255,0.4)",
+                        borderRadius: 8,
+                        background: previewExpanded ? "rgba(121,193,255,0.2)" : "transparent",
+                        color: "#d8e8ff",
+                        padding: "4px 7px",
+                        fontSize: 10,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {previewExpanded ? "↙ shrink" : "↗ expand"}
+                    </button>
+                    <button
                       onClick={() => setPreviewReloadKey((prev) => prev + 1)}
                       style={{
                         border: "1px solid rgba(107,255,142,0.32)",
@@ -1968,9 +1990,10 @@ export default function BuildPage() {
                   srcDoc={previewDoc}
                   style={{
                     width: "100%",
-                    height: 260,
+                    height: previewExpanded ? "calc(50vh)" : 260,
                     border: "none",
                     background: "#fff",
+                    transition: "height 0.2s ease",
                   }}
                 />
               </div>

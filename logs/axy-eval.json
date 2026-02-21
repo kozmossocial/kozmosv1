@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-21T22:54:46.094Z",
+  "timestamp": "2026-02-21T23:06:06.365Z",
   "reason": "interval",
   "config": {
     "heartbeatSeconds": 25,
@@ -44,7 +44,7 @@
   },
   "core": {
     "startedAt": "2026-02-21T22:11:25.199Z",
-    "uptimeMs": 2600895,
+    "uptimeMs": 3281166,
     "counters": {
       "sentByChannel": {
         "build": 1,
@@ -71,31 +71,31 @@
         "night": 6,
         "ops": 1
       },
-      "transitions": 1534
+      "transitions": 1824
     },
     "channels": {
       "presence": {
-        "state": "heartbeat",
+        "state": "running",
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 251,
+        "stateAgeMs": 4114,
         "lastOutputAgeMs": null
       },
       "shared": {
-        "state": "idle",
+        "state": "polling",
         "outputs": 2,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 4307,
-        "lastOutputAgeMs": 523012
+        "stateAgeMs": 334,
+        "lastOutputAgeMs": 1203283
       },
       "ops": {
         "state": "idle",
         "outputs": 0,
         "skips": 0,
         "errors": 1,
-        "stateAgeMs": 322567,
+        "stateAgeMs": 1002838,
         "lastOutputAgeMs": null
       },
       "touch": {
@@ -103,7 +103,7 @@
         "outputs": 0,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 323182,
+        "stateAgeMs": 1003453,
         "lastOutputAgeMs": null
       },
       "hush": {
@@ -111,39 +111,39 @@
         "outputs": 2,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 323182,
-        "lastOutputAgeMs": 2459676
+        "stateAgeMs": 1003453,
+        "lastOutputAgeMs": 3139947
       },
       "dm": {
         "state": "idle",
         "outputs": 1,
         "skips": 85,
         "errors": 0,
-        "stateAgeMs": 333537,
-        "lastOutputAgeMs": 2495533
+        "stateAgeMs": 1013808,
+        "lastOutputAgeMs": 3175804
       },
       "build": {
         "state": "idle",
         "outputs": 1,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 324772,
-        "lastOutputAgeMs": 2510133
+        "stateAgeMs": 1005043,
+        "lastOutputAgeMs": 3190404
       },
       "play": {
         "state": "idle",
         "outputs": 10,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 398559,
-        "lastOutputAgeMs": 398560
+        "stateAgeMs": 1078830,
+        "lastOutputAgeMs": 1078831
       },
       "night": {
         "state": "idle",
         "outputs": 0,
         "skips": 0,
         "errors": 6,
-        "stateAgeMs": 1193253,
+        "stateAgeMs": 1873524,
         "lastOutputAgeMs": null
       },
       "swarm": {
@@ -151,23 +151,23 @@
         "outputs": 50,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 324772,
-        "lastOutputAgeMs": 485108
+        "stateAgeMs": 1005043,
+        "lastOutputAgeMs": 1165379
       },
       "matrix": {
         "state": "moving",
         "outputs": 40,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 2451882,
-        "lastOutputAgeMs": 466099
+        "stateAgeMs": 3132153,
+        "lastOutputAgeMs": 1146370
       },
       "freedom": {
         "state": "idle",
         "outputs": 0,
         "skips": 2,
         "errors": 0,
-        "stateAgeMs": 393512,
+        "stateAgeMs": 1073783,
         "lastOutputAgeMs": null
       },
       "game-chat": {
@@ -175,53 +175,21 @@
         "outputs": 3,
         "skips": 0,
         "errors": 0,
-        "stateAgeMs": 2389574,
-        "lastOutputAgeMs": 485932
+        "stateAgeMs": 3069845,
+        "lastOutputAgeMs": 1166203
       },
       "my-home-note": {
         "state": "idle",
         "outputs": 5,
         "skips": 2,
         "errors": 0,
-        "stateAgeMs": 2239785,
-        "lastOutputAgeMs": 393512
+        "stateAgeMs": 2920056,
+        "lastOutputAgeMs": 1073783
       }
     },
     "recentEvents": [
       {
-        "at": "2026-02-21T22:50:03.814Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:50:08.834Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:50:09.626Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:50:10.780Z",
-        "type": "transition",
-        "channel": "presence",
-        "from": "running",
-        "to": "heartbeat",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:50:11.961Z",
+        "at": "2026-02-21T23:01:27.375Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -229,7 +197,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:14.629Z",
+        "at": "2026-02-21T23:01:28.386Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -237,7 +205,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:15.289Z",
+        "at": "2026-02-21T23:01:29.009Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -245,7 +213,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:20.295Z",
+        "at": "2026-02-21T23:01:34.010Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -253,7 +221,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:21.025Z",
+        "at": "2026-02-21T23:01:34.781Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -261,7 +229,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:26.031Z",
+        "at": "2026-02-21T23:01:39.784Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -269,7 +237,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:26.794Z",
+        "at": "2026-02-21T23:01:40.512Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -277,7 +245,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:31.802Z",
+        "at": "2026-02-21T23:01:45.521Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -285,7 +253,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:32.534Z",
+        "at": "2026-02-21T23:01:46.256Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -293,7 +261,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:35.789Z",
+        "at": "2026-02-21T23:01:50.986Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -301,7 +269,23 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:36.928Z",
+        "at": "2026-02-21T23:01:51.264Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:01:52.013Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:01:52.320Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -309,7 +293,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:37.537Z",
+        "at": "2026-02-21T23:01:57.016Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -317,7 +301,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:38.178Z",
+        "at": "2026-02-21T23:01:57.782Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -325,7 +309,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:43.187Z",
+        "at": "2026-02-21T23:02:02.781Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -333,7 +317,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:44.147Z",
+        "at": "2026-02-21T23:02:03.566Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -341,7 +325,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:49.152Z",
+        "at": "2026-02-21T23:02:08.572Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -349,7 +333,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:49.884Z",
+        "at": "2026-02-21T23:02:09.371Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -357,7 +341,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:54.891Z",
+        "at": "2026-02-21T23:02:14.387Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -365,7 +349,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:50:55.780Z",
+        "at": "2026-02-21T23:02:15.138Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -373,15 +357,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:00.781Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:51:00.788Z",
+        "at": "2026-02-21T23:02:15.995Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -389,15 +365,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:01.682Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:51:02.140Z",
+        "at": "2026-02-21T23:02:17.149Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -405,7 +373,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:06.683Z",
+        "at": "2026-02-21T23:02:20.141Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -413,7 +381,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:07.673Z",
+        "at": "2026-02-21T23:02:20.755Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -421,7 +389,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:12.680Z",
+        "at": "2026-02-21T23:02:25.757Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -429,7 +397,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:13.422Z",
+        "at": "2026-02-21T23:02:26.542Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -437,7 +405,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:18.436Z",
+        "at": "2026-02-21T23:02:31.551Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -445,7 +413,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:19.207Z",
+        "at": "2026-02-21T23:02:32.359Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -453,7 +421,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:24.210Z",
+        "at": "2026-02-21T23:02:37.366Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -461,7 +429,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:25.170Z",
+        "at": "2026-02-21T23:02:38.206Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -469,7 +437,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:25.800Z",
+        "at": "2026-02-21T23:02:41.001Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -477,7 +445,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:27.402Z",
+        "at": "2026-02-21T23:02:42.164Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -485,7 +453,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:30.177Z",
+        "at": "2026-02-21T23:02:43.209Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -493,7 +461,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:30.926Z",
+        "at": "2026-02-21T23:02:43.872Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -501,7 +469,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:35.936Z",
+        "at": "2026-02-21T23:02:48.884Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -509,7 +477,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:36.714Z",
+        "at": "2026-02-21T23:02:49.644Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -517,7 +485,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:41.719Z",
+        "at": "2026-02-21T23:02:54.658Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -525,7 +493,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:42.452Z",
+        "at": "2026-02-21T23:02:55.442Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -533,7 +501,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:47.454Z",
+        "at": "2026-02-21T23:03:00.453Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -541,7 +509,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:48.221Z",
+        "at": "2026-02-21T23:03:01.214Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -549,7 +517,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:50.811Z",
+        "at": "2026-02-21T23:03:06.011Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -557,7 +525,23 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:51.923Z",
+        "at": "2026-02-21T23:03:06.218Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:03:06.971Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:03:07.386Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -565,7 +549,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:53.223Z",
+        "at": "2026-02-21T23:03:11.984Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -573,7 +557,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:53.862Z",
+        "at": "2026-02-21T23:03:12.772Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -581,7 +565,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:58.864Z",
+        "at": "2026-02-21T23:03:17.782Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -589,7 +573,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:51:59.636Z",
+        "at": "2026-02-21T23:03:18.547Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -597,7 +581,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:04.646Z",
+        "at": "2026-02-21T23:03:23.549Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -605,7 +589,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:05.406Z",
+        "at": "2026-02-21T23:03:24.685Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -613,7 +597,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:10.408Z",
+        "at": "2026-02-21T23:03:29.703Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -621,7 +605,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:11.333Z",
+        "at": "2026-02-21T23:03:30.477Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -629,7 +613,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:15.811Z",
+        "at": "2026-02-21T23:03:31.015Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -637,23 +621,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:16.343Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:52:17.083Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:52:17.121Z",
+        "at": "2026-02-21T23:03:32.112Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -661,7 +629,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:22.086Z",
+        "at": "2026-02-21T23:03:35.481Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -669,7 +637,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:22.892Z",
+        "at": "2026-02-21T23:03:36.091Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -677,7 +645,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:27.909Z",
+        "at": "2026-02-21T23:03:41.102Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -685,7 +653,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:28.733Z",
+        "at": "2026-02-21T23:03:41.857Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -693,7 +661,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:33.735Z",
+        "at": "2026-02-21T23:03:46.871Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -701,7 +669,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:34.503Z",
+        "at": "2026-02-21T23:03:47.682Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -709,7 +677,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:39.516Z",
+        "at": "2026-02-21T23:03:52.683Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -717,7 +685,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:40.288Z",
+        "at": "2026-02-21T23:03:53.487Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -725,7 +693,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:40.813Z",
+        "at": "2026-02-21T23:03:56.015Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -733,7 +701,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:42.011Z",
+        "at": "2026-02-21T23:03:57.224Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -741,7 +709,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:45.291Z",
+        "at": "2026-02-21T23:03:58.495Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -749,7 +717,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:46.009Z",
+        "at": "2026-02-21T23:03:59.081Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -757,7 +725,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:51.009Z",
+        "at": "2026-02-21T23:04:04.084Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -765,7 +733,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:51.748Z",
+        "at": "2026-02-21T23:04:04.924Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -773,7 +741,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:56.749Z",
+        "at": "2026-02-21T23:04:09.936Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -781,7 +749,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:52:58.242Z",
+        "at": "2026-02-21T23:04:10.953Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -789,7 +757,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:03.248Z",
+        "at": "2026-02-21T23:04:15.957Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -797,7 +765,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:04.060Z",
+        "at": "2026-02-21T23:04:17.177Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -805,7 +773,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:05.819Z",
+        "at": "2026-02-21T23:04:21.021Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -813,7 +781,15 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:07.031Z",
+        "at": "2026-02-21T23:04:22.185Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:04:22.186Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -821,15 +797,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:09.061Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:53:09.710Z",
+        "at": "2026-02-21T23:04:22.871Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -837,7 +805,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:14.718Z",
+        "at": "2026-02-21T23:04:27.873Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -845,7 +813,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:15.474Z",
+        "at": "2026-02-21T23:04:28.614Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -853,7 +821,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:20.489Z",
+        "at": "2026-02-21T23:04:33.620Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -861,7 +829,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:21.246Z",
+        "at": "2026-02-21T23:04:34.427Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -869,7 +837,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:26.255Z",
+        "at": "2026-02-21T23:04:39.428Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -877,7 +845,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:26.992Z",
+        "at": "2026-02-21T23:04:40.172Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -885,7 +853,15 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:30.819Z",
+        "at": "2026-02-21T23:04:45.175Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:04:46.022Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -893,7 +869,15 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:31.862Z",
+        "at": "2026-02-21T23:04:46.023Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:04:47.179Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -901,7 +885,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:31.993Z",
+        "at": "2026-02-21T23:04:51.026Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -909,7 +893,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:32.610Z",
+        "at": "2026-02-21T23:04:51.655Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -917,7 +901,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:37.612Z",
+        "at": "2026-02-21T23:04:56.659Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -925,7 +909,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:38.483Z",
+        "at": "2026-02-21T23:04:57.540Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -933,7 +917,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:43.484Z",
+        "at": "2026-02-21T23:05:02.552Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -941,7 +925,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:44.210Z",
+        "at": "2026-02-21T23:05:03.388Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -949,7 +933,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:49.210Z",
+        "at": "2026-02-21T23:05:08.392Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -957,7 +941,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:50.015Z",
+        "at": "2026-02-21T23:05:09.178Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -965,23 +949,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:55.024Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "idle",
-        "to": "polling",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:53:55.753Z",
-        "type": "transition",
-        "channel": "shared",
-        "from": "polling",
-        "to": "idle",
-        "detail": ""
-      },
-      {
-        "at": "2026-02-21T22:53:55.829Z",
+        "at": "2026-02-21T23:05:11.035Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -989,7 +957,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:53:56.998Z",
+        "at": "2026-02-21T23:05:12.166Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -997,7 +965,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:00.760Z",
+        "at": "2026-02-21T23:05:14.187Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -1005,7 +973,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:01.544Z",
+        "at": "2026-02-21T23:05:14.807Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -1013,7 +981,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:06.553Z",
+        "at": "2026-02-21T23:05:19.823Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -1021,7 +989,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:07.297Z",
+        "at": "2026-02-21T23:05:20.621Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -1029,7 +997,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:12.305Z",
+        "at": "2026-02-21T23:05:25.632Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -1037,7 +1005,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:13.047Z",
+        "at": "2026-02-21T23:05:26.371Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -1045,7 +1013,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:18.048Z",
+        "at": "2026-02-21T23:05:31.392Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -1053,7 +1021,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:18.788Z",
+        "at": "2026-02-21T23:05:32.241Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -1061,7 +1029,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:20.843Z",
+        "at": "2026-02-21T23:05:36.037Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
@@ -1069,7 +1037,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:21.994Z",
+        "at": "2026-02-21T23:05:37.141Z",
         "type": "transition",
         "channel": "presence",
         "from": "heartbeat",
@@ -1077,7 +1045,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:23.789Z",
+        "at": "2026-02-21T23:05:37.242Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -1085,7 +1053,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:24.417Z",
+        "at": "2026-02-21T23:05:37.874Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -1093,7 +1061,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:29.422Z",
+        "at": "2026-02-21T23:05:42.889Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -1101,7 +1069,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:30.178Z",
+        "at": "2026-02-21T23:05:43.655Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -1109,7 +1077,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:35.183Z",
+        "at": "2026-02-21T23:05:48.671Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -1117,7 +1085,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:36.002Z",
+        "at": "2026-02-21T23:05:49.413Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -1125,7 +1093,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:41.015Z",
+        "at": "2026-02-21T23:05:54.421Z",
         "type": "transition",
         "channel": "shared",
         "from": "idle",
@@ -1133,7 +1101,7 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:41.787Z",
+        "at": "2026-02-21T23:05:55.223Z",
         "type": "transition",
         "channel": "shared",
         "from": "polling",
@@ -1141,11 +1109,43 @@
         "detail": ""
       },
       {
-        "at": "2026-02-21T22:54:45.843Z",
+        "at": "2026-02-21T23:06:00.234Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:06:01.016Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "polling",
+        "to": "idle",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:06:01.047Z",
         "type": "transition",
         "channel": "presence",
         "from": "running",
         "to": "heartbeat",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:06:02.251Z",
+        "type": "transition",
+        "channel": "presence",
+        "from": "heartbeat",
+        "to": "running",
+        "detail": ""
+      },
+      {
+        "at": "2026-02-21T23:06:06.031Z",
+        "type": "transition",
+        "channel": "shared",
+        "from": "idle",
+        "to": "polling",
         "detail": ""
       }
     ]
