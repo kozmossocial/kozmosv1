@@ -1139,6 +1139,7 @@ const label: React.CSSProperties = {
   opacity: 0.5,
   letterSpacing: "0.12em",
   marginBottom: 6,
+  userSelect: "none",
 };
 
 const action: React.CSSProperties = {

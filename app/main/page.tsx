@@ -897,7 +897,7 @@ export default function Main() {
   const displayUsername = username?.trim() ? username.trim() : "\u00A0";
   const presentUsers = useMemo(() => {
     const merged = new Map<string, string>();
-    [...realtimePresentUsers, ...runtimePresentUsers].forEach((name) => {
+    realtimePresentUsers.forEach((name) => {
       const trimmed = name.trim();
       if (!trimmed) return;
       const key = trimmed.toLowerCase();
@@ -908,7 +908,7 @@ export default function Main() {
     return Array.from(merged.values()).sort((a, b) =>
       a.localeCompare(b, "en", { sensitivity: "base" })
     );
-  }, [realtimePresentUsers, runtimePresentUsers]);
+  }, [realtimePresentUsers]);
   const normalizedPresentUsersSearch = presentUsersSearch.trim().toLowerCase();
   const filteredPresentUsersDisplay = useMemo(() => {
     if (!normalizedPresentUsersSearch) return presentUsersDisplay;
@@ -916,7 +916,7 @@ export default function Main() {
       name.toLowerCase().includes(normalizedPresentUsersSearch)
     );
   }, [normalizedPresentUsersSearch, presentUsersDisplay]);
-  const presenceReady = realtimePresencePrimed && runtimePresencePrimed;
+  const presenceReady = realtimePresencePrimed;
   const gameChatEnabled = Boolean(
     playOpen && activePlay && CHAT_REQUIRED_PLAYS.has(activePlay)
   );
