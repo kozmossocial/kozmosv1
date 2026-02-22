@@ -165,7 +165,7 @@ export default function Home() {
     null
   );
   const [runtimeInviteCopied, setRuntimeInviteCopied] = useState(false);
-  const [runtimeConnectClosed, setRuntimeConnectClosed] = useState(false);
+  const [runtimeConnectClosed, setRuntimeConnectClosed] = useState(true);
   const [ambientSoft, setAmbientSoft] = useState(false);
   const [matrixMotionActive, setMatrixMotionActive] = useState(false);
   const [ambientSoundOn, setAmbientSoundOn] = useState(false);

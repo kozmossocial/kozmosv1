@@ -1057,9 +1057,7 @@ body {
       rgba(152, 160, 178, 0.08) 100%
     );
   background-size: 220% 220%;
-  filter: blur(22px);
-  animation: myHomeAmbientFlow 16s ease-in-out infinite;
-}
+  }
 
 @media (max-width: 900px) {
   .matrix-logo-ambient {
@@ -1083,6 +1081,44 @@ body {
   animation-duration: 24s;
   }
 
+  /* Chrome-like background for Firefox: ambient + connect */
+  @-moz-document url-prefix() {
+    .runtime-page-ambient {
+      opacity: 0.24;
+      mix-blend-mode: normal;
+      background:
+        radial-gradient(circle at 18% 28%, rgba(255, 90, 170, 0.22), transparent 52%),
+        radial-gradient(circle at 78% 34%, rgba(70, 160, 255, 0.24), transparent 56%),
+        radial-gradient(circle at 52% 74%, rgba(68, 240, 190, 0.22), transparent 54%),
+        linear-gradient(
+          125deg,
+          rgba(255, 90, 170, 0.11) 0%,
+          rgba(70, 160, 255, 0.11) 33%,
+          rgba(68, 240, 190, 0.11) 66%,
+          rgba(170, 116, 255, 0.11) 100%
+        );
+      background-size: 165% 165%;
+      filter: blur(12px);
+      animation: runtimePanelBgFlow 22s ease-in-out infinite;
+      transition: opacity 420ms ease, filter 420ms ease;
+    }
+    .runtime-page-ambient::before {
+      filter: blur(26px);
+      opacity: 0.34;
+      animation: runtimePanelShimmer 24s linear infinite;
+      transition: opacity 420ms ease;
+    }
+    .runtime-connect-panel::before {
+      filter: blur(10px);
+      opacity: 0.58;
+      animation: runtimePanelShimmer 10s linear infinite;
+    }
+    .runtime-connect-panel::after {
+      opacity: 0.38;
+      animation: runtimePanelScan 5.4s ease-in-out infinite;
+    }
+    }
+
   /* Force Chrome-like background effect for Firefox */
   @-moz-document url-prefix() {
     .my-home-shell::before,
@@ -1104,6 +1140,14 @@ body {
         );
       background-size: 220% 220%;
     }
+      .runtime-connect-panel {
+        background: none !important;
+        animation: none !important;
+      }
+      .runtime-connect-panel::before,
+      .runtime-connect-panel::after {
+        display: none !important;
+      }
     }
   
     .main-page-shell .hush-panel,
