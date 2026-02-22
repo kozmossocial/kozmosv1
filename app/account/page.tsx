@@ -991,104 +991,106 @@ export default function AccountPage() {
           ) : null}
         </div>
 
-        <div style={{ marginBottom: 6 }}>
-          <div style={label}>username</div>
-          <div>{username}</div>
-        </div>
 
-        <div style={{ marginBottom: 6 }}>
-          <div style={label}>email</div>
-          <div>{email}</div>
-        </div>
-
-        <div style={{ marginBottom: 6 }}>
-          <div style={label}>spice</div>
-          <div>{spiceBalance.toLocaleString("en-US")} SPC</div>
-        </div>
-
-        <div style={{ marginBottom: 2 }}>
-          <div
-            style={{
-              ...label,
-              cursor: "pointer",
-              opacity: 0.7,
-              userSelect: "none",
-              transition: "none",
-            }}
-            onClick={() => setShowTransferSection((prev) => !prev)}
-          >
-            send spice
+        <div style={{ marginBottom: 6, width: "100%", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <div>
+            <div style={label}>username</div>
+            <div>{username}</div>
           </div>
-          {showTransferSection ? (
-            <>
-              {inTouchUsers.length === 0 ? (
-                <div style={{ fontSize: 12, opacity: 0.66 }}>no in touch users</div>
-              ) : (
-                <>
-                  <select
-                    value={transferTargetUserId}
-                    onChange={(event) => setTransferTargetUserId(event.target.value)}
-                    style={{ ...passwordInput, background: "#0b0b0b" }}
-                    disabled={transferBusy}
-                  >
-                    {inTouchUsers.map((row) => (
-                      <option
-                        key={row.id}
-                        value={row.id}
-                        style={{ background: "#0b0b0b", color: "#eaeaea" }}
-                      >
-                        {row.username}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={transferAmount}
-                    onChange={(event) =>
-                      setTransferAmount(
-                        event.target.value.replace(/[^0-9]/g, "").slice(0, 12)
-                      )
-                    }
-                    placeholder="SPC amount"
-                    style={{ ...passwordInput, marginTop: 10 }}
-                    disabled={transferBusy}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleTransferSpc}
-                    disabled={transferBusy}
+          <div style={{ marginTop: 4 }}>
+            <div style={label}>email</div>
+            <div>{email}</div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 6, width: "100%", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <div>
+            <div style={label}>spice</div>
+            <div>{spiceBalance.toLocaleString("en-US")} SPC</div>
+          </div>
+          <div style={{ marginTop: 4 }}>
+            <div
+              style={{
+                ...label,
+                cursor: "pointer",
+                opacity: 0.7,
+                userSelect: "none",
+                transition: "none",
+              }}
+              onClick={() => setShowTransferSection((prev) => !prev)}
+            >
+              send spice
+            </div>
+            {showTransferSection ? (
+              <>
+                {inTouchUsers.length === 0 ? (
+                  <div style={{ fontSize: 12, opacity: 0.66 }}>no in touch users</div>
+                ) : (
+                  <>
+                    <select
+                      value={transferTargetUserId}
+                      onChange={(event) => setTransferTargetUserId(event.target.value)}
+                      style={{ ...passwordInput, background: "#0b0b0b" }}
+                      disabled={transferBusy}
+                    >
+                      {inTouchUsers.map((row) => (
+                        <option
+                          key={row.id}
+                          value={row.id}
+                          style={{ background: "#0b0b0b", color: "#eaeaea" }}
+                        >
+                          {row.username}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={transferAmount}
+                      onChange={(event) =>
+                        setTransferAmount(
+                          event.target.value.replace(/[^0-9]/g, "").slice(0, 12)
+                        )
+                      }
+                      placeholder="SPC amount"
+                      style={{ ...passwordInput, marginTop: 10 }}
+                      disabled={transferBusy}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleTransferSpc}
+                      disabled={transferBusy}
+                      style={{
+                        ...avatarActionButton,
+                        marginTop: 10,
+                        minWidth: 130,
+                        opacity: transferBusy ? 0.5 : 0.9,
+                        cursor: transferBusy ? "default" : "pointer",
+                      }}
+                    >
+                      {transferBusy ? "sending..." : "send"}
+                    </button>
+                  </>
+                )}
+
+                {transferMessage ? (
+                  <div
                     style={{
-                      ...avatarActionButton,
-                      marginTop: 10,
-                      minWidth: 130,
-                      opacity: transferBusy ? 0.5 : 0.9,
-                      cursor: transferBusy ? "default" : "pointer",
+                      marginTop: 8,
+                      fontSize: 12,
+                      opacity: 0.72,
+                      color: transferMessage.startsWith("sent")
+                        ? "#b8ffd1"
+                        : "#ff9d9d",
                     }}
                   >
-                    {transferBusy ? "sending..." : "send"}
-                  </button>
-                </>
-              )}
-
-              {transferMessage ? (
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    opacity: 0.72,
-                    color: transferMessage.startsWith("sent")
-                      ? "#b8ffd1"
-                      : "#ff9d9d",
-                  }}
-                >
-                  {transferMessage}
-                </div>
-              ) : null}
-            </>
-          ) : null}
+                    {transferMessage}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         </div>
-
         <div style={{ display: "grid", gap: 4, marginTop: -2 }}>
         <div style={{ marginBottom: 0 }}>
           <div
