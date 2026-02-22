@@ -36,6 +36,22 @@ function getOpenAIClient() {
 
 // Prompts moved to lib/axy-unified.ts - use buildAxySystemPrompt() instead
 
+// Helper to map channel strings to valid AxyChannel types
+function toAxyChannel(channel: string): AxyChannel {
+  const map: Record<string, AxyChannel> = {
+    dm: "dm",
+    shared: "main",
+    main: "main",
+    hush: "hush",
+    welcome: "welcome",
+    "my-home": "my-home",
+    build: "build",
+    runtime: "runtime",
+    reflection: "reflection",
+  };
+  return map[channel] || "main";
+}
+
 type AxyTurn = {
   role: "user" | "assistant";
   text: string;
@@ -910,20 +926,9 @@ function buildMasterChatPrompt(
       "If unclear, keep it gentle and minimal. Do not force direction. One short sentence is preferred.",
   };
 
-  // Map channel string to AxyChannel type
-  const channelMap: Record<string, AxyChannel> = {
-    dm: "dm",
-    shared: "shared",
-    hush: "hush",
-    welcome: "welcome",
-    "my-home": "my-home",
-    build: "build",
-  };
-  const axyChannel: AxyChannel = channelMap[channel] || "dm";
-
   // Use unified prompt builder
   const basePrompt = buildAxySystemPrompt({
-    channel: axyChannel,
+    channel: toAxyChannel(channel),
     tone: "neutral",
     includeKozmosSpirit: true,
     includeGameTheory: true,
@@ -1408,7 +1413,7 @@ export async function POST(req: Request) {
     logConversationTurn(supabaseAdmin, {
       user_id: null, // Anonymous API - no user ID available
       username: context?.targetUsername || "anonymous",
-      channel: channel as AxyChannel,
+      channel: toAxyChannel(channel),
       conversation_key: localConversationKey,
       userMessage,
       axyReply: reply,
