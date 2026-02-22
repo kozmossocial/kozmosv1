@@ -1083,25 +1083,21 @@ body {
   animation-duration: 24s;
 }
 
-/* Firefox performance optimizations */
+/* Firefox performance optimizations - disable heavy animations while preserving visuals */
 @-moz-document url-prefix() {
   .my-home-shell::before,
   .main-page-shell::before {
     animation: none;
-    filter: blur(8px);
-    opacity: 0.08;
-    mix-blend-mode: normal;
+    /* Keep original blur/opacity for visual quality */
   }
   
   .runtime-page-ambient {
     animation: none;
-    filter: blur(8px);
-    opacity: 0.12;
+    /* Keep original blur/opacity for visual quality */
   }
   
   .runtime-page-ambient::before {
     animation: none;
-    opacity: 0.1;
   }
 }
 
