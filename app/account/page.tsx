@@ -935,7 +935,7 @@ export default function AccountPage() {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 40,
+          gap: 8,
           maxWidth: 420,
           width: "min(420px, calc(100% - 24px))",
           margin: "0 auto",
@@ -943,7 +943,7 @@ export default function AccountPage() {
         }}
         className="account-content-grid"
       >
-        <div style={{ marginBottom: 36 }}>
+        <div style={{ marginBottom: 6 }}>
           <div style={label}>profile picture</div>
           <div style={avatarRow}>
             <div style={avatarCircle}>
@@ -991,17 +991,17 @@ export default function AccountPage() {
           ) : null}
         </div>
 
-        <div style={{ marginBottom: 2 }}>
+        <div style={{ marginBottom: 6 }}>
           <div style={label}>username</div>
           <div>{username}</div>
         </div>
 
-        <div style={{ marginBottom: 2 }}>
+        <div style={{ marginBottom: 6 }}>
           <div style={label}>email</div>
           <div>{email}</div>
         </div>
 
-        <div style={{ marginBottom: 2 }}>
+        <div style={{ marginBottom: 6 }}>
           <div style={label}>spice</div>
           <div>{spiceBalance.toLocaleString("en-US")} SPC</div>
         </div>
