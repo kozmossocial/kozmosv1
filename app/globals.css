@@ -1083,24 +1083,6 @@ body {
   animation-duration: 24s;
 }
 
-/* Firefox performance optimizations - disable heavy animations while preserving visuals */
-@-moz-document url-prefix() {
-  .my-home-shell::before,
-  .main-page-shell::before {
-    animation: none;
-    /* Keep original blur/opacity for visual quality */
-  }
-  
-  .runtime-page-ambient {
-    animation: none;
-    /* Keep original blur/opacity for visual quality */
-  }
-  
-  .runtime-page-ambient::before {
-    animation: none;
-  }
-}
-
 .main-page-shell .hush-panel,
 .main-page-shell .chat-panel,
 .main-page-shell .play-panel,

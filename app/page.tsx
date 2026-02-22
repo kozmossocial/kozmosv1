@@ -457,9 +457,7 @@ export default function Home() {
         Number.isFinite(navigator.hardwareConcurrency) &&
         navigator.hardwareConcurrency > 0 &&
         navigator.hardwareConcurrency <= 4;
-      // Firefox has slower CSS animation performance - enable low-perf mode
-      const isFirefox = typeof navigator !== "undefined" && /firefox/i.test(navigator.userAgent);
-      setLowPerfMotion(media.matches || cpuLow || isFirefox);
+      setLowPerfMotion(media.matches || cpuLow);
     };
 
     syncMotionMode();
