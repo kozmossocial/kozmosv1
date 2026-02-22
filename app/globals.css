@@ -572,6 +572,7 @@ body {
 .matrix-column {
   position: relative;
   overflow: hidden;
+  contain: layout style paint;
 }
 
 .matrix-column-glow .matrix-stream {
@@ -591,6 +592,8 @@ body {
   text-shadow: 0 0 12px rgba(255, 230, 170, 0.25);
   animation: matrix-fall var(--duration) linear infinite;
   animation-delay: var(--delay);
+  will-change: transform, opacity;
+  contain: layout style;
 }
 
 .matrix-rain-paused .matrix-stream {
@@ -602,7 +605,13 @@ body {
 }
 
 .matrix-rain.matrix-rain-low-perf .matrix-stream {
-  text-shadow: 0 0 8px rgba(255, 230, 170, 0.18);
+  text-shadow: none;
+  will-change: transform;
+}
+
+.matrix-rain.matrix-rain-low-perf .matrix-column-glow .matrix-stream {
+  text-shadow: 0 0 6px rgba(255, 230, 170, 0.3);
+  filter: none !important;
 }
 
 .matrix-tail-glow {
@@ -1072,6 +1081,28 @@ body {
   mix-blend-mode: normal;
   filter: blur(12px);
   animation-duration: 24s;
+}
+
+/* Firefox performance optimizations */
+@-moz-document url-prefix() {
+  .my-home-shell::before,
+  .main-page-shell::before {
+    animation: none;
+    filter: blur(8px);
+    opacity: 0.08;
+    mix-blend-mode: normal;
+  }
+  
+  .runtime-page-ambient {
+    animation: none;
+    filter: blur(8px);
+    opacity: 0.12;
+  }
+  
+  .runtime-page-ambient::before {
+    animation: none;
+    opacity: 0.1;
+  }
 }
 
 .main-page-shell .hush-panel,
