@@ -843,9 +843,12 @@ export default function AccountPage() {
         minHeight: "100vh",
         background: "#0b0b0b",
         color: "#eaeaea",
-        padding: "200px 40px 80px 300px",
+        padding: 0,
         display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
         justifyContent: "center",
+        width: "100vw",
       }}
     >
       <a
@@ -936,6 +939,7 @@ export default function AccountPage() {
           maxWidth: 420,
           width: "min(420px, calc(100% - 24px))",
           margin: "0 auto",
+          alignItems: "center",
         }}
         className="account-content-grid"
       >
