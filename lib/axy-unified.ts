@@ -418,7 +418,8 @@ export interface GlobalTurnData {
  * This function is async but doesn't need to be awaited - fire and forget
  */
 export async function logGlobalTurn(
-  supabase: { from: (table: string) => { insert: (data: unknown) => Promise<{ error: unknown }> } },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
   data: GlobalTurnData
 ): Promise<void> {
   try {
@@ -446,7 +447,8 @@ export async function logGlobalTurn(
  * Log both user and assistant turns in one call
  */
 export async function logConversationTurn(
-  supabase: { from: (table: string) => { insert: (data: unknown) => Promise<{ error: unknown }> } },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
   options: {
     user_id: string | null;
     username: string;
