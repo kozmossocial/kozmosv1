@@ -943,7 +943,8 @@ export default function AccountPage() {
         }}
         className="account-content-grid"
       >
-        <div style={{ marginBottom: 6 }}>
+
+        <div style={{ marginBottom: 16 }}>
           <div style={label}>profile picture</div>
           <div style={avatarRow}>
             <div style={avatarCircle}>
@@ -991,24 +992,23 @@ export default function AccountPage() {
           ) : null}
         </div>
 
-
-        <div style={{ marginBottom: 6, width: "100%", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          <div>
-            <div style={label}>username</div>
-            <div>{username}</div>
+        {/* Info block directly under profile picture */}
+        <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 180, marginLeft: 48 }}>
+            <div style={{ textAlign: "left", minWidth: 120 }}>
+              <div style={label}>username</div>
+              <div>{username}</div>
+            </div>
+            <div style={{ marginTop: 4, textAlign: "left", minWidth: 120, marginLeft: 56 }}>
+              <div style={label}>email</div>
+              <div>{email}</div>
+            </div>
           </div>
-          <div style={{ marginTop: 4 }}>
-            <div style={label}>email</div>
-            <div>{email}</div>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 6, width: "100%", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
           <div>
             <div style={label}>spice</div>
             <div>{spiceBalance.toLocaleString("en-US")} SPC</div>
           </div>
-          <div style={{ marginTop: 4 }}>
+          <div>
             <div
               style={{
                 ...label,
