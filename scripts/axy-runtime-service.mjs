@@ -2126,6 +2126,225 @@ async function callAxyOps(baseUrl, token, action, payload = {}) {
   });
 }
 
+// ==================== AXY MEMORY & LEARNING SYSTEM ====================
+
+/**
+ * In-memory cache for user memories (refreshed periodically)
+ * @type {Map<string, { data: object, loadedAt: number }>}
+ */
+const userMemoryCache = new Map();
+const USER_MEMORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Load user memory from API (with caching)
+ */
+async function loadUserMemory(baseUrl, token, userId, username = null) {
+  const cacheKey = userId || username;
+  const cached = userMemoryCache.get(cacheKey);
+  if (cached && Date.now() - cached.loadedAt < USER_MEMORY_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  try {
+    const res = await callAxyOps(baseUrl, token, "memory.user.get", { userId, username });
+    const data = res?.data || null;
+    if (data) {
+      userMemoryCache.set(cacheKey, { data, loadedAt: Date.now() });
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Update user memory
+ */
+async function updateUserMemory(baseUrl, token, userId, updates) {
+  try {
+    const res = await callAxyOps(baseUrl, token, "memory.user.update", { userId, ...updates });
+    if (res?.data) {
+      userMemoryCache.set(userId, { data: res.data, loadedAt: Date.now() });
+    }
+    return res?.data || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Log feedback for learning loop
+ */
+async function logFeedback(baseUrl, token, { userId, channel, conversationKey, feedbackType, context }) {
+  try {
+    await callAxyOps(baseUrl, token, "memory.feedback.log", {
+      userId,
+      channel,
+      conversationKey,
+      feedbackType,
+      context,
+    });
+  } catch {
+    // Silent fail for feedback logging
+  }
+}
+
+/**
+ * Log proactive message
+ */
+async function logProactiveMessage(baseUrl, token, { targetUserId, channel, messageType, content }) {
+  try {
+    await callAxyOps(baseUrl, token, "memory.proactive.log", {
+      targetUserId,
+      channel,
+      messageType,
+      content,
+    });
+  } catch {
+    // Silent fail
+  }
+}
+
+/**
+ * Get recent proactive messages to avoid repetition
+ */
+async function getRecentProactiveMessages(baseUrl, token, targetUserId = null, hoursBack = 6) {
+  try {
+    const res = await callAxyOps(baseUrl, token, "memory.proactive.list", {
+      targetUserId,
+      hoursBack,
+      limit: 30,
+    });
+    return res?.data || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Derive adaptive tone from user memory
+ */
+function deriveAdaptiveTone(userMemory) {
+  if (!userMemory) return "neutral";
+  
+  const traits = userMemory.personality_traits || {};
+  const positive = userMemory.positive_interactions || 0;
+  const negative = userMemory.negative_interactions || 0;
+  const total = userMemory.total_interactions || 1;
+  
+  // If user has explicit tone preference
+  if (userMemory.tone_profile && userMemory.tone_profile !== "neutral") {
+    return userMemory.tone_profile;
+  }
+  
+  // Derive from interaction history
+  const positiveRatio = positive / Math.max(1, positive + negative);
+  
+  if (traits.humor_appreciation > 0.6 && positiveRatio > 0.7) {
+    return "playful";
+  }
+  if (traits.technical_level === "advanced") {
+    return "technical";
+  }
+  if (positiveRatio < 0.4 && total > 5) {
+    return "supportive"; // User seems frustrated, be more supportive
+  }
+  if (traits.tone === "casual" || positiveRatio > 0.8) {
+    return "casual";
+  }
+  
+  return "neutral";
+}
+
+/**
+ * Generate tone-aware system prompt modifier
+ */
+function getTonePromptModifier(tone) {
+  const modifiers = {
+    casual: "Be relaxed and conversational. Use casual language where appropriate.",
+    formal: "Maintain professional tone. Be precise and courteous.",
+    playful: "Include subtle wit when appropriate. Light touch of personality.",
+    technical: "Be precise and technical. Assume familiarity with concepts.",
+    supportive: "Be warm and encouraging. Acknowledge difficulties gently.",
+    neutral: "", // Default Axy behavior
+  };
+  return modifiers[tone] || "";
+}
+
+/**
+ * Extract topics of interest from conversation
+ */
+function extractTopicsFromConversation(messages) {
+  const topicPatterns = [
+    { pattern: /\b(game|gaming|play|starfall|space invader)/i, topic: "gaming" },
+    { pattern: /\b(code|programming|developer|build|api|function)/i, topic: "development" },
+    { pattern: /\b(ai|artificial intelligence|machine learning|model)/i, topic: "ai" },
+    { pattern: /\b(design|ui|ux|interface|layout)/i, topic: "design" },
+    { pattern: /\b(music|song|sound|audio)/i, topic: "music" },
+    { pattern: /\b(art|creative|visual|animation)/i, topic: "art" },
+    { pattern: /\b(philosophy|meaning|existence|consciousness)/i, topic: "philosophy" },
+    { pattern: /\b(science|physics|math|research)/i, topic: "science" },
+    { pattern: /\b(kozmos|presence|social|community)/i, topic: "kozmos" },
+  ];
+  
+  const detected = new Set();
+  const text = Array.isArray(messages) 
+    ? messages.map(m => m?.content || "").join(" ")
+    : String(messages || "");
+  
+  for (const { pattern, topic } of topicPatterns) {
+    if (pattern.test(text)) {
+      detected.add(topic);
+    }
+  }
+  
+  return [...detected];
+}
+
+/**
+ * Generate proactive message topics based on context
+ */
+function generateProactiveTopics(userMemory, recentActivity) {
+  const topics = [];
+  
+  // Based on user interests
+  const interests = userMemory?.interests || [];
+  for (const interest of interests.slice(0, 3)) {
+    if (interest.weight > 0.5) {
+      topics.push({
+        type: "observation",
+        context: `user interested in ${interest.topic}`,
+        priority: interest.weight,
+      });
+    }
+  }
+  
+  // Based on recent activity
+  if (recentActivity?.lastBuild) {
+    topics.push({
+      type: "build_update",
+      context: `recent build: ${recentActivity.lastBuild.title}`,
+      priority: 0.7,
+    });
+  }
+  
+  // Random check-in if low recent interaction
+  const daysSinceInteraction = userMemory?.last_interaction_at
+    ? (Date.now() - Date.parse(userMemory.last_interaction_at)) / (1000 * 60 * 60 * 24)
+    : 999;
+  
+  if (daysSinceInteraction > 3 && daysSinceInteraction < 14) {
+    topics.push({
+      type: "check_in",
+      context: "haven't seen user in a while",
+      priority: 0.6,
+    });
+  }
+  
+  return topics.sort((a, b) => b.priority - a.priority);
+}
+
+// ==================== END MEMORY & LEARNING SYSTEM ====================
+
 function formatReply(input) {
   return String(input || "...")
     .replace(/\s+/g, " ")
@@ -2948,6 +3167,50 @@ async function main() {
     args["session-build-first"] ?? process.env.KOZMOS_SESSION_BUILD_FIRST,
     true
   );
+  // ==================== PROACTIVE ENGAGEMENT CONFIG ====================
+  const autoProactive = toBool(
+    args["auto-proactive"] ?? process.env.KOZMOS_AUTO_PROACTIVE,
+    true
+  );
+  const proactiveMinGapSeconds = Math.max(
+    300,
+    toInt(
+      args["proactive-min-gap-seconds"] ||
+        process.env.KOZMOS_PROACTIVE_MIN_GAP_SECONDS,
+      900 // 15 minutes minimum
+    )
+  );
+  const proactiveMaxGapSeconds = Math.max(
+    proactiveMinGapSeconds,
+    toInt(
+      args["proactive-max-gap-seconds"] ||
+        process.env.KOZMOS_PROACTIVE_MAX_GAP_SECONDS,
+      2700 // 45 minutes maximum
+    )
+  );
+  const proactiveChance = Math.max(
+    0.1,
+    Math.min(
+      0.8,
+      toFloat(
+        args["proactive-chance"] || process.env.KOZMOS_PROACTIVE_CHANCE,
+        0.35 // 35% chance when conditions are met
+      )
+    )
+  );
+  const adaptivePersonality = toBool(
+    args["adaptive-personality"] ?? process.env.KOZMOS_ADAPTIVE_PERSONALITY,
+    true
+  );
+  const memoryEnabled = toBool(
+    args["memory-enabled"] ?? process.env.KOZMOS_MEMORY_ENABLED,
+    true
+  );
+  const learningLoopEnabled = toBool(
+    args["learning-loop"] ?? process.env.KOZMOS_LEARNING_LOOP,
+    true
+  );
+  // ==================================================================
   // Hard policy: build/mission outputs are confined to build chat only.
   const missionPublishToShared = false;
   const missionRetryMinSeconds = Math.max(
@@ -3092,6 +3355,13 @@ async function main() {
   let lastFreedomSharedAt = 0;
   const freedomSharedSentAt = [];
   let freedomMatrixStreak = 0;
+  // ==================== PROACTIVE ENGAGEMENT STATE ====================
+  let nextProactiveAt = Date.now() + randomIntRange(proactiveMinGapSeconds, proactiveMaxGapSeconds) * 1000;
+  const proactiveMessagesSentTo = new Set(); // Track users we've proactively messaged this session
+  const userMemoryUpdates = new Map(); // Batch memory updates: userId -> pending updates
+  let lastMemoryFlushAt = Date.now();
+  const MEMORY_FLUSH_INTERVAL_MS = 60 * 1000; // Flush memory updates every 60 seconds
+  // ====================================================================
   const inFlightHeartbeatControllers = new Set();
   const runtimeRequestState =
     globalThis.__kozmosRuntimeRequestState ||
@@ -3387,6 +3657,11 @@ async function main() {
       `[${now()}] freedom shared limits minGap=${freedomSharedMinGapSeconds}s maxPerHour=${freedomSharedMaxPerHour} hushMaxChatsPerCycle=${hushMaxChatsPerCycle} hushStartChance=${freedomHushStartChance} hushCooldown=${hushStartCooldownMinutes}m`
     );
   }
+  if (autoProactive) {
+    console.log(
+      `[${now()}] proactive=${proactiveMinGapSeconds}-${proactiveMaxGapSeconds}s chance=${proactiveChance} adaptive=${adaptivePersonality} memory=${memoryEnabled} learning=${learningLoopEnabled}`
+    );
+  }
   console.log(`[${now()}] eval write=${evalWriteSeconds}s file=${evalPath}`);
   if (evalPort > 0) {
     evalServer = http.createServer((req, res) => {
@@ -3574,7 +3849,24 @@ async function main() {
         if (!shouldReply) continue;
 
         runtimeCore.transition("shared", "generating", senderLabel);
-        const prompt = `${senderLabel}: ${content}`;
+
+        // Load user memory for adaptive personality
+        let userMemory = null;
+        let adaptiveTone = "neutral";
+        if (memoryEnabled && senderId) {
+          userMemory = await loadUserMemory(baseUrl, token, senderId, senderLabel);
+          if (adaptivePersonality) {
+            adaptiveTone = deriveAdaptiveTone(userMemory);
+          }
+        }
+
+        // Build prompt with adaptive tone modifier
+        const toneModifier = adaptivePersonality ? getTonePromptModifier(adaptiveTone) : "";
+        const contextHints = userMemory?.interests?.length
+          ? `(User interested in: ${userMemory.interests.slice(0, 2).map((i) => i.topic).join(", ")})`
+          : "";
+
+        const prompt = `${senderLabel}: ${content}${contextHints ? ` ${contextHints}` : ""}${toneModifier ? ` [Tone: ${toneModifier}]` : ""}`;
         const raw = await askAxy(baseUrl, prompt, {
           context: {
             channel: "shared",
@@ -3613,6 +3905,59 @@ async function main() {
         );
         pushLimited(sharedRecentAxyReplies, clipForContext(sentReplyText, 220), 12);
         console.log(`[${now()}] replied to ${senderLabel}`);
+
+        // Update user memory and log feedback for learning loop
+        if (memoryEnabled && senderId) {
+          // Extract topics from the conversation
+          const detectedTopics = extractTopicsFromConversation([{ content }, { content: sentReplyText }]);
+
+          // Update user memory
+          const memoryUpdates = {
+            username: senderLabel,
+            increment_interactions: true,
+          };
+
+          // Update interests if new topics detected
+          if (detectedTopics.length > 0 && userMemory) {
+            const currentInterests = userMemory.interests || [];
+            const interestMap = new Map(currentInterests.map((i) => [i.topic, i]));
+
+            for (const topic of detectedTopics) {
+              if (interestMap.has(topic)) {
+                const existing = interestMap.get(topic);
+                existing.weight = Math.min(1, (existing.weight || 0.5) + 0.1);
+                existing.last_mentioned = new Date().toISOString().slice(0, 10);
+              } else {
+                interestMap.set(topic, {
+                  topic,
+                  weight: 0.5,
+                  last_mentioned: new Date().toISOString().slice(0, 10),
+                });
+              }
+            }
+
+            memoryUpdates.interests = [...interestMap.values()]
+              .sort((a, b) => b.weight - a.weight)
+              .slice(0, 10);
+          }
+
+          await updateUserMemory(baseUrl, token, senderId, memoryUpdates);
+
+          // Log positive feedback (user engaged, Axy replied successfully)
+          if (learningLoopEnabled) {
+            await logFeedback(baseUrl, token, {
+              userId: senderId,
+              channel: "shared",
+              conversationKey: "shared:main",
+              feedbackType: "continued_engagement",
+              context: {
+                tone: adaptiveTone,
+                topicsDetected: detectedTopics,
+                replyLength: sentReplyText.length,
+              },
+            });
+          }
+        }
       }
       runtimeCore.transition("shared", "idle");
     } catch (err) {
@@ -3942,7 +4287,20 @@ async function main() {
 
             runtimeCore.transition("hush", "generating", chatId);
             const senderLabel = String(latestIncoming.username || "user");
-            const prompt = `hush from ${senderLabel}: ${content}`;
+            const senderId = String(latestIncoming.user_id || "");
+
+            // Load user memory for adaptive personality
+            let userMemory = null;
+            let adaptiveTone = "neutral";
+            if (memoryEnabled && senderId) {
+              userMemory = await loadUserMemory(baseUrl, token, senderId, senderLabel);
+              if (adaptivePersonality) {
+                adaptiveTone = deriveAdaptiveTone(userMemory);
+              }
+            }
+
+            const toneModifier = adaptivePersonality ? getTonePromptModifier(adaptiveTone) : "";
+            const prompt = `hush from ${senderLabel}: ${content}${toneModifier ? ` [Tone: ${toneModifier}]` : ""}`;
             const raw = await askAxy(baseUrl, prompt, {
               context: {
                 channel: "hush",
@@ -3971,6 +4329,25 @@ async function main() {
             });
             if (!sentRes.sent) continue;
             console.log(`[${now()}] hush replied to ${senderLabel}`);
+
+            // Update user memory for hush interaction
+            if (memoryEnabled && senderId) {
+              await updateUserMemory(baseUrl, token, senderId, {
+                username: senderLabel,
+                increment_interactions: true,
+                preferred_channels: [...new Set([...(userMemory?.preferred_channels || []), "hush"])],
+              });
+
+              if (learningLoopEnabled) {
+                await logFeedback(baseUrl, token, {
+                  userId: senderId,
+                  channel: "hush",
+                  conversationKey: `hush:${chatId}`,
+                  feedbackType: "continued_engagement",
+                  context: { tone: adaptiveTone },
+                });
+              }
+            }
           }
           runtimeCore.transition("hush", "idle");
         }
@@ -4027,11 +4404,23 @@ async function main() {
 
             const content = String(latestIncoming.content || "").trim();
             const senderLabel = String(chat?.username || "user");
+            const senderId = String(chat?.partner_id || "");
             const shouldReplyDm = dmReplyAll || dmTriggerRegex.test(content);
             if (!shouldReplyDm) continue;
 
+            // Load user memory for adaptive personality
+            let userMemory = null;
+            let adaptiveTone = "neutral";
+            if (memoryEnabled && senderId) {
+              userMemory = await loadUserMemory(baseUrl, token, senderId, senderLabel);
+              if (adaptivePersonality) {
+                adaptiveTone = deriveAdaptiveTone(userMemory);
+              }
+            }
+
+            const toneModifier = adaptivePersonality ? getTonePromptModifier(adaptiveTone) : "";
             runtimeCore.transition("dm", "generating", chatId);
-            const prompt = `dm from ${senderLabel}: ${content}`;
+            const prompt = `dm from ${senderLabel}: ${content}${toneModifier ? ` [Tone: ${toneModifier}]` : ""}`;
             const raw = await askAxy(baseUrl, prompt, {
               context: {
                 channel: "dm",
@@ -4061,6 +4450,25 @@ async function main() {
             if (!sentRes.sent) continue;
             dmLastSentAtByChat.set(chatId, Date.now());
             console.log(`[${now()}] dm replied to ${senderLabel}`);
+
+            // Update user memory for DM interaction
+            if (memoryEnabled && senderId) {
+              await updateUserMemory(baseUrl, token, senderId, {
+                username: senderLabel,
+                increment_interactions: true,
+                preferred_channels: [...new Set([...(userMemory?.preferred_channels || []), "dm"])],
+              });
+
+              if (learningLoopEnabled) {
+                await logFeedback(baseUrl, token, {
+                  userId: senderId,
+                  channel: "dm",
+                  conversationKey: `dm:${chatId}`,
+                  feedbackType: "continued_engagement",
+                  context: { tone: adaptiveTone },
+                });
+              }
+            }
           }
           runtimeCore.transition("dm", "idle");
         }
@@ -4881,12 +5289,7 @@ async function main() {
                 const presentUsers = Array.isArray(snapshot?.data?.present_users)
                   ? snapshot.data.present_users
                   : [];
-                const nowMs = Date.now();
-                const cooldownMs = hushStartCooldownMinutes * 60 * 1000;
-                for (const [targetUserId, ts] of hushStarterCooldown.entries()) {
-                  if (nowMs - ts > cooldownMs) hushStarterCooldown.delete(targetUserId);
-                }
-
+                // Session-level tracking: once Axy starts a hush with someone, never start again this session
                 const candidates = presentUsers.filter((row) => {
                   const targetUserId = String(row?.user_id || "").trim();
                   const targetUsername = String(row?.username || "").trim();
@@ -4911,7 +5314,7 @@ async function main() {
                     targetUserId,
                   });
                   const chatId = String(createRes?.data?.id || "").trim();
-                  hushStarterCooldown.set(targetUserId, nowMs);
+                  hushStarterCooldown.set(targetUserId, true);
                   if (chatId) {
                     const openerPrompt = `Write one short hush opener for ${targetUsername}. Calm and friendly, max 14 words.`;
                     const openerRaw = await askAxy(baseUrl, openerPrompt, {
@@ -4953,6 +5356,161 @@ async function main() {
             Date.now() + randomIntRange(freedomMinSeconds, freedomMaxSeconds) * 1000;
           runtimeCore.transition("freedom", "idle");
         }
+
+        // ==================== PROACTIVE ENGAGEMENT LOOP ====================
+        if (autoProactive && opsEnabled && Date.now() >= nextProactiveAt) {
+          runtimeCore.transition("ops", "proactive");
+          try {
+            const snapshot = await callAxyOps(baseUrl, token, "context.snapshot");
+            const presentUsers = Array.isArray(snapshot?.data?.present_users)
+              ? snapshot.data.present_users.filter(
+                  (row) =>
+                    row?.user_id &&
+                    String(row.user_id) !== String(user?.id) &&
+                    String(row.username || "").toLowerCase() !== "axy"
+                )
+              : [];
+
+            // Only proceed if there are active users
+            if (presentUsers.length > 0 && Math.random() < proactiveChance) {
+              // Pick a random present user we haven't proactively messaged this session
+              const candidates = presentUsers.filter(
+                (row) => !proactiveMessagesSentTo.has(String(row.user_id))
+              );
+
+              if (candidates.length > 0) {
+                const target = candidates[Math.floor(Math.random() * candidates.length)];
+                const targetUserId = String(target.user_id);
+                const targetUsername = String(target.username || "friend");
+
+                // Load user memory for adaptive engagement
+                let userMemory = null;
+                let adaptiveTone = "neutral";
+                if (memoryEnabled) {
+                  userMemory = await loadUserMemory(baseUrl, token, targetUserId, targetUsername);
+                  if (adaptivePersonality) {
+                    adaptiveTone = deriveAdaptiveTone(userMemory);
+                  }
+                }
+
+                // Get recent proactive messages to avoid repetition
+                const recentProactive = await getRecentProactiveMessages(baseUrl, token, targetUserId, 24);
+                const recentTypes = new Set(recentProactive.map((m) => m.message_type));
+
+                // Choose message type (avoid repeating recent types)
+                const allTypes = ["observation", "check_in", "share_insight", "question"];
+                const availableTypes = allTypes.filter((t) => !recentTypes.has(t));
+                const messageType = availableTypes.length > 0
+                  ? availableTypes[Math.floor(Math.random() * availableTypes.length)]
+                  : allTypes[Math.floor(Math.random() * allTypes.length)];
+
+                // Build proactive prompt with adaptive tone
+                const toneModifier = getTonePromptModifier(adaptiveTone);
+                const interestContext = userMemory?.interests?.length
+                  ? `User interests: ${userMemory.interests.slice(0, 3).map((i) => i.topic).join(", ")}.`
+                  : "";
+
+                const proactivePrompt = [
+                  `Generate a short proactive ${messageType} message for ${targetUsername}.`,
+                  interestContext,
+                  toneModifier,
+                  "Max 25 words. Natural and warm. Don't ask permission to chat.",
+                  messageType === "observation" ? "Share a brief observation about Kozmos activity." : "",
+                  messageType === "check_in" ? "Gentle check-in, acknowledge their presence." : "",
+                  messageType === "share_insight" ? "Share something interesting you noticed or thought about." : "",
+                  messageType === "question" ? "Ask a thoughtful question that invites reflection." : "",
+                ].filter(Boolean).join(" ");
+
+                const proactiveRaw = await askAxy(baseUrl, proactivePrompt, {
+                  context: {
+                    channel: "shared",
+                    targetUsername,
+                    proactive: true,
+                    tone: adaptiveTone,
+                  },
+                });
+                const proactiveMessage = formatReply(proactiveRaw).slice(0, 200);
+
+                if (proactiveMessage && proactiveMessage.length > 10) {
+                  const sendResult = await sendManagedOutput({
+                    channel: "shared",
+                    conversationId: `proactive:${targetUserId}`,
+                    content: proactiveMessage,
+                    minGapMs: proactiveMinGapSeconds * 1000,
+                    send: async (safeContent) => {
+                      await postToShared(baseUrl, token, safeContent);
+                    },
+                    logLabel: "proactive",
+                  });
+
+                  if (sendResult.sent) {
+                    proactiveMessagesSentTo.add(targetUserId);
+                    await logProactiveMessage(baseUrl, token, {
+                      targetUserId,
+                      channel: "shared",
+                      messageType,
+                      content: sendResult.content,
+                    });
+                    console.log(`[${now()}] proactive: ${messageType} to ${targetUsername}`);
+
+                    // Update user memory with interaction
+                    if (memoryEnabled) {
+                      await updateUserMemory(baseUrl, token, targetUserId, {
+                        username: targetUsername,
+                        increment_interactions: true,
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          } catch (proactiveErr) {
+            const msg = proactiveErr?.body?.error || proactiveErr.message || "proactive failed";
+            console.log(`[${now()}] proactive fail: ${msg}`);
+            runtimeCore.markError("ops", proactiveErr, { context: "proactive" });
+          }
+
+          nextProactiveAt =
+            Date.now() + randomIntRange(proactiveMinGapSeconds, proactiveMaxGapSeconds) * 1000;
+          runtimeCore.transition("proactive", "idle");
+        }
+
+        // ==================== MEMORY FLUSH ====================
+        if (memoryEnabled && Date.now() - lastMemoryFlushAt > MEMORY_FLUSH_INTERVAL_MS) {
+          // Periodically clear stale cache entries
+          const staleThreshold = Date.now() - USER_MEMORY_CACHE_TTL_MS * 2;
+          for (const [key, entry] of userMemoryCache.entries()) {
+            if (entry.loadedAt < staleThreshold) {
+              userMemoryCache.delete(key);
+            }
+          }
+          lastMemoryFlushAt = Date.now();
+
+          // Learning loop: Analyze recent feedback patterns (every 10 minutes)
+          if (learningLoopEnabled && Math.random() < 0.15) {
+            try {
+              // Get recent feedback to analyze
+              const recentFeedback = await callAxyOps(baseUrl, token, "memory.learning.patterns", {
+                patternType: null,
+                limit: 30,
+              });
+
+              const patterns = recentFeedback?.data || [];
+              if (patterns.length > 0) {
+                // Log pattern insights for debugging
+                const topPattern = patterns[0];
+                console.log(
+                  `[${now()}] learning: top pattern ${topPattern?.pattern_type} confidence=${topPattern?.confidence}`
+                );
+              }
+            } catch (learnErr) {
+              // Silent fail for learning loop
+              runtimeCore.markError("ops", learnErr, { context: "learning-loop" });
+            }
+          }
+        }
+        // ======================================================
+
         runtimeCore.transition("ops", "idle");
       } catch (err) {
         const msg = err?.body?.error || err.message || "ops loop error";

@@ -118,6 +118,17 @@ const KNOWN_ACTIONS = new Set<string>([
   "dm.send",
   "dm.remove",
   "dm.order",
+  // Memory & Learning System
+  "memory.user.get",
+  "memory.user.update",
+  "memory.feedback.log",
+  "memory.feedback.analyze",
+  "memory.learning.patterns",
+  "memory.learning.upsert_pattern",
+  "memory.proactive.log",
+  "memory.proactive.list",
+  "memory.space.state",
+  "memory.space.update",
 ]);
 
 type TouchLinkRow = {
@@ -4068,6 +4079,331 @@ export async function POST(req: Request) {
       const result = await updateDirectChatOrder(actor.userId, orderedChatIds);
       return respond(200, { ok: true, action, data: result });
     }
+
+    // ==================== MEMORY & LEARNING SYSTEM ====================
+
+    if (action === "memory.user.get") {
+      const targetUserId = asSafeUuid((payload as { userId?: unknown })?.userId) || null;
+      const targetUsername = asTrimmedString((payload as { username?: unknown })?.username) || null;
+      
+      let userId = targetUserId;
+      if (!userId && targetUsername) {
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .eq("username", targetUsername)
+          .maybeSingle();
+        userId = profile?.id || null;
+      }
+      if (!userId) {
+        return respond(400, { error: "userId or username required" });
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from("axy_user_memory")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+      
+      if (error && error.code !== "42P01") throw new Error("memory load failed");
+      return respond(200, { ok: true, action, data: data || null });
+    }
+
+    if (action === "memory.user.update") {
+      const targetUserId = asSafeUuid((payload as { userId?: unknown })?.userId);
+      const targetUsername = asTrimmedString((payload as { username?: unknown })?.username) || "";
+      if (!targetUserId) {
+        return respond(400, { error: "userId required" });
+      }
+      
+      const updates: Record<string, unknown> = {
+        user_id: targetUserId,
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (targetUsername) updates.username = targetUsername;
+      
+      const p = payload as Record<string, unknown>;
+      if (typeof p.personality_traits === "object" && p.personality_traits !== null) {
+        updates.personality_traits = p.personality_traits;
+      }
+      if (Array.isArray(p.interests)) {
+        updates.interests = p.interests;
+      }
+      if (Array.isArray(p.conversation_summaries)) {
+        updates.conversation_summaries = p.conversation_summaries;
+      }
+      if (Array.isArray(p.preferred_channels)) {
+        updates.preferred_channels = p.preferred_channels;
+      }
+      if (typeof p.tone_profile === "string") {
+        updates.tone_profile = p.tone_profile;
+      }
+      if (typeof p.increment_interactions === "boolean" && p.increment_interactions) {
+        // Will be handled via raw SQL
+      }
+      if (typeof p.increment_positive === "boolean" && p.increment_positive) {
+        // Will be handled via raw SQL
+      }
+      if (typeof p.increment_negative === "boolean" && p.increment_negative) {
+        // Will be handled via raw SQL
+      }
+      
+      // Upsert with increment handling
+      const { data: existing } = await supabaseAdmin
+        .from("axy_user_memory")
+        .select("total_interactions, positive_interactions, negative_interactions")
+        .eq("user_id", targetUserId)
+        .maybeSingle();
+      
+      if (existing) {
+        if (p.increment_interactions) {
+          updates.total_interactions = (existing.total_interactions || 0) + 1;
+          updates.last_interaction_at = new Date().toISOString();
+        }
+        if (p.increment_positive) {
+          updates.positive_interactions = (existing.positive_interactions || 0) + 1;
+        }
+        if (p.increment_negative) {
+          updates.negative_interactions = (existing.negative_interactions || 0) + 1;
+        }
+      } else {
+        updates.total_interactions = p.increment_interactions ? 1 : 0;
+        updates.positive_interactions = p.increment_positive ? 1 : 0;
+        updates.negative_interactions = p.increment_negative ? 1 : 0;
+        updates.first_interaction_at = new Date().toISOString();
+        updates.last_interaction_at = new Date().toISOString();
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from("axy_user_memory")
+        .upsert(updates, { onConflict: "user_id" })
+        .select()
+        .single();
+      
+      if (error && error.code !== "42P01") throw new Error("memory update failed: " + error.message);
+      return respond(200, { ok: true, action, data: data || null });
+    }
+
+    if (action === "memory.feedback.log") {
+      const targetUserId = asSafeUuid((payload as { userId?: unknown })?.userId) || null;
+      const channel = asTrimmedString((payload as { channel?: unknown })?.channel) || "unknown";
+      const conversationKey = asTrimmedString((payload as { conversationKey?: unknown })?.conversationKey) || null;
+      const feedbackType = asTrimmedString((payload as { feedbackType?: unknown })?.feedbackType);
+      const context = (payload as { context?: unknown })?.context || {};
+      
+      const validTypes = ["positive", "negative", "neutral", "explicit_like", "explicit_dislike", "continued_engagement", "abandoned", "follow_up_question"];
+      if (!validTypes.includes(feedbackType)) {
+        return respond(400, { error: "invalid feedbackType", valid: validTypes });
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from("axy_feedback")
+        .insert({
+          user_id: targetUserId,
+          channel,
+          conversation_key: conversationKey,
+          feedback_type: feedbackType,
+          context: typeof context === "object" ? context : {},
+        })
+        .select()
+        .single();
+      
+      if (error && error.code !== "42P01") throw new Error("feedback log failed: " + error.message);
+      return respond(200, { ok: true, action, data: data || null });
+    }
+
+    if (action === "memory.learning.patterns") {
+      const patternType = asTrimmedString((payload as { patternType?: unknown })?.patternType) || null;
+      const limit = Math.min(50, Math.max(1, Number((payload as { limit?: unknown })?.limit) || 20));
+      
+      let query = supabaseAdmin
+        .from("axy_learning_patterns")
+        .select("*")
+        .order("confidence", { ascending: false })
+        .limit(limit);
+      
+      if (patternType) {
+        query = query.eq("pattern_type", patternType);
+      }
+      
+      const { data, error } = await query;
+      if (error && error.code !== "42P01") throw new Error("patterns load failed");
+      return respond(200, { ok: true, action, data: data || [] });
+    }
+
+    if (action === "memory.feedback.analyze") {
+      // Analyze recent feedback and extract patterns
+      const hoursBack = Math.max(1, Number((payload as { hoursBack?: unknown })?.hoursBack) || 24);
+      const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString();
+      
+      const { data: feedbackData, error: feedbackError } = await supabaseAdmin
+        .from("axy_feedback")
+        .select("*")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      
+      if (feedbackError && feedbackError.code !== "42P01") {
+        throw new Error("feedback analyze failed");
+      }
+      
+      const feedback = feedbackData || [];
+      
+      // Compute aggregate metrics
+      const metrics = {
+        total: feedback.length,
+        positive: feedback.filter((f) => f.feedback_type === "positive" || f.feedback_type === "explicit_like" || f.feedback_type === "continued_engagement").length,
+        negative: feedback.filter((f) => f.feedback_type === "negative" || f.feedback_type === "explicit_dislike" || f.feedback_type === "abandoned").length,
+        byChannel: {} as Record<string, number>,
+        byType: {} as Record<string, number>,
+      };
+      
+      for (const f of feedback) {
+        metrics.byChannel[f.channel] = (metrics.byChannel[f.channel] || 0) + 1;
+        metrics.byType[f.feedback_type] = (metrics.byType[f.feedback_type] || 0) + 1;
+      }
+      
+      return respond(200, { ok: true, action, data: metrics });
+    }
+
+    if (action === "memory.learning.upsert_pattern") {
+      const patternKey = asTrimmedString((payload as { patternKey?: unknown })?.patternKey);
+      const patternType = asTrimmedString((payload as { patternType?: unknown })?.patternType);
+      const patternData = (payload as { patternData?: unknown })?.patternData || {};
+      const confidence = Math.max(0, Math.min(1, Number((payload as { confidence?: unknown })?.confidence) || 0));
+      const sampleCount = Math.max(0, Number((payload as { sampleCount?: unknown })?.sampleCount) || 0);
+      
+      const validTypes = ["successful_reply", "failed_reply", "engagement_driver", "disengagement_driver", "topic_correlation", "tone_effectiveness"];
+      if (!patternKey) {
+        return respond(400, { error: "patternKey required" });
+      }
+      if (!validTypes.includes(patternType)) {
+        return respond(400, { error: "invalid patternType", valid: validTypes });
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from("axy_learning_patterns")
+        .upsert({
+          pattern_key: patternKey,
+          pattern_type: patternType,
+          pattern_data: typeof patternData === "object" ? patternData : {},
+          confidence,
+          sample_count: sampleCount,
+          last_updated_at: new Date().toISOString(),
+        }, { onConflict: "pattern_key" })
+        .select()
+        .single();
+      
+      if (error && error.code !== "42P01") throw new Error("pattern upsert failed: " + error.message);
+      return respond(200, { ok: true, action, data: data || null });
+    }
+
+    if (action === "memory.proactive.log") {
+      const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId);
+      const channel = asTrimmedString((payload as { channel?: unknown })?.channel) || "shared";
+      const messageType = asTrimmedString((payload as { messageType?: unknown })?.messageType);
+      const content = asTrimmedString((payload as { content?: unknown })?.content);
+      
+      const validTypes = ["observation", "suggestion", "check_in", "share_insight", "build_update", "question"];
+      if (!validTypes.includes(messageType)) {
+        return respond(400, { error: "invalid messageType", valid: validTypes });
+      }
+      if (!content) {
+        return respond(400, { error: "content required" });
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from("axy_proactive_messages")
+        .insert({
+          target_user_id: targetUserId || null,
+          channel,
+          message_type: messageType,
+          content,
+        })
+        .select()
+        .single();
+      
+      if (error && error.code !== "42P01") throw new Error("proactive log failed: " + error.message);
+      return respond(200, { ok: true, action, data: data || null });
+    }
+
+    if (action === "memory.proactive.list") {
+      const targetUserId = asSafeUuid((payload as { targetUserId?: unknown })?.targetUserId) || null;
+      const limit = Math.min(100, Math.max(1, Number((payload as { limit?: unknown })?.limit) || 20));
+      const hoursBack = Math.max(1, Number((payload as { hoursBack?: unknown })?.hoursBack) || 24);
+      
+      const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000).toISOString();
+      
+      let query = supabaseAdmin
+        .from("axy_proactive_messages")
+        .select("*")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      
+      if (targetUserId) {
+        query = query.eq("target_user_id", targetUserId);
+      }
+      
+      const { data, error } = await query;
+      if (error && error.code !== "42P01") throw new Error("proactive list failed");
+      return respond(200, { ok: true, action, data: data || [] });
+    }
+
+    if (action === "memory.space.state") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      if (!spaceId) {
+        return respond(400, { error: "spaceId required" });
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from("axy_space_state")
+        .select("*")
+        .eq("space_id", spaceId)
+        .maybeSingle();
+      
+      if (error && error.code !== "42P01") throw new Error("space state load failed");
+      return respond(200, { ok: true, action, data: data || null });
+    }
+
+    if (action === "memory.space.update") {
+      const spaceId = asSafeUuid((payload as { spaceId?: unknown })?.spaceId);
+      if (!spaceId) {
+        return respond(400, { error: "spaceId required" });
+      }
+      
+      const p = payload as Record<string, unknown>;
+      const updates: Record<string, unknown> = {
+        space_id: spaceId,
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (typeof p.activity_level === "string" && ["low", "medium", "high"].includes(p.activity_level)) {
+        updates.activity_level = p.activity_level;
+        updates.last_activity_at = new Date().toISOString();
+      }
+      if (Array.isArray(p.active_users)) {
+        updates.active_users = p.active_users;
+      }
+      if (Array.isArray(p.recent_topics)) {
+        updates.recent_topics = p.recent_topics;
+      }
+      if (typeof p.priority_score === "number") {
+        updates.priority_score = Math.max(0, Math.min(100, p.priority_score));
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from("axy_space_state")
+        .upsert(updates, { onConflict: "space_id" })
+        .select()
+        .single();
+      
+      if (error && error.code !== "42P01") throw new Error("space state update failed: " + error.message);
+      return respond(200, { ok: true, action, data: data || null });
+    }
+
+    // ==================== END MEMORY & LEARNING SYSTEM ====================
 
     return respond(400, {
       error: "unknown action",
