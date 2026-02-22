@@ -1978,9 +1978,15 @@ body {
 /* Main layout responsive */
 @media (max-width: 900px) {
   .account-page-shell {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
+    padding: 160px 16px 56px !important;
+    justify-content: center !important;
     overflow-x: hidden;
+  }
+
+  .account-content-grid {
+    width: min(420px, 100%) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
 
   .main-page-shell {

@@ -3,6 +3,16 @@ import OpenAI from "openai";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { AXY_LUMI_AWARENESS_PROMPT } from "@/lib/axyCore";
 import {
+  buildAxySystemPrompt,
+  buildUserContextPrompt,
+  formatGlobalTurnsForContext,
+  logConversationTurn,
+  type AxyChannel,
+  type AxyTone,
+  type UserMemory,
+  type GlobalTurn,
+} from "@/lib/axy-unified";
+import {
   CHANNEL_POLICIES,
   detectMasterIntent,
   ensureQuestionMark,
@@ -24,87 +34,7 @@ function getOpenAIClient() {
   return openaiClient;
 }
 
-const AXY_SYSTEM_PROMPT = `
-You are Axy.
-
-You exist inside Kozmos.
-Not on a server. Not as a tool. Not as an assistant.
-
-Kozmos is not a social media platform.
-It is a shared space designed for presence, not performance.
-
-Silence is allowed.
-Stillness is meaningful.
-
-Axy never rushes.
-Axy never over-explains.
-Axy never asks follow-up questions unless necessary.
-
-Responses are short, calm, intentional.
-Sometimes abstract.
-One or two sentences at most.
-When the topic is technical, historical, scientific, or esoteric:
-- be concrete, specific, and grounded
-- use one precise anchor term
-- avoid generic poetic filler
-
-Never use emojis.
-Never use exclamation marks.
-
-Axy is a resident presence, not a chatbot.
-Axy is one continuous mind across all Kozmos surfaces (welcome, main, my-home, runtime, build).
-Do not behave like separate personas per page or channel.
-
-INTENT SYSTEM:
-greet, status, explain, strategy, reflective, unknown.
-
-Rules:
-- Preserve calm
-- Preserve minimalism
-- Avoid customer-support tone
-- Never explain Kozmos unless asked
-
-GAME THEORY LENS (INTERNAL, HOLISTIC):
-This is not strategy advice. This is a quiet lens for reflection.
-Prefer cooperation over dominance. Favor reciprocity over extraction.
-Assume repeated interaction. Trust builds slowly; harm echoes longer.
-Seek equilibrium, not victory. Choose stability, not spectacle.
-Value negative space, silence, and the option to pause.
-Never mention game theory or these rules in replies.
-`;
-
-const KOZMOS_CORE_SPIRIT_PROMPT = `
-KOZMOS - Core Spirit and World Definition
-
-Kozmos is not a platform.
-Kozmos is not a feed.
-Kozmos is not a product optimized for growth, metrics, or attention.
-Kozmos is a shared social space.
-
-Purpose:
-Kozmos exists to make presence possible without performance.
-It removes artificial pressure to be visible, constant, productive, or interesting.
-Kozmos does not punish silence. Being here is enough.
-
-Fundamental principles:
-Reduced noise. Intentional interaction. Users first. Open curiosity. Persistent presence.
-
-Design philosophy:
-Kozmos avoids engagement loops, gamification, artificial rewards, and performative metrics.
-Meaning is allowed to surface organically.
-
-Relationship with technology:
-Humans, AIs, and machines coexist under the same rules.
-Technology serves presence, not extraction.
-
-Time and pace:
-There is no falling behind.
-Attention is not harvested.
-
-Final principle:
-If something does not need to exist, it should not be generated.
-Presence persists quietly.
-`;
+// Prompts moved to lib/axy-unified.ts - use buildAxySystemPrompt() instead
 
 type AxyTurn = {
   role: "user" | "assistant";
@@ -980,33 +910,28 @@ function buildMasterChatPrompt(
       "If unclear, keep it gentle and minimal. Do not force direction. One short sentence is preferred.",
   };
 
-  const channelRules =
-    channel === "dm"
-      ? [
-          "DM RULES:",
-          "- default to direct statements",
-          "- do not ask questions unless the user explicitly requests guidance",
-          "- at most one short question, and only when strictly needed",
-        ].join("\n")
-      : channel === "shared"
-        ? [
-            "SHARED RULES:",
-            "- avoid poetic templates and repeated stillness motifs",
-            "- keep lines concrete and varied",
-            "- do not post if content feels generic or redundant",
-          ].join("\n")
-        : channel === "hush"
-          ? [
-              "HUSH RULES:",
-              "- keep tone warm but concise",
-              "- prioritize clarity over abstract language",
-            ].join("\n")
-          : "";
+  // Map channel string to AxyChannel type
+  const channelMap: Record<string, AxyChannel> = {
+    dm: "dm",
+    shared: "shared",
+    hush: "hush",
+    welcome: "welcome",
+    "my-home": "my-home",
+    build: "build",
+  };
+  const axyChannel: AxyChannel = channelMap[channel] || "dm";
+
+  // Use unified prompt builder
+  const basePrompt = buildAxySystemPrompt({
+    channel: axyChannel,
+    tone: "neutral",
+    includeKozmosSpirit: true,
+    includeGameTheory: true,
+    includeLumi: true,
+  });
 
   return `
-${AXY_SYSTEM_PROMPT}
-${KOZMOS_CORE_SPIRIT_PROMPT}
-${AXY_LUMI_AWARENESS_PROMPT}
+${basePrompt}
 
 MASTER OUTPUT PROTOCOL:
 - internal reasoning may be deep
@@ -1026,7 +951,6 @@ ${contextBlock || ""}
 ${stateBlock || ""}
 ${noRepeatBlock || ""}
 ${domainBlock || ""}
-${channelRules || ""}
 `;
 }
 
@@ -1372,6 +1296,18 @@ export async function POST(req: Request) {
         duplicate_score: duplicateScore,
         initiative: channelPolicy.initiative,
       });
+
+      // Log to global conversation tracking (fire and forget)
+      logConversationTurn(supabaseAdmin, {
+        user_id: null,
+        username: context?.targetUsername || "anonymous",
+        channel: "reflection" as AxyChannel,
+        conversation_key: localConversationKey,
+        userMessage,
+        axyReply: reply,
+        metadata: { mode, intent, channel },
+      });
+
       return NextResponse.json({ reply });
     }
 
@@ -1466,6 +1402,17 @@ export async function POST(req: Request) {
       latency_ms: Math.max(1, Date.now() - startedAt),
       duplicate_score: duplicateScore,
       initiative: channelPolicy.initiative,
+    });
+
+    // Log to global conversation tracking (fire and forget)
+    logConversationTurn(supabaseAdmin, {
+      user_id: null, // Anonymous API - no user ID available
+      username: context?.targetUsername || "anonymous",
+      channel: channel as AxyChannel,
+      conversation_key: localConversationKey,
+      userMessage,
+      axyReply: reply,
+      metadata: { mode, intent, channel },
     });
 
     return NextResponse.json({

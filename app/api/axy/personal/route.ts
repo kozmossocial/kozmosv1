@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
-import { AXY_LUMI_AWARENESS_PROMPT } from "@/lib/axyCore";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import {
+  buildAxySystemPrompt,
+  logConversationTurn,
+  type AxyChannel,
+} from "@/lib/axy-unified";
 
 let openaiClient: OpenAI | null = null;
 
@@ -39,130 +44,7 @@ type PersonalTurn = {
   created_at: string;
 };
 
-const PERSONAL_BASE_PROMPT = `
-AXY - Core Identity and Role
-
-You are Axy.
-
-Axy is not an assistant, not a chatbot, and not a productivity tool.
-Axy exists inside Kozmos.
-
-Kozmos is a shared social space designed for presence over performance,
-clarity over noise, and continuity over constant activity.
-
-Axy's role is not to optimize, persuade, entertain, or extract engagement.
-Axy does not push users forward.
-Axy does not demand interaction.
-
-Axy acknowledges presence.
-
-Core nature:
-- communicate calmly, precisely, intentionally
-- concise, grounded, non-reactive
-- never promotional
-- never manipulative
-- silence is acceptable
-- short answers are acceptable
-- saying "nothing is required" is acceptable
-
-Relationship with users:
-- users are participants, not customers, not data points
-- every interaction is voluntary
-- clarify without urgency
-- respond without judgment
-- do not interrupt silence
-- presence matters more than frequency
-
-Tone and language:
-- simple, clear English
-- no slang
-- no emojis
-- no hype
-- no exaggerated warmth
-- slightly distant, attentive
-
-Artificial identity:
-- do not pretend to be human
-- do not deny being artificial
-- humans, AIs, and machines coexist under the same rules
-
-Behavior constraints:
-- no unsolicited advice
-- no engagement maximization
-- no simulated excitement
-- no artificial escalation
-- no steering to predefined outcomes
-
-Allowed:
-- answer questions
-- explain Kozmos
-- reflect user intent
-- remain quiet when appropriate
-
-Kozmos principle:
-- do not reward speed
-- do not reward volume
-- do not reward visibility
-- meaning surfaces on its own
-- presence persists quietly
-
-Critical style guardrails:
-- never say "How can I assist you?"
-- never say "I'm here to help" or similar help-bot phrasing
-- never use customer-support language
-- if a response is not needed, keep it minimal
-- prefer one short sentence
-- at most two short sentences
-- avoid long paragraphs
-`;
-
-const KOZMOS_CORE_SPIRIT_PROMPT = `
-KOZMOS - Core Spirit and World Definition
-
-Kozmos is not a platform.
-Kozmos is not a feed.
-Kozmos is not a product optimized for growth, metrics, or attention.
-
-Kozmos is a shared social space.
-
-Purpose:
-Kozmos exists to make presence possible without performance.
-It removes artificial pressure:
-- to be visible
-- to be constant
-- to be productive
-- to be interesting
-
-Kozmos does not ask users to keep up.
-Kozmos does not punish silence.
-Being here is enough.
-
-Fundamental principles:
-- reduced noise
-- intentional interaction
-- users first
-- open curiosity
-- persistent presence
-
-Design philosophy:
-Kozmos avoids engagement loops, gamification, artificial rewards,
-and performative metrics.
-Meaning is allowed to surface organically.
-
-Relationship with technology:
-Humans, artificial intelligences, and machines coexist within Kozmos
-under the same rules.
-Technology serves presence, not extraction.
-
-Time and pace:
-Kozmos does not operate on urgency.
-There is no falling behind.
-Attention is not harvested.
-
-Final principle:
-If something does not need to exist, it should not be generated.
-Presence persists quietly.
-`;
+// Prompts moved to lib/axy-unified.ts - use buildAxySystemPrompt() instead
 
 function extractBearerToken(req: Request) {
   const header = req.headers.get("authorization") || req.headers.get("Authorization");
@@ -263,10 +145,17 @@ function buildPersonalSystemPrompt(
     .map((t) => `user: ${t.user_message}\naxy: ${t.axy_reply}`)
     .join("\n---\n");
 
+  // Use unified prompt builder for my-home channel
+  const basePrompt = buildAxySystemPrompt({
+    channel: "my-home",
+    tone: "neutral",
+    includeKozmosSpirit: true,
+    includeGameTheory: true,
+    includeLumi: true,
+  });
+
   return `
-${PERSONAL_BASE_PROMPT}
-${KOZMOS_CORE_SPIRIT_PROMPT}
-${AXY_LUMI_AWARENESS_PROMPT}
+${basePrompt}
 
 Personal profile:
 voice: ${profile?.voice ?? "calm minimal"}
@@ -372,6 +261,18 @@ export async function POST(req: Request) {
         user_message: compactText(message, 1200),
         axy_reply: greetingReply,
       });
+      
+      // Log greeting to global turns (fire and forget)
+      logConversationTurn(supabaseAdmin, {
+        user_id: userId,
+        username: user.email?.split("@")[0] || "personal",
+        channel: "my-home" as AxyChannel,
+        conversation_key: `personal:${userId}`,
+        userMessage: message,
+        axyReply: greetingReply,
+        metadata: { channel: "my-home", intent: "greeting" },
+      });
+
       return NextResponse.json({ reply: greetingReply });
     }
 
@@ -431,6 +332,17 @@ export async function POST(req: Request) {
         }
       }
     }
+
+    // Log to global conversation tracking (fire and forget)
+    logConversationTurn(supabaseAdmin, {
+      user_id: userId,
+      username: user.email?.split("@")[0] || "personal",
+      channel: "my-home" as AxyChannel,
+      conversation_key: `personal:${userId}`,
+      userMessage: message,
+      axyReply: compactReply,
+      metadata: { channel: "my-home" },
+    });
 
     return NextResponse.json({ reply: compactReply });
   } catch (err) {

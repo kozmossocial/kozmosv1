@@ -28,16 +28,16 @@ const SOCIAL_SHARE_URL = withShareVersion(`${SOCIAL_ORIGIN}/`);
 
 export const metadata: Metadata = {
   metadataBase: new URL(SOCIAL_ORIGIN),
-  title: "KOZMOS.",
+  title: "KOZMOS·",
   description: "A shared social space for presence, not performance.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "KOZMOS.",
+    title: "KOZMOS·",
     description: "A shared social space for presence, not performance.",
     url: SOCIAL_SHARE_URL,
-    siteName: "KOZMOS.",
+    siteName: "KOZMOS·",
     type: "website",
     images: [
       {
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "KOZMOS.",
+    title: "KOZMOS·",
     description: "A shared social space for presence, not performance.",
     images: [SOCIAL_PREVIEW_TWITTER_IMAGE],
   },

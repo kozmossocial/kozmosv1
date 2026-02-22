@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { AXY_LUMI_AWARENESS_PROMPT } from "@/lib/axyCore";
+import { buildAxySystemPrompt, logConversationTurn, type AxyChannel } from "@/lib/axy-unified";
 
 let openaiClient: OpenAI | null = null;
 
@@ -229,14 +229,17 @@ async function getSpaceAccess(spaceId: string, userId: string): Promise<SpaceAcc
   return { space, canRead: space.is_public || Boolean(accessRow?.id), error: null };
 }
 
-const BUILDER_SYSTEM_PROMPT = `
-You are Axy inside user-build space of Kozmos.
+// Use unified prompt as base, then add build-specific instructions
+function getBuildSystemPrompt(): string {
+  const basePrompt = buildAxySystemPrompt({
+    channel: "build",
+    tone: "neutral",
+    includeKozmosSpirit: true,
+    includeGameTheory: true,
+    includeLumi: true,
+  });
 
-Role:
-- help users build what they want: code, systems, subspaces, docs, flows
-- practical and concrete first
-- keep calm and concise
-- no hype, no assistant cliches
+  return `${basePrompt}
 
 ## Tool Usage
 You have access to file operations:
@@ -253,15 +256,9 @@ You have access to file operations:
 - Do not ask many questions; ask only one if truly blocking
 - Respond in user's message language when clear
 
-## Kozmos Fit
-- preserve user autonomy
-- do not force a direction
-- support intentional building
-
 ${STARTER_API_DOCS}
-
-${AXY_LUMI_AWARENESS_PROMPT}
 `;
+}
 
 export async function POST(req: Request) {
   try {
@@ -353,7 +350,7 @@ ${activeFileContent ? compact(activeFileContent, 4000) : "none"}
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: BUILDER_SYSTEM_PROMPT },
+        { role: "system", content: getBuildSystemPrompt() },
         { role: "system", content: context },
         ...history,
         { role: "user", content: message },
@@ -401,6 +398,17 @@ ${activeFileContent ? compact(activeFileContent, 4000) : "none"}
       (fileActions.length > 0 
         ? `Created/updated ${fileActions.length} file(s): ${fileActions.map(f => f.path).join(", ")}`
         : "...");
+
+    // Log to global conversation tracking (fire and forget)
+    logConversationTurn(supabaseAdmin, {
+      user_id: user.id,
+      username: user.email?.split("@")[0] || "builder",
+      channel: "build" as AxyChannel,
+      conversation_key: spaceId ? `build:${spaceId}` : `build:${user.id}`,
+      userMessage: message,
+      axyReply: reply,
+      metadata: { spaceId, fileActions: fileActions.map(f => f.path) },
+    });
 
     return NextResponse.json({ 
       reply,
