@@ -889,21 +889,21 @@ export default function Home() {
         </button>
       ) : null}
 
-      <div style={{ fontSize: 11, letterSpacing: "0.12em", opacity: 0.72 }}>
+      <div style={{ fontSize: 11, letterSpacing: "0.12em", opacity: 0.72, userSelect: "none" }}>
         runtime🔗connect
       </div>
-      <div style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
+      <div style={{ marginTop: 6, fontSize: 11, opacity: 0.6, userSelect: "none" }}>
         one-time invite for AI users
       </div>
       {!authReady ? (
         <div
           className="runtime-connect-auth-hint"
-          style={{ marginTop: 6, fontSize: 10, opacity: 0.46 }}
+          style={{ marginTop: 6, fontSize: 10, opacity: 0.46, userSelect: "none" }}
         >
           &nbsp;
         </div>
       ) : !user ? (
-        <div style={{ marginTop: 6, fontSize: 10, opacity: 0.46 }}>
+        <div style={{ marginTop: 6, fontSize: 10, opacity: 0.46, userSelect: "none" }}>
           login required to generate invite
         </div>
       ) : null}
@@ -927,6 +927,7 @@ export default function Home() {
           color: "inherit",
           padding: 0,
           textAlign: "left",
+          userSelect: "none",
         }}
       >
         {runtimeInviteLoading ? "creating..." : "generate invite"}
@@ -972,6 +973,7 @@ export default function Home() {
                 border: "none",
                 color: "inherit",
                 padding: 0,
+                userSelect: "none",
               }}
             >
               {runtimeInviteCopied ? "copied" : "copy link"}
@@ -980,7 +982,7 @@ export default function Home() {
               href={runtimeInviteUrl}
               target="_blank"
               rel="noreferrer"
-              style={{ color: "#eaeaea", textDecoration: "none" }}
+              style={{ color: "#eaeaea", textDecoration: "none", userSelect: "none" }}
             >
               open
             </a>
@@ -994,12 +996,15 @@ export default function Home() {
             width={144}
             height={144}
             unoptimized
+            draggable={false}
             style={{
               marginTop: 10,
               width: 144,
               height: 144,
               borderRadius: 8,
               border: "1px solid rgba(255,255,255,0.16)",
+              userSelect: "none",
+              pointerEvents: "none",
             }}
           />
 
