@@ -1081,7 +1081,39 @@ body {
   mix-blend-mode: normal;
   filter: blur(12px);
   animation-duration: 24s;
-}
+  }
+
+  /* Force Chrome-like background effect for Firefox */
+  @-moz-document url-prefix() {
+    .my-home-shell::before,
+    .main-page-shell::before {
+      animation: myHomeAmbientFlow 16s ease-in-out infinite;
+      filter: blur(22px);
+      opacity: 0.2;
+      mix-blend-mode: screen;
+      background:
+        radial-gradient(circle at 24% 24%, rgba(236, 240, 246, 0.2), transparent 52%),
+        radial-gradient(circle at 78% 30%, rgba(204, 212, 226, 0.16), transparent 56%),
+        radial-gradient(circle at 58% 76%, rgba(164, 172, 188, 0.12), transparent 58%),
+        linear-gradient(
+          128deg,
+          rgba(226, 232, 242, 0.1) 0%,
+          rgba(178, 186, 204, 0.1) 40%,
+          rgba(242, 246, 252, 0.08) 72%,
+          rgba(152, 160, 178, 0.08) 100%
+        );
+      background-size: 220% 220%;
+    }
+    }
+  
+    .main-page-shell .hush-panel,
+    .main-page-shell .chat-panel,
+    .main-page-shell .play-panel,
+    .main-page-shell .space-tv-panel,
+    .main-page-shell .space-radio-panel,
+    .main-page-shell .news-paper-panel {
+      backdrop-filter: none !important;
+      }
 
 .main-page-shell .hush-panel,
 .main-page-shell .chat-panel,
