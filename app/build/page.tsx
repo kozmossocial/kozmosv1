@@ -2078,12 +2078,34 @@ export default function BuildPage() {
                   border: "1px solid rgba(107,255,142,0.24)",
                   background: "rgba(2,9,6,0.84)",
                   color: "#d8ffe4",
-                  padding: 12,
-                  fontSize: 13,
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                  lineHeight: 1.45,
+                  fontSize: 14,
+                  fontFamily: "inherit",
+                  padding: "14px 16px",
+                  outline: "none",
                   resize: "vertical",
-                  opacity: canEditSelectedSpace ? 1 : 0.76,
+                  boxShadow: "0 0 18px rgba(107,255,142,0.08)",
+                }}
+                onFocus={() => {
+                  if (editorSearch && editorRef.current) {
+                    const content = editorContent.toLowerCase();
+                    const search = editorSearch.toLowerCase();
+                    const matches: number[] = [];
+                    let idx = content.indexOf(search);
+                    while (idx !== -1) {
+                      matches.push(idx);
+                      idx = content.indexOf(search, idx + 1);
+                    }
+                    if (matches.length > 0) {
+                      editorRef.current.setSelectionRange(matches[editorSearchIndex], matches[editorSearchIndex] + editorSearch.length);
+                      // Otomatik scroll: textarea için scrollTop ayarı
+                      const textarea = editorRef.current;
+                      const start = matches[editorSearchIndex];
+                      const lineHeight = parseInt(window.getComputedStyle(textarea).lineHeight || "18", 10);
+                      const before = textarea.value.slice(0, start);
+                      const lines = before.split("\n").length;
+                      textarea.scrollTop = (lines - 1) * lineHeight;
+                    }
+                  }
                 }}
               />
 
@@ -2176,19 +2198,32 @@ export default function BuildPage() {
                     </button>
                   </div>
                 </div>
-                <iframe
-                  key={`${selectedSpaceId || "none"}:${previewReloadKey}`}
-                  title="build outcome"
-                  sandbox="allow-scripts allow-same-origin"
-                  srcDoc={previewDoc}
+                <div
+                  className="build-page-preview-box"
                   style={{
                     width: "100%",
                     height: previewExpanded ? "calc(50vh)" : 260,
-                    border: "none",
+                    borderRadius: 10,
+                    overflowY: "auto",
                     background: "#fff",
+                    boxShadow: "0 0 18px rgba(107,255,142,0.08)",
+                    border: "none",
                     transition: "height 0.2s ease",
                   }}
-                />
+                >
+                  <iframe
+                    key={`${selectedSpaceId || "none"}:${previewReloadKey}`}
+                    title="build outcome"
+                    sandbox="allow-scripts allow-same-origin"
+                    srcDoc={previewDoc}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      border: "none",
+                      background: "transparent",
+                    }}
+                  />
+                </div>
               </div>
 
               <div style={{ marginTop: 14, fontSize: 12, opacity: 0.74, letterSpacing: "0.1em" }}>
